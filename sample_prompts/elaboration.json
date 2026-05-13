@@ -1,0 +1,38 @@
+[
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding vivid imagery and sensory details to bring it to life.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding concrete examples to illustrate the main points.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding backstory and context to enrich understanding.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding real-world applications and specific details.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding storytelling elements and dialogue to increase engagement.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding supporting information to elaborate on the key points.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    }
+]
