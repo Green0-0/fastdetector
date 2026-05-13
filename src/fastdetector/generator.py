@@ -17,7 +17,6 @@ async def _send_request(client: AsyncOpenAI, semaphore: asyncio.Semaphore, messa
                 temperature=0.7,
                 top_p=0.8,
                 presence_penalty=1.5,
-                repetition_penalty=1.0,
                 extra_body={
                     "top_k": 20,
                     "chat_template_kwargs": {"enable_thinking": False},
