@@ -5,7 +5,7 @@ from fastdetector.prompts import Prompt, PromptSet
 
 MAX_RETRIES = 5
 
-MAX_CONCURRENT = 64
+MAX_CONCURRENT = 256
 
 async def _send_request(client: AsyncOpenAI, semaphore: asyncio.Semaphore, messages: list[dict]) -> str:
     """Send a single chat completion request. Retries are handled by the OpenAI client."""

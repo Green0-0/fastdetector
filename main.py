@@ -8,7 +8,7 @@ from fastdetector.generator import build_dataset
 SOURCE_DATASET = "HuggingFaceFW/fineweb-edu"
 SOURCE_CONFIG = "sample-10BT"
 SOURCE_COLUMN = "text"
-NUM_SAMPLES = 100_000
+NUM_SAMPLES = 10_000
 
 TARGET_DATASET = "G-reen/fineweb-edu-rewritten"  # TODO: set this
 
