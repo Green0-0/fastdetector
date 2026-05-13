@@ -10,7 +10,7 @@ SOURCE_CONFIG = "sample-10BT"
 SOURCE_COLUMN = "text"
 NUM_SAMPLES = 100_000
 
-TARGET_DATASET = "YOUR_HF_USERNAME/fineweb-edu-rewritten"  # TODO: set this
+TARGET_DATASET = "G-reen/fineweb-edu-rewritten"  # TODO: set this
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts")
 
