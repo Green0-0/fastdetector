@@ -11,7 +11,19 @@ async def _send_request(client: AsyncOpenAI, semaphore: asyncio.Semaphore, messa
     """Send a single chat completion request. Retries are handled by the OpenAI client."""
     async with semaphore:
         try:
-            response = await client.chat.completions.create(model="", messages=messages)
+            response = await client.chat.completions.create(
+                model="",
+                messages=messages,
+                temperature=0.7,
+                top_p=0.8,
+                min_p=0.0,
+                presence_penalty=1.5,
+                repetition_penalty=1.0,
+                extra_body={
+                    "top_k": 20,
+                    "chat_template_kwargs": {"enable_thinking": False},
+                },
+            )
             return response.choices[0].message.content or ""
         except Exception as e:
             print(f"Request failed: {e}")
