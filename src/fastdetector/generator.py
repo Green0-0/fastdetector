@@ -5,25 +5,39 @@ from fastdetector.prompts import Prompt, PromptSet
 
 MAX_RETRIES = 5
 
-async def _send_request(client: AsyncOpenAI, messages: list[dict]) -> str:
+MAX_CONCURRENT = 64
+
+async def _send_request(client: AsyncOpenAI, semaphore: asyncio.Semaphore, messages: list[dict]) -> str:
     """Send a single chat completion request. Retries are handled by the OpenAI client."""
-    try:
-        response = await client.chat.completions.create(model="", messages=messages)
-        return response.choices[0].message.content or ""
-    except Exception as e:
-        print(f"Request failed: {e}")
-        return ""
+    async with semaphore:
+        try:
+            response = await client.chat.completions.create(model="", messages=messages)
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            print(f"Request failed: {e}")
+            return ""
 
 async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[str]:
-    """Fires all requests concurrently via asyncio.gather."""
+    """Fires requests concurrently with a bounded semaphore."""
     client = AsyncOpenAI(
         base_url=api_url,
         api_key="EMPTY",
         max_retries=MAX_RETRIES,
         timeout=180.0,
     )
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+    total = len(inputs)
+    completed = 0
 
-    tasks = [_send_request(client, messages) for messages in inputs]
+    async def _tracked_request(messages: list[dict]) -> str:
+        nonlocal completed
+        result = await _send_request(client, semaphore, messages)
+        completed += 1
+        if completed % 1000 == 0 or completed == total:
+            print(f"  Progress: {completed}/{total} requests complete")
+        return result
+
+    tasks = [_tracked_request(messages) for messages in inputs]
     results = await asyncio.gather(*tasks)
     await client.close()
     return list(results)
