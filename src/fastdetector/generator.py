@@ -18,7 +18,7 @@ async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[
     """Fires all requests concurrently via asyncio.gather."""
     client = AsyncOpenAI(
         base_url=api_url,
-        api_key="",
+        api_key="EMPTY",
         max_retries=MAX_RETRIES,
         timeout=180.0,
     )
