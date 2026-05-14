@@ -1,42 +1,18 @@
 import glob
 import os
-from datasets import Dataset, load_dataset
+from datasets import load_dataset
 from fastdetector.prompts import load_prompts
 from fastdetector.generator import build_dataset
 
 # --- Configuration ---
-SOURCE_DATASET = "G-reen/view"
+SOURCE_DATASET = "G-reen/cc-contiguous"
 SOURCE_CONFIG = None
-SOURCE_COLUMN = "trafilatura_text"
+SOURCE_COLUMN = "response_0"
 NUM_SAMPLES = 1_000
 
-TARGET_DATASET = "G-reen/cc-contiguous"
-FILTERED_COLUMN = "response_0"
-ORIGINAL_COLUMN = "original"
+TARGET_DATASET = "G-reen/cc-contiguous-rewritten"
 
-PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "filtering")
-
-
-def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: str) -> Dataset:
-    """Append validation columns for contiguous subset checks."""
-
-    def _check_batch(batch: dict) -> dict:
-        originals = batch[original_col]
-        filtered = batch[filtered_col]
-        malformed: list[bool] = []
-        deviation_size: list[int] = []
-        for original, filtered_text in zip(originals, filtered):
-            if not isinstance(original, str):
-                original = "" if original is None else str(original)
-            if not isinstance(filtered_text, str):
-                filtered_text = "" if filtered_text is None else str(filtered_text)
-            malformed.append(not filtered_text or filtered_text not in original)
-            original_words = len(original.split())
-            filtered_words = len(filtered_text.split())
-            deviation_size.append(max(0, original_words - filtered_words))
-        return {"malformed": malformed, "deviation_size": deviation_size}
-
-    return dataset.map(_check_batch, batched=True)
+PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "generation")
 
 
 def load_samples(dataset: str, config: str | None, column: str, num_samples: int) -> list[str]:
@@ -75,7 +51,7 @@ def main():
     # Stream the source dataset
     samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES)
 
-    # Filter locally
+    # Generate locally
     result_ds = build_dataset(
         samples=samples,
         target=TARGET_DATASET,
@@ -84,12 +60,9 @@ def main():
         append=False,
     )
 
-    # Validate that filtered outputs are contiguous subsets of the originals
-    print("Validating filtered outputs...")
-    result_ds = add_validation_columns(result_ds, original_col=ORIGINAL_COLUMN, filtered_col=FILTERED_COLUMN)
-    malformed_count = sum(result_ds["malformed"])
-    print(f"Malformed rows: {malformed_count}/{len(result_ds)}")
     result_ds.push_to_hub(TARGET_DATASET)
+    print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
+
     print("Done!")
 
 

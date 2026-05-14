@@ -97,7 +97,7 @@ def build_dataset(
     prompts: PromptSet,
     append: bool,
     use_test: bool = False,
-):
+) -> Dataset:
     """
     Iteratively builds the dataset by batching across the prompt dimension.
 
@@ -117,7 +117,7 @@ def build_dataset(
 
     Args:
         samples: List of text samples to process.
-        target: HuggingFace repo to push results to.
+        target: HuggingFace repo to read from when append is True.
         api_url: OpenAI-compatible API base URL.
         prompts: PromptSet to draw prompts from.
         append: If True, append to any existing dataset at target.
@@ -177,5 +177,6 @@ def build_dataset(
         except Exception:
             print(f"No existing dataset found at '{target}', creating new.")
 
-    result_ds.push_to_hub(target)
-    print(f"Dataset pushed to '{target}' with {len(result_ds)} rows and {len(columns)} columns.")
+    print(f"Dataset built with {len(result_ds)} rows and {len(columns)} columns (not pushed).")
+
+    return result_ds
