@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=gen_data
-#SBATCH --output=gen-data-%j.out
-#SBATCH --error=gen-data-%j.err
+#SBATCH --job-name=filter_data
+#SBATCH --output=filter-data-%j.out
+#SBATCH --error=filter-data-%j.err
 #SBATCH --time=3-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
