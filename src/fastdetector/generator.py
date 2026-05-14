@@ -33,7 +33,7 @@ async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[
         base_url=api_url,
         api_key="EMPTY",
         max_retries=MAX_RETRIES,
-        timeout=180.0,
+        timeout=360.0,
     )
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
     total = len(inputs)
@@ -43,7 +43,7 @@ async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[
         nonlocal completed
         result = await _send_request(client, semaphore, messages)
         completed += 1
-        if completed % 1000 == 0 or completed == total:
+        if completed % 100 == 0 or completed == total:
             print(f"  Progress: {completed}/{total} requests complete")
         return result
 
