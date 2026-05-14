@@ -44,7 +44,7 @@ async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[
         result = await _send_request(client, semaphore, messages)
         completed += 1
         if completed % 100 == 0 or completed == total:
-            print(f"  Progress: {completed}/{total} requests complete")
+            print(f"  Progress: {completed}/{total} requests complete", flush=True)
         return result
 
     tasks = [_tracked_request(messages) for messages in inputs]
