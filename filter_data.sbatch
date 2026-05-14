@@ -89,6 +89,6 @@ echo "vLLM endpoint: ${VLLM_API_URL}"
 
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
-python generate_data.py
+python filter_data.py
 
 echo "Dataset generation complete."

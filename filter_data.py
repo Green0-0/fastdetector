@@ -10,7 +10,7 @@ SOURCE_CONFIG = None
 SOURCE_COLUMN = "trafilatura_text"
 NUM_SAMPLES = 1_000
 
-TARGET_DATASET = "G-reen/cc_contiguous"
+TARGET_DATASET = "G-reen/cc-contiguous"
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "filtering")
 

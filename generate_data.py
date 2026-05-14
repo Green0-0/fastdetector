@@ -5,12 +5,12 @@ from fastdetector.prompts import load_prompts
 from fastdetector.generator import build_dataset
 
 # --- Configuration ---
-SOURCE_DATASET = "G-reen/cc_contiguous"
+SOURCE_DATASET = "G-reen/cc-contiguous"
 SOURCE_CONFIG = None
 SOURCE_COLUMN = "response_0"
 NUM_SAMPLES = 1_000
 
-TARGET_DATASET = "G-reen/fineweb-edu-rewritten"
+TARGET_DATASET = "G-reen/cc-contiguous-rewritten"
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "generation")
 
