@@ -12,6 +12,12 @@ NUM_SAMPLES = 1_000
 
 TARGET_DATASET = "G-reen/cc-contiguous-rewritten"
 
+GENERATION_PARAMS = {
+    "temperature": 0.7,
+    "top_p": 0.8,
+    "presence_penalty": 1.5,
+}
+
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "generation")
 
 
@@ -58,6 +64,7 @@ def main():
         api_url=api_url,
         prompts=prompts,
         append=False,
+        generation_params=GENERATION_PARAMS,
     )
 
     result_ds.push_to_hub(TARGET_DATASET)

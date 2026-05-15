@@ -13,8 +13,37 @@ NUM_SAMPLES = 1_000
 TARGET_DATASET = "G-reen/cc-contiguous"
 FILTERED_COLUMN = "response_0"
 ORIGINAL_COLUMN = "original"
+FILTERING_GENERATION_PARAMS = {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "presence_penalty": 0.0,
+}
 
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "filtering")
+
+PUNCT_TRANSLATION = str.maketrans({
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201C": "\"",
+    "\u201D": "\"",
+    "\u201A": "'",
+    "\u201E": "\"",
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2011": "-",
+    "\u2212": "-",
+    "\u2026": "...",
+    "\u00AB": "\"",
+    "\u00BB": "\"",
+    "\u00A0": " ",
+    "\u2009": " ",
+    "\u202F": " ",
+})
+
+
+def normalize_text(text: str) -> str:
+    """Normalize punctuation style for subset checks."""
+    return text.translate(PUNCT_TRANSLATION)
 
 
 def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: str) -> Dataset:
@@ -30,9 +59,11 @@ def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: st
                 original = "" if original is None else str(original)
             if not isinstance(filtered_text, str):
                 filtered_text = "" if filtered_text is None else str(filtered_text)
-            malformed.append(not filtered_text or filtered_text not in original)
-            original_words = len(original.split())
-            filtered_words = len(filtered_text.split())
+            original_norm = normalize_text(original)
+            filtered_norm = normalize_text(filtered_text)
+            malformed.append(not filtered_norm or filtered_norm not in original_norm)
+            original_words = len(original_norm.split())
+            filtered_words = len(filtered_norm.split())
             deviation_size.append(max(0, original_words - filtered_words))
         return {"malformed": malformed, "deviation_size": deviation_size}
 
@@ -82,6 +113,7 @@ def main():
         api_url=api_url,
         prompts=prompts,
         append=False,
+        generation_params=FILTERING_GENERATION_PARAMS,
     )
 
     # Validate that filtered outputs are contiguous subsets of the originals

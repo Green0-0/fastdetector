@@ -7,27 +7,37 @@ MAX_RETRIES = 5
 
 MAX_CONCURRENT = 256
 
-async def _send_request(client: AsyncOpenAI, semaphore: asyncio.Semaphore, messages: list[dict]) -> str:
+async def _send_request(
+    client: AsyncOpenAI,
+    semaphore: asyncio.Semaphore,
+    messages: list[dict],
+    generation_params: dict,
+) -> str:
     """Send a single chat completion request. Retries are handled by the OpenAI client."""
     async with semaphore:
         try:
+            extra_body = {
+                "chat_template_kwargs": {"enable_thinking": False},
+            }
+
             response = await client.chat.completions.create(
                 model="",
                 messages=messages,
-                temperature=0.7,
-                top_p=0.8,
-                presence_penalty=1.5,
-                extra_body={
-                    "top_k": 20,
-                    "chat_template_kwargs": {"enable_thinking": False},
-                },
+                temperature=generation_params.get("temperature", 0.7),
+                top_p=generation_params.get("top_p", 0.8),
+                presence_penalty=generation_params.get("presence_penalty", 1.5),
+                extra_body=extra_body,
             )
             return response.choices[0].message.content or ""
         except Exception as e:
             print(f"Request failed: {e}")
             return ""
 
-async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[str]:
+async def _batch_generate_async(
+    api_url: str,
+    inputs: list[list[dict]],
+    generation_params: dict,
+) -> list[str]:
     """Fires requests concurrently with a bounded semaphore."""
     client = AsyncOpenAI(
         base_url=api_url,
@@ -41,7 +51,7 @@ async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[
 
     async def _tracked_request(messages: list[dict]) -> str:
         nonlocal completed
-        result = await _send_request(client, semaphore, messages)
+        result = await _send_request(client, semaphore, messages, generation_params)
         completed += 1
         if completed % 100 == 0 or completed == total:
             print(f"  Progress: {completed}/{total} requests complete", flush=True)
@@ -52,7 +62,11 @@ async def _batch_generate_async(api_url: str, inputs: list[list[dict]]) -> list[
     await client.close()
     return list(results)
 
-def batch_generate(api_url: str, inputs: list[list[dict]]) -> list[str]:
+def batch_generate(
+    api_url: str,
+    inputs: list[list[dict]],
+    generation_params: dict,
+) -> list[str]:
     """
     Takes in a list of OpenAI compatible chat conversations, and returns a list of responses.
     Uses the async OpenAI client to fire all requests concurrently via asyncio.gather.
@@ -61,12 +75,13 @@ def batch_generate(api_url: str, inputs: list[list[dict]]) -> list[str]:
         api_url: The URL of the OpenAI-compatible chat completions endpoint
                  (e.g. "http://localhost:8000/v1").
         inputs: A list of conversations, where each conversation is a list of
-                {"role": ..., "content": ...} message dicts.
+            {"role": ..., "content": ...} message dicts.
+        generation_params: Overrides for sampling params.
 
     Returns:
         A list of assistant response strings, one per input conversation.
     """
-    return asyncio.run(_batch_generate_async(api_url, inputs))
+    return asyncio.run(_batch_generate_async(api_url, inputs, generation_params))
 
 def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> list[dict]:
     """
@@ -97,6 +112,7 @@ def build_dataset(
     prompts: PromptSet,
     append: bool,
     use_test: bool = False,
+    generation_params: dict,
 ) -> Dataset:
     """
     Iteratively builds the dataset by batching across the prompt dimension.
@@ -122,6 +138,7 @@ def build_dataset(
         prompts: PromptSet to draw prompts from.
         append: If True, append to any existing dataset at target.
         use_test: If True, use test set prompts instead of train set.
+        generation_params: Overrides for sampling params.
     """
     print(f"Processing {len(samples)} samples...")
 
@@ -152,7 +169,7 @@ def build_dataset(
                 active_indices.append(sample_idx)
 
         # Call the batch generator
-        batch_responses = batch_generate(api_url, batch_inputs)
+        batch_responses = batch_generate(api_url, batch_inputs, generation_params)
 
         # Distribute responses back to the full sample list
         turn_responses = [""] * len(samples)

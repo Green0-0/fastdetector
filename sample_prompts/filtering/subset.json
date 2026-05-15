@@ -1,7 +1,7 @@
 [
     {
         "chat_turns": [
-            "{{DOC}}\nExtract the longest contiguous, logical subset of the document that contains no boilerplate or metadata (headers, dates, bylines, navigation, image.png, READ MORE, and similar noise). Keep the original wording and order. Return only the extracted text with no extra commentary. If no valid subset exists, return an empty string."
+            "{{DOC}}\nExtract the longest contiguous, logical subset of the document that contains no boilerplate or metadata (headers, dates, bylines, navigation, image.png, READ MORE, and similar noise). You should not have any removed boilerplate inbetween the text, the new text you extract must be a strict contiguous subset of the original text. Keep the original wording and order: every newline, space, punctuation should be copied exactly as is with no deviations. Return only the extracted text with no extra commentary. If no valid subset exists, return an empty string."
         ],
         "use_multiturn": false
     }
