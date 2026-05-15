@@ -111,8 +111,8 @@ def build_dataset(
     api_url: str,
     prompts: PromptSet,
     append: bool,
-    use_test: bool = False,
     generation_params: dict,
+    use_test: bool = False,
 ) -> Dataset:
     """
     Iteratively builds the dataset by batching across the prompt dimension.
