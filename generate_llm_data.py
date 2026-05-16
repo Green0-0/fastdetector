@@ -1,7 +1,7 @@
 import glob
 import os
 from datasets import load_dataset
-from fastdetector.prompts import load_prompts
+from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 
 # --- Configuration ---
@@ -18,7 +18,7 @@ GENERATION_PARAMS = {
     "presence_penalty": 1.5,
 }
 
-PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "generation")
+PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts", "generation")
 
 
 def load_samples(dataset: str, config: str | None, column: str, num_samples: int) -> list[str]:
@@ -50,7 +50,8 @@ def main():
     for pf in prompt_files:
         print(f"  - {os.path.basename(pf)}")
 
-    prompts = load_prompts(prompt_files)
+    prompt_list = load_prompts(prompt_files)
+    prompts = PromptSet(prompt_list)
     prompts.shuffle(seed=42)
     print(f"Total prompts loaded: {len(prompts.get_train())}")
 

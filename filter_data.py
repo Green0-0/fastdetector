@@ -1,7 +1,7 @@
 import glob
 import os
 from datasets import Dataset, load_dataset
-from fastdetector.prompts import load_prompts
+from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 
 # --- Configuration ---
@@ -19,7 +19,7 @@ FILTERING_GENERATION_PARAMS = {
     "presence_penalty": 0.0,
 }
 
-PROMPT_DIR = os.path.join(os.path.dirname(__file__), "sample_prompts", "filtering")
+PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts", "filtering")
 
 PUNCT_TRANSLATION = str.maketrans({
     "\u2018": "'",
@@ -99,7 +99,8 @@ def main():
     for pf in prompt_files:
         print(f"  - {os.path.basename(pf)}")
 
-    prompts = load_prompts(prompt_files)
+    prompt_list = load_prompts(prompt_files)
+    prompts = PromptSet(prompt_list)
     prompts.shuffle(seed=42)
     print(f"Total prompts loaded: {len(prompts.get_train())}")
 

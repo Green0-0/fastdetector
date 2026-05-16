@@ -127,7 +127,7 @@ class PromptSet:
         self._train_cursor = 0
 
 
-def load_prompts(all_paths: list[str]) -> PromptSet:
+def load_prompts(all_paths: list[str]) -> list[Prompt]:
     """
     Load prompts from JSON files. Each file must contain a JSON list of objects
     with "chat_turns" (list[str]) and "use_multiturn" (bool) fields.
@@ -136,7 +136,7 @@ def load_prompts(all_paths: list[str]) -> PromptSet:
         all_paths (list[str]): List of JSON file paths to load prompts from.
 
     Returns:
-        PromptSet: Set of prompts.
+        list[Prompt]: List of prompts.
     """
     prompts: list[Prompt] = []
 
@@ -161,4 +161,4 @@ def load_prompts(all_paths: list[str]) -> PromptSet:
                 use_multiturn=entry["use_multiturn"],
             ))
 
-    return PromptSet(prompts)
+    return prompts
