@@ -90,13 +90,13 @@ def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> li
     Constructs user/assistant pairs for turns 0..turn_index. If use_multiturn
     is False, only the final user message is returned.
 
-    {{RES_N}} tokens in each turn are replaced with the response from turn N.
+    {{RESP_N}} tokens in each turn are replaced with the response from turn N.
     """
     messages: list[dict] = []
     for t in range(turn_index + 1):
         text = prompt.chat_turns[t]
         for i in range(t):
-            text = text.replace(f"{{{{RES_{i}}}}}", responses[i])
+            text = text.replace(f"{{{{RESP_{i}}}}}", responses[i])
         messages.append({"role": "user", "content": text})
         if t < turn_index:
             messages.append({"role": "assistant", "content": responses[t]})
@@ -128,7 +128,7 @@ def build_dataset(
     These special tokens are replaced in the prompt:
 
     {{DOC}} is replaced with the sample text.
-    {{RES_N}} is replaced with the Nth response. Note that when multiturn is true, the entire
+    {{RESP_N}} is replaced with the Nth response. Note that when multiturn is true, the entire
     chat history is used, otherwise only the latest message is used.
 
     Args:
@@ -152,7 +152,7 @@ def build_dataset(
     responses_by_turn: list[list[str]] = []
 
     # Build the dataset columns, starting with the original text and prompt template
-    columns: dict[str, list[str]] = {"original": samples, "prompt": prompt_labels}
+    columns: dict[str, list] = {"original": samples, "prompt": prompt_labels}
 
     for turn_idx in range(max_turns):
         print(f"Processing chat turn {turn_idx} / {max_turns - 1}...")

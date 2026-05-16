@@ -1,4 +1,3 @@
-import glob
 import os
 from datasets import load_dataset
 from fastdetector.prompts import PromptSet, load_prompts
@@ -18,7 +17,7 @@ GENERATION_PARAMS = {
     "presence_penalty": 1.5,
 }
 
-PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts", "generation")
+PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts")
 
 
 def load_samples(dataset: str, config: str | None, column: str, num_samples: int) -> list[str]:
@@ -41,10 +40,14 @@ def main():
 
     print(f"Using API endpoint: {api_url}")
 
-    # Load all prompt JSON files
-    prompt_files = sorted(glob.glob(os.path.join(PROMPT_DIR, "*.json")))
-    if not prompt_files:
-        raise FileNotFoundError(f"No prompt JSON files found in {PROMPT_DIR}")
+    # Load prompt JSON files
+    prompt_files = [
+        os.path.join(PROMPT_DIR, "testing_multiturn_dataset.json"),
+        os.path.join(PROMPT_DIR, "testing_recursive_dataset.json"),
+    ]
+    for pf in prompt_files:
+        if not os.path.exists(pf):
+            raise FileNotFoundError(f"Prompt JSON file not found: {pf}")
 
     print(f"Loading prompts from {len(prompt_files)} files:")
     for pf in prompt_files:

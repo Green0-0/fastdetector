@@ -1,0 +1,306 @@
+[
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more urgent and compelling.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to group related ideas and include clear section breaks.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by making the argument and main points stronger and easier to understand.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nAdapt this text for a 5th-grade reading level.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more direct and bold.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nClarify this text by making the argument and main points stronger and easier to understand.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nChange the tone of this text to be more objective and unbiased.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nAdapt this text for a lay audience with no technical background.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nAdapt this text for a teenage audience.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nAdapt this text for an elderly adult with limited knowledge of modern day affairs.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to eliminate awkward phrasing and improve the overall rhythm.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding supporting information to elaborate on the key points.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to ensure a clear introduction, body, and compelling conclusion.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nEdit this text to trim the length without losing important information or tone.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nClarify this text by paraphrasing it with different vocabulary and varied sentence structures.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nRestructure this text to improve the transitions and connections between ideas.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by presenting the same information from a fresh angle.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding real-world applications and specific details.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nExpand this text by adding backstory and context to enrich understanding.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nClarify this text by making the cause-and-effect relationships more obvious.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to improve the transitions and connections between ideas.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more polite and diplomatic.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nChange the tone of this text to be more inspiring and motivational.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nEdit this text to be more concise and powerful.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by improving the phrasing while preserving its original intent.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nExpand this text by adding supporting information to elaborate on the key points.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by paraphrasing it with different vocabulary and varied sentence structures.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more direct and bold.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nChange the tone of this text to be more relaxed and friendly.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nAdapt this text for a teenage audience.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to improve the transitions and connections between ideas.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more professional and authoritative.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nExpand this text by adding vivid imagery and sensory details to bring it to life.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nExpand this text by adding real-world applications and specific details.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding vivid imagery and sensory details to bring it to life.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to eliminate awkward phrasing and improve the overall rhythm.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by defining any terms that might be unclear to the reader.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nClarify this text by defining any terms that might be unclear to the reader.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nEdit this text to be more concise and powerful.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more objective and unbiased.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nAdapt this text for social media sharing.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to ensure a clear introduction, body, and compelling conclusion.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nExpand this text by adding real-world applications and specific details.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nRestructure this text to improve the logical flow and argument progression.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more relaxed and friendly.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more urgent and compelling.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nRestructure this text to arrange the points in order of importance.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more suited for a business audience.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more inspiring and motivational.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more enthusiastic and energetic.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nEdit this text to trim the length without losing important information or tone.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nAdapt this text for a teenage audience.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more empathetic and understanding.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to read more naturally, as if written by a native English speaker.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding backstory and context to enrich understanding.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more persuasive and convincing.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more lighthearted and humorous.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more conversational and approachable.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nAdapt this text for social media sharing.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more inspiring and motivational.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to arrange the points in order of importance.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nChange the tone of this text to be more polite and diplomatic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nAdapt this text for an elderly adult with limited knowledge of modern day affairs.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more enthusiastic and energetic.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nChange the tone of this text to be more direct and bold.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by making the cause-and-effect relationships more obvious.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nClarify this text by eliminating any ambiguous or vague language.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more persuasive and convincing.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nEdit this text to eliminate redundant and filler words.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nClarify this text by improving the phrasing while preserving its original intent.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to read more naturally, as if written by a native English speaker.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nEdit this text to eliminate redundant and filler words.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more academic and scholarly.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nRestructure this text to improve the logical flow and argument progression.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nAdapt this text for a 5th-grade reading level.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding storytelling elements and dialogue to increase engagement.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to group related ideas and include clear section breaks.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more analytical and logical.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more analytical and logical.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nExpand this text by adding storytelling elements and dialogue to increase engagement.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nChange the tone of this text to be more polite and diplomatic.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nClarify this text by presenting the same information from a fresh angle.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nExpand this text by adding concrete examples to illustrate the main points.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nExpand this text by adding concrete examples to illustrate the main points.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nAdapt this text for a 5th-grade reading level.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to arrange the points in order of importance.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_0}}\nChange the tone of this text to be more lighthearted and humorous.\nOutput the full new text with no extra statements or commentations.",
+            "{{RESP_1}}\nClarify this text by paraphrasing it with different vocabulary and varied sentence structures.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nRestructure this text to improve the logical flow and argument progression.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    }
+]

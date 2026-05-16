@@ -1,4 +1,3 @@
-import glob
 import os
 from datasets import Dataset, load_dataset
 from fastdetector.prompts import PromptSet, load_prompts
@@ -19,7 +18,7 @@ FILTERING_GENERATION_PARAMS = {
     "presence_penalty": 0.0,
 }
 
-PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts", "filtering")
+PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts")
 
 PUNCT_TRANSLATION = str.maketrans({
     "\u2018": "'",
@@ -90,16 +89,14 @@ def main():
 
     print(f"Using API endpoint: {api_url}")
 
-    # Load all prompt JSON files
-    prompt_files = sorted(glob.glob(os.path.join(PROMPT_DIR, "*.json")))
-    if not prompt_files:
-        raise FileNotFoundError(f"No prompt JSON files found in {PROMPT_DIR}")
+    # Load prompt JSON file
+    prompt_file = os.path.join(PROMPT_DIR, "filter_contiguous_subset.json")
+    if not os.path.exists(prompt_file):
+        raise FileNotFoundError(f"Prompt JSON file not found: {prompt_file}")
 
-    print(f"Loading prompts from {len(prompt_files)} files:")
-    for pf in prompt_files:
-        print(f"  - {os.path.basename(pf)}")
+    print(f"Loading prompts from file: {os.path.basename(prompt_file)}")
 
-    prompt_list = load_prompts(prompt_files)
+    prompt_list = load_prompts([prompt_file])
     prompts = PromptSet(prompt_list)
     prompts.shuffle(seed=42)
     print(f"Total prompts loaded: {len(prompts.get_train())}")

@@ -45,7 +45,7 @@ class PromptSet:
         self._train_cursor = 0
         self._test_cursor = 0
 
-    def map(self, samples: list[str], use_test: bool = False) -> tuple[list[Prompt], list[str]]:
+    def map(self, samples: list[str], use_test: bool = False) -> tuple[list[Prompt], list[dict]]:
         """
         Maps one prompt to each of the samples in the list. Pulls prompts
         from the training or testing set via the internal cursor (wrapping around).
@@ -58,17 +58,20 @@ class PromptSet:
         Returns:
             A tuple of:
               - A list of Prompt objects with {{DOC}} replaced, one per sample.
-              - A list of JSON-serialized original template chat_turns (before substitution).
+              - A list of dictionaries containing the complete metadata of the original template prompt (before substitution).
         """
         templates = self.next_test(len(samples)) if use_test else self.next_train(len(samples))
         mapped: list[Prompt] = []
-        prompt_labels: list[str] = []
+        prompt_labels: list[dict] = []
         for sample, template in zip(samples, templates):
             mapped.append(Prompt(
                 chat_turns=[turn.replace("{{DOC}}", sample) for turn in template.chat_turns],
                 use_multiturn=template.use_multiturn,
             ))
-            prompt_labels.append(json.dumps(template.chat_turns))
+            prompt_labels.append({
+                "chat_turns": template.chat_turns,
+                "use_multiturn": template.use_multiturn,
+            })
         return mapped, prompt_labels
 
     def next_train(self, num: int) -> list[Prompt]:
