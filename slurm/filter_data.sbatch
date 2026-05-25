@@ -30,7 +30,6 @@ fi
 
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
-python scripts/filter_data.py \
-  --model-name "QuantTrio/Qwen3.5-9B-AWQ"
+python scripts/filter_data.py
 
 echo "Dataset generation complete."

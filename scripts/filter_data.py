@@ -86,7 +86,7 @@ def load_samples(dataset: str, config: str | None, column: str, num_samples: int
 def main():
     parser = argparse.ArgumentParser(description="Filter data using an LLM server.")
     parser.add_argument("--engine", type=str, default="vllm", help="LLM engine to run (e.g. vllm).")
-    parser.add_argument("--model-name", type=str, default="QuantTrio/Qwen3.5-9B-AWQ", help="Model name to launch.")
+    parser.add_argument("--model-name", type=str, default="google/gemma-4-E4B", help="Model name to launch.")
     parser.add_argument("--port", type=int, default=None, help="Port to run LLM server on (default: auto-detect free port).")
     args = parser.parse_args()
 

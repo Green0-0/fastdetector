@@ -30,7 +30,6 @@ fi
 
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
-python scripts/generate_llm_data.py \
-  --model-name "QuantTrio/Qwen3.5-9B-AWQ"
+python scripts/generate_llm_data.py
 
 echo "Dataset generation complete."
