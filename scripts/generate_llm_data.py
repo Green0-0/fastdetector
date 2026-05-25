@@ -21,7 +21,6 @@ GENERATION_PARAMS = {
 
 PROMPT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts")
 
-
 def load_samples(dataset: str, config: str | None, column: str, num_samples: int) -> list[str]:
     """Stream a HuggingFace dataset and extract the first num_samples texts."""
     print(f"Streaming {num_samples} samples from {dataset} ({config})...")
@@ -32,7 +31,6 @@ def load_samples(dataset: str, config: str | None, column: str, num_samples: int
     samples = [row[column] for row in ds.take(num_samples)]
     print(f"Loaded {len(samples)} samples.")
     return samples
-
 
 def main():
     parser = argparse.ArgumentParser(description="Generate LLM data using an LLM server.")
@@ -77,7 +75,6 @@ def main():
         print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
 
         print("Done!")
-
 
 if __name__ == "__main__":
     main()

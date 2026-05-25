@@ -41,11 +41,9 @@ PUNCT_TRANSLATION = str.maketrans({
     "\u202F": " ",
 })
 
-
 def normalize_text(text: str) -> str:
     """Normalize punctuation style for subset checks."""
     return text.translate(PUNCT_TRANSLATION)
-
 
 def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: str) -> Dataset:
     """Append validation columns for contiguous subset checks."""
@@ -70,7 +68,6 @@ def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: st
 
     return dataset.map(_check_batch, batched=True)
 
-
 def load_samples(dataset: str, config: str | None, column: str, num_samples: int) -> list[str]:
     """Stream a HuggingFace dataset and extract the first num_samples texts."""
     print(f"Streaming {num_samples} samples from {dataset} ({config})...")
@@ -81,7 +78,6 @@ def load_samples(dataset: str, config: str | None, column: str, num_samples: int
     samples = [row[column] for row in ds.take(num_samples)]
     print(f"Loaded {len(samples)} samples.")
     return samples
-
 
 def main():
     parser = argparse.ArgumentParser(description="Filter data using an LLM server.")
@@ -125,7 +121,6 @@ def main():
         print(f"Malformed rows: {malformed_count}/{len(result_ds)}")
         result_ds.push_to_hub(TARGET_DATASET)
         print("Done!")
-
 
 if __name__ == "__main__":
     main()

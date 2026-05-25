@@ -35,7 +35,7 @@ def launch_vllm_server(model_name: str, port: int) -> subprocess.Popen:
     cmd = [
         vllm_bin, "serve", model_name,
         "--port", str(port),
-        "--pipeline-parallel-size", str(gpu_count),
+        "--data-parallel-size", str(gpu_count),
         "--max-model-len", "4096",
         "--max-num-seqs", "256",
         "--max-num-batched-tokens", "2048",
