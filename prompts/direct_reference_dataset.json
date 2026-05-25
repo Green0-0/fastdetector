@@ -1,0 +1,3002 @@
+[
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that is on a completely different topic, but reuses verbatim as many phrases and sentences from this text as possible.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should use varied sentence lengths, and remove all common AI buzzwords such as 'tapestry', 'delve', or 'testament', to ensure that it sounds like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a prequel to this text, describing the events, thoughts, or historical context that immediately led up to this piece being written, making sure to use similar language and wording as the author, as if it was written by the author.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake a subpoint within this text and write a full new text about it, using the language and wording from the text as appropriate.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should make sure there are slight, subtle grammatical mistakes, to make it sound like it was written by a human.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that is of a similar theme or background as this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text with a different topic that the author of this text might write about.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a different piece of text on the same topic.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a followup to this piece of text, in the same style and language as the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nTake inspiration from the style, language, and content of this text, and write a new piece of text on a topic of your choice. However, you should write the new text as if it was a rough draft being typed out on a phone.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a piece of text in the same style and language as this text, but is directly contrasting to the themes, ideas, and/or details in this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite an alternate version of this text, it should follow the style and format of the original text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a detailed rebuttal or critique challenging the core ideas, themes, or facts presented in this text, using the same language and roughly matching the intellectual level of the text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite a new piece of text that uses this text as a citation or reference.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    },
+    {
+        "chat_turns": [
+            "{{DOC}}\nWrite another piece of text that resembles the style and language of this text.\nOutput the full new text with no extra statements or commentations."
+        ],
+        "use_multiturn": false
+    }
+]

@@ -1,0 +1,10 @@
+[
+    "Write a detailed descriptor for the style of writing of this text, including its qualitative and quantitative properties.",
+    "Write a detailed descriptor for the manner in which the author of this uses language, and things such as their word choice.",
+    "Write a detailed descriptor for how this text is stylistically differentiated from other texts, including grammatical choices and word choices not present in other texts of this kind.",
+    "Write a detailed descriptor for the (imaginary) personality of the author who wrote this text, including their livelihood and day to day activities, as well as how that influences their writing.",
+    "Create a detailed dictionary that fully describes all the meaningful phrases and words this author utilizes to create this text, and how the author utilizes those words and phrases, and why.",
+    "Envision the scenario in which the author wrote this text. Describe that scenario in exhaustive detail.",
+    "Reformat this text into a sensible, structured JSON object.",
+    "Translate the entirety of this text into a sequence of emojis that captures the literal meaning, tone, and narrative progression of the writing. Do not use any letters or words."
+]

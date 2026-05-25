@@ -58,7 +58,7 @@ def resize(items: list[list[str]], target_length: int, also_shuffle: bool = True
         rng.shuffle(result)
     return result
 
-def partial_stack(items_to_stack: list[list[list[str]]], max_stack_size: int, min_stack_size: int = 1) -> list[list[str]]:
+def partial_stack(items_to_stack: list[list[list[str]]], min_stack_size: int = 1, max_stack_size: int = 1, seed: int = 42) -> list[list[str]]:
     """
     Takes a list of lists, where each list must have the exact same number of elements.
 
@@ -72,8 +72,9 @@ def partial_stack(items_to_stack: list[list[list[str]]], max_stack_size: int, mi
 
     Args:
         items_to_stack (list[list[list[str]]]): List of datasets to stack.
-        max_stack_size (int): Maximum number of lists to stack.
         min_stack_size (int, optional): Minimum number of lists to stack. Defaults to 1.
+        max_stack_size (int, optional): Maximum number of lists to stack. Defaults to 1.
+        seed (int, optional): Seed for the random number generator. Defaults to 42.
     
     Returns:
         list[list[str]]: List of sequentially combined chat turns.
@@ -83,9 +84,10 @@ def partial_stack(items_to_stack: list[list[list[str]]], max_stack_size: int, mi
     assert 1 <= min_stack_size <= max_stack_size, f"Invalid bounds: min ({min_stack_size}) must be <= max ({max_stack_size}) and >= 1."
     assert max_stack_size <= len(items_to_stack), f"max_stack_size ({max_stack_size}) cannot exceed the number of sets provided ({len(items_to_stack)})."
 
+    rng = random.Random(seed)
     result = []
     for i in range(len(items_to_stack[0])):
-        stack_size = random.randint(min_stack_size, max_stack_size)
+        stack_size = rng.randint(min_stack_size, max_stack_size)
         stacked_item = []
         for j in range(stack_size):
             stacked_item.extend(items_to_stack[j][i])

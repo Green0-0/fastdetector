@@ -1,0 +1,13 @@
+[
+    "Edit this text by removing exactly one to three sentences from it (the least necessary), you may only make minimal modifications to adjacent sentences for better flow.",
+    "Edit this text by inserting exactly one to three sentences (in appropriate locations), you may only make minimal modifications to transitions in adjacent sentences for better flow.",
+    "Edit this text by replacing exactly one to three sentences, without changing anything else.",
+    "Edit this text by replacing, removing or inserting exactly one to three sentences, without changing anything else.",
+    "Edit this text by replacing all instances of passive voice with active voice, without altering any sentences that are already in the active voice.",
+    "Edit this text by splitting the three longest sentences into shorter, distinct sentences, without changing the vocabulary or structure of the rest of the text.",
+    "Edit this text by combining at least four pairs of short, adjacent sentences into complex sentences using appropriate conjunctions, leaving all other sentences untouched.",
+    "Rewrite only the opening hook and the final concluding sentence of this text, leaving the entire middle portion exactly as it was originally written.",
+    "Edit this text by completely rewriting the topic sentence of every paragraph, while preserving the supporting sentences in those paragraphs verbatim.",
+    "Edit this text by inserting a single, highly engaging introductory sentence at the very beginning, without modifying any of the original text that follows.",
+    "Edit this text by replacing the final sentence with a more open-ended, thought-provoking statement, without altering any preceding text."
+]

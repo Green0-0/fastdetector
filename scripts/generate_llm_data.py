@@ -9,7 +9,7 @@ from fastdetector.llm_utils import llm_server_context
 SOURCE_DATASET = "G-reen/cc-contiguous"
 SOURCE_CONFIG = None
 SOURCE_COLUMN = "response_0"
-NUM_SAMPLES = 1_000
+NUM_SAMPLES = 5_000
 
 TARGET_DATASET = "G-reen/cc-contiguous-rewritten"
 
@@ -46,8 +46,7 @@ def main():
 
         # Load prompt JSON files
         prompt_files = [
-            os.path.join(PROMPT_DIR, "testing_multiturn_dataset.json"),
-            os.path.join(PROMPT_DIR, "testing_recursive_dataset.json"),
+            os.path.join(PROMPT_DIR, "combined_dataset.json"),
         ]
         for pf in prompt_files:
             if not os.path.exists(pf):
@@ -59,7 +58,6 @@ def main():
 
         prompt_list = load_prompts(prompt_files)
         prompts = PromptSet(prompt_list)
-        prompts.shuffle(seed=42)
         print(f"Total prompts loaded: {len(prompts.get_train())}")
 
         # Stream the source dataset
