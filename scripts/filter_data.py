@@ -1,7 +1,9 @@
+import argparse
 import os
 from datasets import Dataset, load_dataset
 from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
+from fastdetector.llm_utils import llm_server_context
 
 # --- Configuration ---
 SOURCE_DATASET = "G-reen/view"
@@ -82,45 +84,47 @@ def load_samples(dataset: str, config: str | None, column: str, num_samples: int
 
 
 def main():
-    # Get the API URL from environment (set by the sbatch script)
-    api_url = os.environ.get("VLLM_API_URL")
-    if not api_url:
-        raise RuntimeError("VLLM_API_URL environment variable is not set.")
+    parser = argparse.ArgumentParser(description="Filter data using an LLM server.")
+    parser.add_argument("--engine", type=str, default="vllm", help="LLM engine to run (e.g. vllm).")
+    parser.add_argument("--model-name", type=str, default="QuantTrio/Qwen3.5-9B-AWQ", help="Model name to launch.")
+    parser.add_argument("--port", type=int, default=None, help="Port to run LLM server on (default: auto-detect free port).")
+    args = parser.parse_args()
 
-    print(f"Using API endpoint: {api_url}")
+    with llm_server_context(engine=args.engine, model_name=args.model_name, port=args.port) as api_url:
+        print(f"Using API endpoint: {api_url}")
 
-    # Load prompt JSON file
-    prompt_file = os.path.join(PROMPT_DIR, "filter_contiguous_subset.json")
-    if not os.path.exists(prompt_file):
-        raise FileNotFoundError(f"Prompt JSON file not found: {prompt_file}")
+        # Load prompt JSON file
+        prompt_file = os.path.join(PROMPT_DIR, "filter_contiguous_subset.json")
+        if not os.path.exists(prompt_file):
+            raise FileNotFoundError(f"Prompt JSON file not found: {prompt_file}")
 
-    print(f"Loading prompts from file: {os.path.basename(prompt_file)}")
+        print(f"Loading prompts from file: {os.path.basename(prompt_file)}")
 
-    prompt_list = load_prompts([prompt_file])
-    prompts = PromptSet(prompt_list)
-    prompts.shuffle(seed=42)
-    print(f"Total prompts loaded: {len(prompts.get_train())}")
+        prompt_list = load_prompts([prompt_file])
+        prompts = PromptSet(prompt_list)
+        prompts.shuffle(seed=42)
+        print(f"Total prompts loaded: {len(prompts.get_train())}")
 
-    # Stream the source dataset
-    samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES)
+        # Stream the source dataset
+        samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES)
 
-    # Filter locally
-    result_ds = build_dataset(
-        samples=samples,
-        target=TARGET_DATASET,
-        api_url=api_url,
-        prompts=prompts,
-        append=False,
-        generation_params=FILTERING_GENERATION_PARAMS,
-    )
+        # Filter locally
+        result_ds = build_dataset(
+            samples=samples,
+            target=TARGET_DATASET,
+            api_url=api_url,
+            prompts=prompts,
+            append=False,
+            generation_params=FILTERING_GENERATION_PARAMS,
+        )
 
-    # Validate that filtered outputs are contiguous subsets of the originals
-    print("Validating filtered outputs...")
-    result_ds = add_validation_columns(result_ds, original_col=ORIGINAL_COLUMN, filtered_col=FILTERED_COLUMN)
-    malformed_count = sum(result_ds["malformed"])
-    print(f"Malformed rows: {malformed_count}/{len(result_ds)}")
-    result_ds.push_to_hub(TARGET_DATASET)
-    print("Done!")
+        # Validate that filtered outputs are contiguous subsets of the originals
+        print("Validating filtered outputs...")
+        result_ds = add_validation_columns(result_ds, original_col=ORIGINAL_COLUMN, filtered_col=FILTERED_COLUMN)
+        malformed_count = sum(result_ds["malformed"])
+        print(f"Malformed rows: {malformed_count}/{len(result_ds)}")
+        result_ds.push_to_hub(TARGET_DATASET)
+        print("Done!")
 
 
 if __name__ == "__main__":

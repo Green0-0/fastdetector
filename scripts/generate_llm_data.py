@@ -1,7 +1,9 @@
+import argparse
 import os
 from datasets import load_dataset
 from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
+from fastdetector.llm_utils import llm_server_context
 
 # --- Configuration ---
 SOURCE_DATASET = "G-reen/cc-contiguous"
@@ -33,48 +35,50 @@ def load_samples(dataset: str, config: str | None, column: str, num_samples: int
 
 
 def main():
-    # Get the API URL from environment (set by the sbatch script)
-    api_url = os.environ.get("VLLM_API_URL")
-    if not api_url:
-        raise RuntimeError("VLLM_API_URL environment variable is not set.")
+    parser = argparse.ArgumentParser(description="Generate LLM data using an LLM server.")
+    parser.add_argument("--engine", type=str, default="vllm", help="LLM engine to run (e.g. vllm).")
+    parser.add_argument("--model-name", type=str, default="QuantTrio/Qwen3.5-9B-AWQ", help="Model name to launch.")
+    parser.add_argument("--port", type=int, default=None, help="Port to run LLM server on (default: auto-detect free port).")
+    args = parser.parse_args()
 
-    print(f"Using API endpoint: {api_url}")
+    with llm_server_context(engine=args.engine, model_name=args.model_name, port=args.port) as api_url:
+        print(f"Using API endpoint: {api_url}")
 
-    # Load prompt JSON files
-    prompt_files = [
-        os.path.join(PROMPT_DIR, "testing_multiturn_dataset.json"),
-        os.path.join(PROMPT_DIR, "testing_recursive_dataset.json"),
-    ]
-    for pf in prompt_files:
-        if not os.path.exists(pf):
-            raise FileNotFoundError(f"Prompt JSON file not found: {pf}")
+        # Load prompt JSON files
+        prompt_files = [
+            os.path.join(PROMPT_DIR, "testing_multiturn_dataset.json"),
+            os.path.join(PROMPT_DIR, "testing_recursive_dataset.json"),
+        ]
+        for pf in prompt_files:
+            if not os.path.exists(pf):
+                raise FileNotFoundError(f"Prompt JSON file not found: {pf}")
 
-    print(f"Loading prompts from {len(prompt_files)} files:")
-    for pf in prompt_files:
-        print(f"  - {os.path.basename(pf)}")
+        print(f"Loading prompts from {len(prompt_files)} files:")
+        for pf in prompt_files:
+            print(f"  - {os.path.basename(pf)}")
 
-    prompt_list = load_prompts(prompt_files)
-    prompts = PromptSet(prompt_list)
-    prompts.shuffle(seed=42)
-    print(f"Total prompts loaded: {len(prompts.get_train())}")
+        prompt_list = load_prompts(prompt_files)
+        prompts = PromptSet(prompt_list)
+        prompts.shuffle(seed=42)
+        print(f"Total prompts loaded: {len(prompts.get_train())}")
 
-    # Stream the source dataset
-    samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES)
+        # Stream the source dataset
+        samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES)
 
-    # Generate locally
-    result_ds = build_dataset(
-        samples=samples,
-        target=TARGET_DATASET,
-        api_url=api_url,
-        prompts=prompts,
-        append=False,
-        generation_params=GENERATION_PARAMS,
-    )
+        # Generate locally
+        result_ds = build_dataset(
+            samples=samples,
+            target=TARGET_DATASET,
+            api_url=api_url,
+            prompts=prompts,
+            append=False,
+            generation_params=GENERATION_PARAMS,
+        )
 
-    result_ds.push_to_hub(TARGET_DATASET)
-    print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
+        result_ds.push_to_hub(TARGET_DATASET)
+        print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
 
-    print("Done!")
+        print("Done!")
 
 
 if __name__ == "__main__":
