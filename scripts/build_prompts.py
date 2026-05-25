@@ -64,9 +64,9 @@ def main():
 
     all_prompts += build_indirect_reference({
         "sample_prompts/indirect_reference/descriptive_encode.json":
-            "Above is an AI generated descriptor/trace of some human written document, in some arbitrary format. Based on that descriptor, recreate the original human written text it describes as accurately as possible. Output only the recreated text with no extra commentary.",
+            "Above is an AI generated descriptor/trace of some human written document, in some arbitrary format. Based on that descriptor, recreate the original human written text it describes as accurately as possible, noting that many details have been lost/excluded in the descriptor, and you must expand upon it to recover the original text. Output only the recreated text with no extra commentary.",
         "sample_prompts/indirect_reference/partial_encode.json":
-            "Above is a partial trace of a human written document, in some arbitrary format. Based on that descriptor, recreate the original human written text it describes as accurately as possible. Output only the recreated text with no extra commentary.",
+            "Above is a partial trace of a human written document, in some arbitrary format. Based on that descriptor, recreate the original human written text it describes as accurately as possible, noting that many details have been lost/excluded in the descriptor, and you must expand upon it to recover the original text. Output only the recreated text with no extra commentary.",
         "sample_prompts/indirect_reference/prompt_encode.json":
             "Output only the generated text with no extra commentary.",
         "sample_prompts/indirect_reference/translation_roundtrip.json":
