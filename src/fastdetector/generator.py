@@ -183,6 +183,8 @@ def build_dataset(
         columns[col_name] = turn_responses
         print(f"  -> Column '{col_name}' created with {len(active_indices)} active responses.")
 
+    columns["final_response_index"] = [len(p.chat_turns) - 1 for p in mapped_prompts]
+
     # Build the final HuggingFace dataset
     result_ds = Dataset.from_dict(columns)
 

@@ -53,18 +53,41 @@ def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: st
         filtered = batch[filtered_col]
         malformed: list[bool] = []
         deviation_size: list[int] = []
+        updated_filtered: list[str] = []
         for original, filtered_text in zip(originals, filtered):
             if not isinstance(original, str):
                 original = "" if original is None else str(original)
             if not isinstance(filtered_text, str):
                 filtered_text = "" if filtered_text is None else str(filtered_text)
-            original_norm = normalize_text(original)
-            filtered_norm = normalize_text(filtered_text)
-            malformed.append(not filtered_norm or filtered_norm not in original_norm)
-            original_words = len(original_norm.split())
-            filtered_words = len(filtered_norm.split())
+            
+            orig_norm = normalize_text(original)
+            filt_norm = normalize_text(filtered_text)
+            
+            orig_canon = ""
+            orig_mapping = []
+            for i, c in enumerate(orig_norm):
+                if not c.isspace():
+                    orig_canon += c.lower()
+                    orig_mapping.append(i)
+                    
+            filt_canon = "".join(c.lower() for c in filt_norm if not c.isspace())
+            
+            if not filt_canon or filt_canon not in orig_canon:
+                malformed.append(True)
+                updated_filtered.append(filtered_text)
+            else:
+                malformed.append(False)
+                start_idx = orig_canon.find(filt_canon)
+                end_idx = start_idx + len(filt_canon) - 1
+                orig_start = orig_mapping[start_idx]
+                orig_end = orig_mapping[end_idx]
+                updated_filtered.append(original[orig_start:orig_end+1])
+                
+            original_words = len(orig_norm.split())
+            filtered_words = len(filt_norm.split())
             deviation_size.append(max(0, original_words - filtered_words))
-        return {"malformed": malformed, "deviation_size": deviation_size}
+            
+        return {"malformed": malformed, "deviation_size": deviation_size, filtered_col: updated_filtered}
 
     return dataset.map(_check_batch, batched=True)
 
