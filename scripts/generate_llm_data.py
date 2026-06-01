@@ -1,5 +1,7 @@
 import argparse
 import os
+import io
+import matplotlib.pyplot as plt
 import numpy as np
 from huggingface_hub import HfApi
 from datasets import load_dataset
@@ -154,13 +156,83 @@ def main():
     global_stats.append(f"- **AI-Human**: {np.mean(result_ds['ai_human_cossim']):.4f}")
     global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
 
+    print("Generating charts...")
+    charts = {}
+
+    def get_classifier_plot(human_scores, ai_scores, title):
+        all_scores = np.concatenate([human_scores, ai_scores])
+        min_val, max_val = np.min(all_scores), np.max(all_scores)
+        thresholds = np.linspace(min_val, max_val, 100)
+        
+        human_accs = []
+        ai_accs = []
+        
+        for t in thresholds:
+            pred_ai_for_ai = np.sum(np.array(ai_scores) > t) / len(ai_scores)
+            pred_human_for_human = np.sum(np.array(human_scores) <= t) / len(human_scores)
+            ai_accs.append(pred_ai_for_ai)
+            human_accs.append(pred_human_for_human)
+            
+        plt.figure(figsize=(8, 5))
+        plt.plot(thresholds, human_accs, color='green', label='Human Accuracy')
+        plt.plot(thresholds, ai_accs, color='red', label='AI Accuracy')
+        plt.xlabel('Threshold (Barline)')
+        plt.ylabel('Accuracy')
+        plt.title(title)
+        plt.legend()
+        plt.grid(True)
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close()
+        return buf.read()
+
+    def get_histogram(data1, data2, label1, label2, title):
+        plt.figure(figsize=(8, 5))
+        plt.hist(data1, bins=50, alpha=0.5, label=label1, density=True)
+        if data2 is not None:
+            plt.hist(data2, bins=50, alpha=0.5, label=label2, density=True)
+        plt.title(title)
+        if label1 or label2:
+            plt.legend()
+        plt.grid(True)
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close()
+        return buf.read()
+
+    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+        human_vals = result_ds[f"human_{stat}"]
+        ai_vals = result_ds[f"ai_{stat}"]
+        charts[f"classifier_{stat}.png"] = get_classifier_plot(human_vals, ai_vals, f"Naive Classifier: {stat.capitalize()}")
+        charts[f"hist_{stat}.png"] = get_histogram(human_vals, ai_vals, "Human", "AI", f"Histogram: {stat.capitalize()}")
+
+    charts["hist_pairwise_cossim.png"] = get_histogram(result_ds["pairwise_cossim"], None, "Pairwise Cosine Similarity", None, "Histogram: Pairwise Cosine Similarity")
+    charts["hist_pairwise_crossencoder.png"] = get_histogram(result_ds["pairwise_cross_encoder"], None, "Pairwise Cross-Encoder", None, "Histogram: Pairwise Cross-Encoder")
+    charts["hist_pairwise_levenshtein.png"] = get_histogram(result_ds["pairwise_levenshtein"], None, "Pairwise Levenshtein", None, "Histogram: Pairwise Levenshtein")
+    charts["hist_pairwise_jacard.png"] = get_histogram(result_ds["pairwise_jacard_1"], None, "Pairwise Jaccard (n=1)", None, "Histogram: Pairwise Jaccard (n=1)")
+
     readme_content = "# Generation Configuration\n"
     readme_content += f"- Source Dataset: {SOURCE_DATASET}\n"
     readme_content += f"- Num Samples: {NUM_SAMPLES}\n"
     readme_content += f"- Generation Params: {GENERATION_PARAMS}\n\n"
     readme_content += "\n".join(global_stats)
 
+    readme_content += "\n\n## Classifiers\n"
+    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+        readme_content += f"![Classifier {stat}](classifier_{stat}.png)\n"
+
+    readme_content += "\n## Histograms\n"
+    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+        readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
+    for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jacard"]:
+        readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
+
     result_ds.push_to_hub(TARGET_DATASET)
+
     print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
 
     try:
@@ -171,7 +243,14 @@ def main():
             repo_id=TARGET_DATASET,
             repo_type="dataset"
         )
-        print("Global stats written to Dataset README.md on HuggingFace Hub.")
+        for filename, data in charts.items():
+            api.upload_file(
+                path_or_fileobj=data,
+                path_in_repo=filename,
+                repo_id=TARGET_DATASET,
+                repo_type="dataset"
+            )
+        print("Global stats and charts written to Dataset README.md on HuggingFace Hub.")
     except Exception as e:
         print(f"Error uploading README to HuggingFace Hub: {e}")
 
