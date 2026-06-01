@@ -98,18 +98,42 @@ def main():
     result_ds = result_ds.map(compute_text_stats, batched=True, batch_size=100)
     
     print("Computing global text statistics...")
-    all_human_text = " ".join(result_ds["original"])
+    human_texts_list = result_ds["original"]
     
     resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
     final_indices = result_ds["final_response_index"]
     ai_texts_list = [resp_cols[f"response_{idx}"][i] for i, idx in enumerate(final_indices)]
-    all_ai_text = " ".join(ai_texts_list)
     
+    from collections import Counter
+    def get_global_ngrams(texts, n):
+        counts = Counter()
+        for text in texts:
+            tokens = text.split()
+            if len(tokens) >= n:
+                counts.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
+        total = sum(counts.values())
+        return {k: v / total for k, v in counts.items()} if total > 0 else {}
+        
+    def get_global_jaccard(texts1, texts2, n):
+        t1 = set()
+        t2 = set()
+        for text in texts1:
+            tokens = text.split()
+            if len(tokens) >= n:
+                t1.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
+        for text in texts2:
+            tokens = text.split()
+            if len(tokens) >= n:
+                t2.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
+        if not t1 and not t2: return 1.0
+        if not t1 or not t2: return 0.0
+        return len(t1.intersection(t2)) / len(t1.union(t2))
+
     global_stats = []
     global_stats.append("## N-gram Analysis (Top 10)")
     for n in [1, 2, 3]:
-        human_ngrams = ngram_analysis(all_human_text, n)
-        ai_ngrams = ngram_analysis(all_ai_text, n)
+        human_ngrams = get_global_ngrams(human_texts_list, n)
+        ai_ngrams = get_global_ngrams(ai_texts_list, n)
         
         human_top10 = sorted(human_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
         ai_top10 = sorted(ai_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -120,7 +144,7 @@ def main():
         global_stats.append("**AI:**")
         for k, v in ai_top10: global_stats.append(f"- '{k}': {v:.4f}")
         
-    global_jacard = jacard_ngram(all_human_text, all_ai_text, 1)
+    global_jacard = get_global_jaccard(human_texts_list, ai_texts_list, 1)
     global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jacard:.4f}")
     print("Text-based global stats computed.")
 
@@ -168,8 +192,8 @@ def main():
         ai_accs = []
         
         for t in thresholds:
-            pred_ai_for_ai = np.sum(np.array(ai_scores) > t) / len(ai_scores)
-            pred_human_for_human = np.sum(np.array(human_scores) <= t) / len(human_scores)
+            pred_ai_for_ai = np.sum(np.array(ai_scores) <= t) / len(ai_scores)
+            pred_human_for_human = np.sum(np.array(human_scores) > t) / len(human_scores)
             ai_accs.append(pred_ai_for_ai)
             human_accs.append(pred_human_for_human)
             
