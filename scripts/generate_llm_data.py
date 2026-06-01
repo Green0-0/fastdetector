@@ -8,13 +8,13 @@ from fastdetector.generator import build_dataset
 from fastdetector.llm_utils import llm_server_context
 from fastdetector.statistics import jacard_ngram, levenshtein, ngram_analysis
 from fastdetector.statistics import batch_compute_llm_stats
-from fastdetector.statistics import batch_gen_embeddings, pairwise_cossim_all, human_human_cossim_all, ai_ai_cossim_all, human_ai_cossim_all, ai_human_cossim_all
+from fastdetector.statistics import batch_gen_embeddings, pairwise_cossim_all, human_human_cossim_all, ai_ai_cossim_all, human_ai_cossim_all, ai_human_cossim_all, pairwise_cross_encoder_all
 
 # --- Configuration ---
 SOURCE_DATASET = "G-reen/cc-contiguous"
 SOURCE_CONFIG = None
 SOURCE_COLUMN = "response_0"
-NUM_SAMPLES = 5_000
+NUM_SAMPLES = 100
 
 TARGET_DATASET = "G-reen/cc-contiguous-rewritten"
 
@@ -136,6 +136,9 @@ def main():
     result_ds = human_ai_cossim_all(result_ds)
     result_ds = ai_human_cossim_all(result_ds)
 
+    print("Computing pairwise cross encoder similarities...")
+    result_ds = pairwise_cross_encoder_all(result_ds)
+
     
     global_stats.append("\n## LLM Statistics (Average)")
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
@@ -149,6 +152,7 @@ def main():
     global_stats.append(f"- **AI-AI**: {np.mean(result_ds['ai_ai_cossim']):.4f}")
     global_stats.append(f"- **Human-AI**: {np.mean(result_ds['human_ai_cossim']):.4f}")
     global_stats.append(f"- **AI-Human**: {np.mean(result_ds['ai_human_cossim']):.4f}")
+    global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
 
     readme_content = "# Generation Configuration\n"
     readme_content += f"- Source Dataset: {SOURCE_DATASET}\n"

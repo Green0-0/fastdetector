@@ -5,8 +5,7 @@ from openai import OpenAI, AsyncOpenAI
 import Levenshtein
 
 from collections import Counter
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer, CrossEncoder
 
 def _get_logprobs(text: str, api_url: str, top_logprobs: int = 5) -> dict:
     """Helper to get logprobs for a given text from a vLLM completion endpoint using the OpenAI client."""
@@ -97,15 +96,10 @@ def perplexity(text: str, api_url: str) -> float:
         print(f"Error computing perplexity: {e}")
         return 0.0
 
-    except Exception as e:
-        print(f"Error computing perplexity: {e}")
-        return 0.0
-
 def entropy(text: str, api_url: str) -> float:
     """Approximate mean next-token entropy using top-N logprobs and a tail-mass heuristic."""
     if not text.strip():
         return 0.0
-        
     try:
         # Fetch logprobs for the top-100 tokens to approximate the distribution
         logprobs_data = _get_logprobs(text, api_url, top_logprobs=100)
@@ -125,9 +119,7 @@ def entropy(text: str, api_url: str) -> float:
                     h_tail = -M * math.log(p_bound + 1e-12)
                 else:
                     h_tail = 0.0
-                    
-                entropies.append(h_top + h_tail)
-                
+                entropies.append(h_top + h_tail)      
         if not entropies:
             return 0.0
         return float(np.mean(entropies))
@@ -135,7 +127,6 @@ def entropy(text: str, api_url: str) -> float:
         print(f"Error computing entropy: {e}")
         return 0.0
 
-    
 def top_p_outlier_percentage(text: str, p: float, api_url: str) -> float:
     """Compute the percentage of tokens in the given text which lie outside the top-p probability mass (ie: are extremely unlikely to be sampled), using the model from the api_url (presumably hosted on vLLM with a logits endpoint)."""
     if not text.strip():
@@ -210,7 +201,7 @@ def batch_gen_embeddings(dataset):
     Returns:
         Dataset: Dataset with added embeddings columns.
     """
-    model = SentenceTransformer("nomic-ai/modernbert-embed-base", trust_remote_code=True)
+    model = SentenceTransformer("Alibaba-NLP/gte-modernbert-base", trust_remote_code=True)
 
     def _embed(batch):
         human_texts = batch["original"]
@@ -227,7 +218,7 @@ def batch_gen_embeddings(dataset):
     return dataset.map(_embed, batched=True, batch_size=32)
 
 def pairwise_cossim_all(dataset):
-    """Compute the pairwise cosine similarity between the embeddings of the human and ai columns of a dataset. Add the results to a new column 'pairwise_cossim' and return the dataset.
+    """Compute the pairwise cosine similarity between the embeddings of the human and ai columns of a dataset. Add the results to a new column 'pairwise_cossim' and return the dataset. Requires embeddings to be pre-computed and normalized.
     
     Args:
         dataset (Dataset): Dataset to process.
@@ -244,6 +235,29 @@ def pairwise_cossim_all(dataset):
 
     return dataset.map(_compute, batched=True, batch_size=100)
 
+def pairwise_cross_encoder_all(dataset):
+    """Compute the pairwise similarity between the human and ai columns of a dataset using a cross-encoder. Add the results to a new column 'pairwise_cross_encoder' and return the dataset.
+    
+    Args:
+        dataset (Dataset): Dataset to process.
+    Returns:
+        Dataset: Dataset with added pairwise cross encoder column.
+    """
+    model = CrossEncoder("Alibaba-NLP/gte-reranker-modernbert-base", trust_remote_code=True)
+
+    def _compute(batch):
+        human_texts = batch["original"]
+        ai_texts = []
+        for i in range(len(batch["original"])):
+            idx = batch["final_response_index"][i]
+            ai_texts.append(batch[f"response_{idx}"][i])
+
+        pairs = list(zip(human_texts, ai_texts))
+        scores = model.predict(pairs)
+        return {"pairwise_cross_encoder": scores}
+
+    return dataset.map(_compute, batched=True, batch_size=32)
+
 def human_human_cossim_all(dataset):
     """Compute the cosine similarity between a row for the human text against all human texts, averaging the results. Add the results to a new column 'human_human_cossim' and return the dataset.
     
@@ -256,13 +270,9 @@ def human_human_cossim_all(dataset):
     
     def _compute(batch):
         batch_embs = np.array(batch["human_embeddings"], dtype=np.float32)
-        # Fast BLAS matrix multiplication since vectors are pre-normalized
         sims = batch_embs @ all_human_embs.T
-        
-        # Exclude the row itself (value is exactly 1.0)
         sum_sims = np.sum(sims, axis=1) - 1.0
         n_items = max(1, len(all_human_embs) - 1)
-        
         return {"human_human_cossim": sum_sims / n_items}
         
     return dataset.map(_compute, batched=True, batch_size=100)
@@ -280,11 +290,8 @@ def ai_ai_cossim_all(dataset):
     def _compute(batch):
         batch_embs = np.array(batch["ai_embeddings"], dtype=np.float32)
         sims = batch_embs @ all_ai_embs.T
-        
-        # Exclude the row itself (value is exactly 1.0)
         sum_sims = np.sum(sims, axis=1) - 1.0
         n_items = max(1, len(all_ai_embs) - 1)
-        
         return {"ai_ai_cossim": sum_sims / n_items}
         
     return dataset.map(_compute, batched=True, batch_size=100)
