@@ -1,9 +1,14 @@
 import argparse
 import os
+import numpy as np
+from huggingface_hub import HfApi
 from datasets import load_dataset
 from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.llm_utils import llm_server_context
+from fastdetector.statistics import jacard_ngram, levenshtein, ngram_analysis
+from fastdetector.statistics import batch_compute_llm_stats
+from fastdetector.statistics import batch_gen_embeddings, pairwise_cossim_all, human_human_cossim_all, ai_ai_cossim_all, human_ai_cossim_all, ai_human_cossim_all
 
 # --- Configuration ---
 SOURCE_DATASET = "G-reen/cc-contiguous"
@@ -71,10 +76,102 @@ def main():
             generation_params=GENERATION_PARAMS,
         )
 
-        result_ds.push_to_hub(TARGET_DATASET)
-        print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
+    print("Adding pairwise text statistics...")
+    
+    
+    def compute_text_stats(batch):
+        human_texts = batch["original"]
+        ai_texts = [batch[f"response_{idx}"][i] for i, idx in enumerate(batch["final_response_index"])]
+        
+        j1 = [jacard_ngram(h, a, 1) for h, a in zip(human_texts, ai_texts)]
+        j2 = [jacard_ngram(h, a, 2) for h, a in zip(human_texts, ai_texts)]
+        lev = [levenshtein(h, a) for h, a in zip(human_texts, ai_texts)]
+        
+        return {
+            "pairwise_jacard_1": j1,
+            "pairwise_jacard_2": j2,
+            "pairwise_levenshtein": lev
+        }
+        
+    result_ds = result_ds.map(compute_text_stats, batched=True, batch_size=100)
+    
+    print("Computing global text statistics...")
+    all_human_text = " ".join(result_ds["original"])
+    
+    resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
+    final_indices = result_ds["final_response_index"]
+    ai_texts_list = [resp_cols[f"response_{idx}"][i] for i, idx in enumerate(final_indices)]
+    all_ai_text = " ".join(ai_texts_list)
+    
+    global_stats = []
+    global_stats.append("## N-gram Analysis (Top 10)")
+    for n in [1, 2, 3]:
+        human_ngrams = ngram_analysis(all_human_text, n)
+        ai_ngrams = ngram_analysis(all_ai_text, n)
+        
+        human_top10 = sorted(human_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
+        ai_top10 = sorted(ai_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        global_stats.append(f"\n### n={n}")
+        global_stats.append("**Human:**")
+        for k, v in human_top10: global_stats.append(f"- '{k}': {v:.4f}")
+        global_stats.append("**AI:**")
+        for k, v in ai_top10: global_stats.append(f"- '{k}': {v:.4f}")
+        
+    global_jacard = jacard_ngram(all_human_text, all_ai_text, 1)
+    global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jacard:.4f}")
+    print("Text-based global stats computed.")
 
-        print("Done!")
+    print("Launching unsloth/Llama-3.2-1B to calculate LLM statistics...")
+    
+    with llm_server_context(engine="vllm", model_name="unsloth/Llama-3.2-1B", port=None) as stat_api_url:
+        result_ds = batch_compute_llm_stats(result_ds, stat_api_url, p=0.9, k=50)
+        
+    print("Computing ModernBERT embeddings and cosine similarities...")
+    
+    result_ds = batch_gen_embeddings(result_ds)
+    result_ds = pairwise_cossim_all(result_ds)
+    result_ds = human_human_cossim_all(result_ds)
+    result_ds = ai_ai_cossim_all(result_ds)
+    result_ds = human_ai_cossim_all(result_ds)
+    result_ds = ai_human_cossim_all(result_ds)
+
+    
+    global_stats.append("\n## LLM Statistics (Average)")
+    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+        h_mean = np.mean(result_ds[f"human_{stat}"])
+        a_mean = np.mean(result_ds[f"ai_{stat}"])
+        global_stats.append(f"- **{stat.capitalize()}**: Human {h_mean:.4f} | AI {a_mean:.4f}")
+        
+    global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
+    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cossim']):.4f}")
+    global_stats.append(f"- **Human-Human**: {np.mean(result_ds['human_human_cossim']):.4f}")
+    global_stats.append(f"- **AI-AI**: {np.mean(result_ds['ai_ai_cossim']):.4f}")
+    global_stats.append(f"- **Human-AI**: {np.mean(result_ds['human_ai_cossim']):.4f}")
+    global_stats.append(f"- **AI-Human**: {np.mean(result_ds['ai_human_cossim']):.4f}")
+
+    readme_content = "# Generation Configuration\n"
+    readme_content += f"- Source Dataset: {SOURCE_DATASET}\n"
+    readme_content += f"- Num Samples: {NUM_SAMPLES}\n"
+    readme_content += f"- Generation Params: {GENERATION_PARAMS}\n\n"
+    readme_content += "\n".join(global_stats)
+
+    result_ds.push_to_hub(TARGET_DATASET)
+    print(f"Dataset pushed to '{TARGET_DATASET}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
+
+    try:
+        api = HfApi()
+        api.upload_file(
+            path_or_fileobj=readme_content.encode("utf-8"),
+            path_in_repo="README.md",
+            repo_id=TARGET_DATASET,
+            repo_type="dataset"
+        )
+        print("Global stats written to Dataset README.md on HuggingFace Hub.")
+    except Exception as e:
+        print(f"Error uploading README to HuggingFace Hub: {e}")
+
+    print("Done!")
 
 if __name__ == "__main__":
     main()

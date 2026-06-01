@@ -12,4 +12,9 @@ dependencies = [
     "datasets>=4.8.5",
     "huggingface-hub>=1.14.0",
     "openai>=1.30.0",
+    "levenshtein>=0.25.0",
+    "sentence-transformers>=3.0.0",
+    "scikit-learn>=1.5.0",
+    "numpy>=1.26.0",
+    "requests>=2.31.0",
 ]
