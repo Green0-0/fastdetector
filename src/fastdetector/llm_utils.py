@@ -41,6 +41,7 @@ def launch_vllm_server(model_name: str, port: int) -> subprocess.Popen:
         "--max-num-batched-tokens", "2048",
         "--disable-uvicorn-access-log",
         "--max-logprobs", "100",
+        "--gpu-memory-utilization", "0.75",
     ]
 
     # Find a free port for PyTorch Distributed master process to avoid collisions
