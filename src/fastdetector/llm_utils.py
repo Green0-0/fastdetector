@@ -32,6 +32,7 @@ def launch_vllm_server(model_name: str, port: int) -> subprocess.Popen:
     if not os.path.isfile(vllm_bin) or not os.access(vllm_bin, os.X_OK):
         raise RuntimeError(f"vLLM executable not found or not executable at: {vllm_bin}")
 
+    # TODO: DISABLE MAX LOGP AND GPU UTIL ON GEMMA
     cmd = [
         vllm_bin, "serve", model_name,
         "--port", str(port),

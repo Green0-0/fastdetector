@@ -1,12 +1,14 @@
 import json
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Prompt:
     """A single prompt entry consisting of an ordered sequence of chat turns and a multiturn flag."""
     chat_turns: list[str]
     use_multiturn: bool
+    examples: list[tuple[str, str]] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
 class PromptSet:
     def __init__(self, prompts: list[Prompt]):
@@ -67,10 +69,14 @@ class PromptSet:
             mapped.append(Prompt(
                 chat_turns=[turn.replace("{{DOC}}", sample) for turn in template.chat_turns],
                 use_multiturn=template.use_multiturn,
+                examples=list(template.examples),
+                metadata=dict(template.metadata),
             ))
             prompt_labels.append({
                 "chat_turns": template.chat_turns,
                 "use_multiturn": template.use_multiturn,
+                "examples": template.examples,
+                "metadata": template.metadata,
             })
         return mapped, prompt_labels
 
@@ -156,12 +162,14 @@ def load_prompts(all_paths: list[str]) -> list[Prompt]:
         for i, entry in enumerate(data):
             if not isinstance(entry, dict):
                 raise ValueError(f"Entry {i} in {path} must be an object, got {type(entry).__name__}.")
-            if "chat_turns" not in entry or "use_multiturn" not in entry:
-                raise ValueError(f"Entry {i} in {path} must have 'chat_turns' and 'use_multiturn' keys.")
+            if "chat_turns" not in entry or "use_multiturn" not in entry or "examples" not in entry or "metadata" not in entry:
+                raise ValueError(f"Entry {i} in {path} must have 'chat_turns', 'use_multiturn', 'examples', and 'metadata' keys.")
 
             prompts.append(Prompt(
                 chat_turns=entry["chat_turns"],
                 use_multiturn=entry["use_multiturn"],
+                examples=entry["examples"],
+                metadata=entry["metadata"],
             ))
 
     return prompts

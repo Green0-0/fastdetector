@@ -1,4 +1,4 @@
-from fastdetector.prompt_builder import shuffle, resize, partial_stack, force_reformat, apply_recursive_format, load_raw_samples, generate_dataset, save_dataset
+from fastdetector.prompt_builder import shuffle, resize, partial_stack, force_reformat, apply_recursive_format, load_raw_samples, generate_dataset, save_dataset, add_metadata
 
 def main():
     print("Collecting prompts...")
@@ -15,6 +15,8 @@ def main():
     print("Building multiturn variant...")
     mt_samples = force_reformat(samples, only_first_message=False, modified_format="{{TEXT}}\nOutput the full new text with no extra statements or commentations.")
     mt_prompts = generate_dataset(mt_samples, use_multiturn=True)
+    add_metadata(mt_prompts, "PROMPT_TYPE", "revise")
+    add_metadata(mt_prompts, "VERSION", "multiturn")
     print(f"Generated {len(mt_prompts)} prompts.")
     print("Saving prompts...")
     save_dataset(mt_prompts, "testing_multiturn_dataset")
@@ -24,6 +26,8 @@ def main():
     samples = force_reformat(samples, only_first_message=False, modified_format="{{TEXT}}\nOutput the full new text with no extra statements or commentations.")
     r_samples = apply_recursive_format(samples)
     r_prompts = generate_dataset(r_samples, use_multiturn=False)
+    add_metadata(r_prompts, "PROMPT_TYPE", "revise")
+    add_metadata(r_prompts, "VERSION", "recursive")
     print(f"Generated {len(r_prompts)} prompts.")
     print("Saving prompts...")
     save_dataset(r_prompts, "testing_recursive_dataset")

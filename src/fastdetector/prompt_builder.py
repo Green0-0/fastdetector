@@ -172,7 +172,23 @@ def generate_dataset(prompts: list[list[str]], use_multiturn: bool = True) -> Li
     """
     Return a set of Prompt objects based on the input.
     """
-    return [Prompt(chat_turns=chat, use_multiturn=True if use_multiturn else False) for chat in prompts]
+    return [Prompt(chat_turns=chat, use_multiturn=use_multiturn) for chat in prompts]
+
+def add_metadata(prompts: List[Prompt], key: str, value: any) -> List[Prompt]:
+    """
+    Adds a key-value pair to the metadata dict of each prompt in the list.
+    """
+    for prompt in prompts:
+        prompt.metadata[key] = value
+    return prompts
+
+def add_example(prompts: List[Prompt], example: tuple[str, str]) -> List[Prompt]:
+    """
+    Adds a user-assistant example tuple to the examples list of each prompt in the list.
+    """
+    for prompt in prompts:
+        prompt.examples.append(example)
+    return prompts
 
 def save_dataset(dataset: list[Prompt], name: str, path: str = "prompts/"):
     """
@@ -187,13 +203,15 @@ def save_dataset(dataset: list[Prompt], name: str, path: str = "prompts/"):
         
     out_path = os.path.join(path, name)
     
-    serialized_data = [
-        {
+    serialized_data = []
+    for prompt in dataset:
+        entry = {
             "chat_turns": prompt.chat_turns,
-            "use_multiturn": prompt.use_multiturn
+            "use_multiturn": prompt.use_multiturn,
+            "examples": prompt.examples,
+            "metadata": prompt.metadata
         }
-        for prompt in dataset
-    ]
+        serialized_data.append(entry)
     
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(serialized_data, f, indent=4)
