@@ -92,17 +92,25 @@ def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> li
 
     {{RESP_N}} tokens in each turn are replaced with the response from turn N.
     """
-    messages: list[dict] = []
+    core_messages: list[dict] = []
     for t in range(turn_index + 1):
         text = prompt.chat_turns[t]
         for i in range(t):
             text = text.replace(f"{{{{RESP_{i}}}}}", responses[i])
-        messages.append({"role": "user", "content": text})
+        core_messages.append({"role": "user", "content": text})
         if t < turn_index:
-            messages.append({"role": "assistant", "content": responses[t]})
+            core_messages.append({"role": "assistant", "content": responses[t]})
 
     if not prompt.use_multiturn:
-        return [messages[-1]]
+        core_messages = [core_messages[-1]]
+
+    messages: list[dict] = []
+    if turn_index == 0 or prompt.use_multiturn:
+        for ex_user, ex_asst in prompt.examples:
+            messages.append({"role": "user", "content": ex_user})
+            messages.append({"role": "assistant", "content": ex_asst})
+            
+    messages.extend(core_messages)
     return messages
 
 def build_dataset(
