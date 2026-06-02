@@ -253,10 +253,10 @@ def pairwise_cross_encoder_all(dataset):
             ai_texts.append(batch[f"response_{idx}"][i])
 
         pairs = list(zip(human_texts, ai_texts))
-        scores = model.predict(pairs)
+        scores = model.predict(pairs, batch_size=4)
         return {"pairwise_cross_encoder": scores}
 
-    return dataset.map(_compute, batched=True, batch_size=32)
+    return dataset.map(_compute, batched=True, batch_size=16)
 
 def human_human_cossim_all(dataset):
     """Compute the cosine similarity between a row for the human text against all human texts, averaging the results. Add the results to a new column 'human_human_cossim' and return the dataset.
