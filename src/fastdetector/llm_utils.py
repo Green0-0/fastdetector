@@ -21,7 +21,7 @@ def get_gpu_count() -> int:
         return len(devices)
     raise RuntimeError("No GPUs found! CUDA_VISIBLE_DEVICES not set.")
 
-def launch_vllm_server(model_name: str, port: int) -> subprocess.Popen:
+def launch_vllm_server(model_name: str, port: int, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000, ) -> subprocess.Popen:
     """Launch the vLLM server with pipeline parallel size equal to the number of GPUs."""
     gpu_count = get_gpu_count()
     vllm_venv = os.environ.get("VLLM_VENV_PATH")
@@ -37,12 +37,12 @@ def launch_vllm_server(model_name: str, port: int) -> subprocess.Popen:
         vllm_bin, "serve", model_name,
         "--port", str(port),
         "--data-parallel-size", str(gpu_count),
-        "--max-model-len", "16000",
+        "--max-model-len", str(max_model_len),
         "--max-num-seqs", "256",
         "--max-num-batched-tokens", "2048",
         "--disable-uvicorn-access-log",
-        "--max-logprobs", "100",
-        "--gpu-memory-utilization", "0.75",
+        "--max-logprobs", str(max_logprobs),
+        "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
 
     # Find a free port for PyTorch Distributed master process to avoid collisions
@@ -79,7 +79,7 @@ def launch_vllm_server(model_name: str, port: int) -> subprocess.Popen:
     raise RuntimeError("vLLM server failed to start within the timeout.")
 
 @contextmanager
-def llm_server_context(engine: str, model_name: str, port: int | None = None):
+def llm_server_context(engine: str, model_name: str, port: int | None = None, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000):
     """Context manager to launch and clean up an LLM server."""
     if port is None:
         port = get_free_port()
@@ -87,7 +87,7 @@ def llm_server_context(engine: str, model_name: str, port: int | None = None):
     proc = None
     try:
         if engine.lower() == "vllm":
-            proc = launch_vllm_server(model_name, port)
+            proc = launch_vllm_server(model_name, port, max_logprobs, gpu_memory_utilization, max_model_len)
         else:
             raise ValueError(f"Unsupported LLM engine: {engine}")
         yield f"http://localhost:{port}/v1"
