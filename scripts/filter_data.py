@@ -1,6 +1,7 @@
 import argparse
 import os
 from datasets import Dataset, load_dataset
+from transformers import AutoTokenizer
 from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.llm_utils import llm_server_context
@@ -91,14 +92,24 @@ def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: st
 
     return dataset.map(_check_batch, batched=True)
 
-def load_samples(dataset: str, config: str | None, column: str, num_samples: int) -> list[str]:
+def load_samples(dataset: str, config: str | None, column: str, num_samples: int, tokenizer, max_length: int) -> list[str]:
     """Stream a HuggingFace dataset and extract the first num_samples texts."""
     print(f"Streaming {num_samples} samples from {dataset} ({config})...")
     if config:
         ds = load_dataset(dataset, name=config, split="train", streaming=True)
     else:
         ds = load_dataset(dataset, split="train", streaming=True)
-    samples = [row[column] for row in ds.take(num_samples)]
+    
+    samples = []
+    for row in ds:
+        text = row[column]
+        if not isinstance(text, str):
+            text = "" if text is None else str(text)
+        if len(tokenizer.encode(text)) <= max_length:
+            samples.append(text)
+        if len(samples) >= num_samples:
+            break
+            
     print(f"Loaded {len(samples)} samples.")
     return samples
 
@@ -106,10 +117,11 @@ def main():
     parser = argparse.ArgumentParser(description="Filter data using an LLM server.")
     parser.add_argument("--engine", type=str, default="vllm", help="LLM engine to run (e.g. vllm).")
     parser.add_argument("--model-name", type=str, default="google/gemma-4-E4B-it", help="Model name to launch.")
+    parser.add_argument("--max-model-len", type=int, default=32000, help="Max model length.")
     parser.add_argument("--port", type=int, default=None, help="Port to run LLM server on (default: auto-detect free port).")
     args = parser.parse_args()
 
-    with llm_server_context(engine=args.engine, model_name=args.model_name, port=args.port) as api_url:
+    with llm_server_context(engine=args.engine, model_name=args.model_name, port=args.port, max_model_len=args.max_model_len) as api_url:
         print(f"Using API endpoint: {api_url}")
 
         # Load prompt JSON file
@@ -125,7 +137,10 @@ def main():
         print(f"Total prompts loaded: {len(prompts.get_train())}")
 
         # Stream the source dataset
-        samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES)
+        print("Loading tokenizer...")
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        max_length = args.max_model_len // 2 - 1000
+        samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES, tokenizer, max_length)
 
         # Filter locally
         result_ds = build_dataset(
