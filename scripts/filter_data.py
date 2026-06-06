@@ -1,3 +1,4 @@
+from datasets import config
 import argparse
 import os
 from datasets import Dataset, load_dataset
@@ -7,10 +8,9 @@ from fastdetector.generator import build_dataset
 from fastdetector.llm_utils import llm_server_context
 
 # --- Configuration ---
-SOURCE_DATASET = "G-reen/view"
-SOURCE_CONFIG = None
+SOURCE_DATASET = "G-reen/cc-2021-raw"
 SOURCE_COLUMN = "trafilatura_text"
-NUM_SAMPLES = 1_000
+NUM_SAMPLES = 5_000
 
 TARGET_DATASET = "G-reen/cc-contiguous"
 FILTERED_COLUMN = "response_0"
@@ -96,13 +96,10 @@ def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: st
 
     return dataset.map(_check_batch, batched=True)
 
-def load_samples(dataset: str, config: str | None, column: str, num_samples: int, tokenizer, max_length: int) -> list[str]:
+def load_samples(dataset: str, column: str, num_samples: int, tokenizer, max_length: int) -> list[str]:
     """Stream a HuggingFace dataset and extract the first num_samples texts."""
-    print(f"Streaming {num_samples} samples from {dataset} ({config})...")
-    if config:
-        ds = load_dataset(dataset, name=config, split="train", streaming=True)
-    else:
-        ds = load_dataset(dataset, split="train", streaming=True)
+    print(f"Streaming {num_samples} samples from {dataset}...")
+    ds = load_dataset(dataset, split="train", streaming=True)
     
     samples = []
     for row in ds:

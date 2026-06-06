@@ -3,6 +3,7 @@ import glob
 import os
 import re
 
+import emoji
 import numpy as np
 import torch
 from datasets import load_dataset, Dataset
@@ -18,7 +19,6 @@ from transformers import (
     TrainingArguments,
 )
 
-
 class NormedLinear(torch.nn.Module):
     """Linear layer preceded by LayerNorm to keep logits well-scaled."""
 
@@ -29,41 +29,22 @@ class NormedLinear(torch.nn.Module):
 
     def forward(self, x):
         return self.linear(self.norm(x))
-
-
-def normalize_emoji(text):
-    try:
-        import emoji
-        return emoji.demojize(text)
-    except ImportError:
-        return text
-
-def remove_think_tag(text):
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-
-def remove_ai_header(text):
-    return text
-
-def normalize_whitespace(text):
-    return re.sub(r"\s+", " ", text).strip()
-
+    
 def clean_text(text):
     if text is None:
         return ""
     if not isinstance(text, str):
         text = str(text)
-    text = normalize_emoji(text)
-    text = remove_think_tag(text)
-    text = remove_ai_header(text)
+    text = emoji.demojize(text)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"\s+", " ", text).strip()
     text = text.lower()
-    text = normalize_whitespace(text)
     return text
 
 def count_words(text):
     if text is None:
         return 0
     return len(re.findall(r"\b\w+\b", text))
-
 
 def is_qlora_checkpoint(checkpoint: str) -> bool:
     """Check whether checkpoint is a QLora adapter (local path or HF repo)."""
@@ -152,7 +133,6 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
     model.eval()
     return model, tokenizer, is_qlora
 
-
 def compute_editlens_scores(texts: list, model, tokenizer, is_qlora: bool, n_buckets: int, max_length: int, batch_size: int):
     ds = Dataset.from_dict({"text": texts})
     
@@ -184,7 +164,6 @@ def compute_editlens_scores(texts: list, model, tokenizer, is_qlora: bool, n_buc
     score_preds = (probs @ bucket_labels) / (n_buckets - 1)
     
     return bucket_preds.tolist(), score_preds.tolist()
-
 
 def main():
     parser = argparse.ArgumentParser(description="Run EditLens inference on the dataset produced by calculate_statistics")
