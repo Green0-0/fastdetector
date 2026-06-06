@@ -3,7 +3,7 @@ import io
 import time
 import matplotlib.pyplot as plt
 import numpy as np
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_download
 from datasets import load_dataset
 
 from fastdetector.llm_utils import llm_server_context
@@ -99,8 +99,17 @@ def upload_results(dataset_name, result_ds, readme_content, charts):
 
     try:
         api = HfApi()
+        
+        try:
+            existing_readme_path = hf_hub_download(repo_id=dataset_name, filename="README.md", repo_type="dataset")
+            with open(existing_readme_path, "r") as f:
+                existing_readme = f.read()
+            final_readme_content = existing_readme + "\n\n" + readme_content
+        except Exception:
+            final_readme_content = readme_content
+
         api.upload_file(
-            path_or_fileobj=readme_content.encode("utf-8"),
+            path_or_fileobj=final_readme_content.encode("utf-8"),
             path_in_repo="README.md",
             repo_id=dataset_name,
             repo_type="dataset"
@@ -119,11 +128,14 @@ def upload_results(dataset_name, result_ds, readme_content, charts):
 def main():
     start_time = time.time()
     parser = argparse.ArgumentParser(description="Calculate statistics for a HuggingFace dataset.")
-    parser.add_argument("--dataset", type=str, default="G-reen/cc-contiguous-rewritten", help="Dataset to analyze")
+    parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten", help="Dataset to analyze")
+    parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-1B", help="Model name to launch.")
+    parser.add_argument("--embed-model", type=str, default="Qwen/Qwen3-Embedding-4B", help="Embedding model name.")
+    parser.add_argument("--rerank-model", type=str, default="Qwen/Qwen3-Reranker-4B", help="Reranker model name.")
     args = parser.parse_args()
 
-    print(f"Downloading dataset {args.dataset}...")
-    result_ds = load_dataset(args.dataset, split="train")
+    print(f"Downloading dataset {args.source_dataset}...")
+    result_ds = load_dataset(args.source_dataset, split="train")
 
     human_texts = result_ds["original"]
     resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
@@ -155,8 +167,8 @@ def main():
     global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jaccard:.4f}")
     print("Text-based global stats computed.")
 
-    print("Launching unsloth/Llama-3.2-1B to calculate LLM statistics...")
-    with llm_server_context(engine="vllm", model_name="unsloth/Llama-3.2-1B", port=None, max_logprobs=100, gpu_memory_utilization=0.75) as stat_api_url:
+    print(f"Launching {args.model_name} to calculate LLM statistics...")
+    with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_logprobs=100, gpu_memory_utilization=0.75) as stat_api_url:
         print("Fetching human logprobs...")
         h_tokens, h_top = fetch_logprobs_all(human_texts, stat_api_url, top_logprobs_k=100)
         print("Fetching AI logprobs...")
@@ -172,9 +184,9 @@ def main():
     result_ds = result_ds.add_column("human_top_k_outlier", top_k_outlier_percentages(human_texts, h_top, h_tokens, 50))
     result_ds = result_ds.add_column("ai_top_k_outlier", top_k_outlier_percentages(ai_texts, a_top, a_tokens, 50))
         
-    print("Computing Qwen3 embeddings and cosine similarities...")
-    human_embs = batch_gen_embeddings(human_texts)
-    ai_embs = batch_gen_embeddings(ai_texts)
+    print(f"Computing {args.embed_model} embeddings and cosine similarities...")
+    human_embs = batch_gen_embeddings(human_texts, model_name=args.embed_model)
+    ai_embs = batch_gen_embeddings(ai_texts, model_name=args.embed_model)
     
     result_ds = result_ds.add_column("pairwise_cossim", pairwise_cossim(human_embs, ai_embs))
     result_ds = result_ds.add_column("human_human_cossim", self_cossim_all(human_embs))
@@ -182,8 +194,8 @@ def main():
     result_ds = result_ds.add_column("human_ai_cossim", opposite_cossim_all(human_embs, ai_embs))
     result_ds = result_ds.add_column("ai_human_cossim", opposite_cossim_all(ai_embs, human_embs))
 
-    print("Computing pairwise cross encoder similarities...")
-    result_ds = result_ds.add_column("pairwise_cross_encoder", batch_cross_encoder(human_texts, ai_texts))
+    print(f"Computing {args.rerank_model} pairwise cross encoder similarities...")
+    result_ds = result_ds.add_column("pairwise_cross_encoder", batch_cross_encoder(human_texts, ai_texts, model_name=args.rerank_model))
 
     global_stats.append("\n## LLM Statistics (Average)")
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
@@ -205,7 +217,7 @@ def main():
     total_runtime = time.time() - start_time
     readme_content = build_readme(global_stats, total_runtime)
     
-    upload_results(args.dataset, result_ds, readme_content, charts)
+    upload_results(args.source_dataset, result_ds, readme_content, charts)
     print("Done!")
 
 if __name__ == "__main__":

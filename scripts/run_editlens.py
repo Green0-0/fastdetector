@@ -167,16 +167,16 @@ def compute_editlens_scores(texts: list, model, tokenizer, is_qlora: bool, n_buc
 
 def main():
     parser = argparse.ArgumentParser(description="Run EditLens inference on the dataset produced by calculate_statistics")
-    parser.add_argument("--dataset", type=str, required=True, help="HuggingFace dataset name to process")
+    parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten", help="HuggingFace dataset name to process")
     parser.add_argument("--checkpoint", type=str, default="pangram/editlens_roberta-large", help="Model checkpoint path or HF repo")
-    parser.add_argument("--base_model", type=str, default="FacebookAI/roberta-large", help="Base model name")
-    parser.add_argument("--max_length", type=int, default=512, help="Max length for tokenizer")
-    parser.add_argument("--batch_size", type=int, default=24, help="Eval batch size")
+    parser.add_argument("--base-model", type=str, default="FacebookAI/roberta-large", help="Base model name")
+    parser.add_argument("--max-length", type=int, default=512, help="Max length for tokenizer")
+    parser.add_argument("--batch-size", type=int, default=24, help="Eval batch size")
     
     args = parser.parse_args()
 
-    print(f"Downloading dataset {args.dataset}...")
-    result_ds = load_dataset(args.dataset, split="train")
+    print(f"Downloading dataset {args.source_dataset}...")
+    result_ds = load_dataset(args.source_dataset, split="train")
 
     if "original" not in result_ds.column_names or "final_response_index" not in result_ds.column_names:
         raise ValueError("Dataset does not appear to have 'original' and 'final_response_index' columns. Are you sure it was produced by calculate_statistics?")
@@ -213,8 +213,57 @@ def main():
     print(f"Human score stats: mean={np.mean(human_scores):.4f}, std={np.std(human_scores):.4f}")
     print(f"AI score stats: mean={np.mean(ai_scores):.4f}, std={np.std(ai_scores):.4f}")
 
-    print(f"Pushing updated dataset back to {args.dataset}...")
-    result_ds.push_to_hub(args.dataset)
+    ai_true = np.array(ai_scores)
+    human_true = np.array(human_scores)
+    
+    threshold = 0.5
+    tp = np.sum(ai_true > threshold)
+    fn = np.sum(ai_true <= threshold)
+    tn = np.sum(human_true <= threshold)
+    fp = np.sum(human_true > threshold)
+    
+    total = len(ai_true) + len(human_true)
+    accuracy = (tp + tn) / total if total > 0 else 0
+    
+    stats_md = f"""
+## EditLens Inference Statistics
+- **Checkpoint**: {args.checkpoint}
+- **Base Model**: {args.base_model}
+
+### Score Distributions
+- **Human Scores**: Mean = {np.mean(human_scores):.4f}, Std = {np.std(human_scores):.4f}
+- **AI Scores**: Mean = {np.mean(ai_scores):.4f}, Std = {np.std(ai_scores):.4f}
+
+### Classification (Threshold = {threshold})
+- **Overall Accuracy**: {accuracy * 100:.2f}%
+- **True Positives (AI correctly identified)**: {tp} ({(tp / len(ai_true) * 100) if len(ai_true) else 0:.2f}%)
+- **False Negatives (AI missed)**: {fn} ({(fn / len(ai_true) * 100) if len(ai_true) else 0:.2f}%)
+- **True Negatives (Human correctly identified)**: {tn} ({(tn / len(human_true) * 100) if len(human_true) else 0:.2f}%)
+- **False Positives (Human misclassified as AI)**: {fp} ({(fp / len(human_true) * 100) if len(human_true) else 0:.2f}%)
+"""
+
+    try:
+        api = HfApi()
+        try:
+            existing_readme_path = hf_hub_download(repo_id=args.source_dataset, filename="README.md", repo_type="dataset")
+            with open(existing_readme_path, "r") as f:
+                existing_readme = f.read()
+            final_readme = existing_readme + "\n\n" + stats_md
+        except Exception:
+            final_readme = stats_md
+
+        api.upload_file(
+            path_or_fileobj=final_readme.encode("utf-8"),
+            path_in_repo="README.md",
+            repo_id=args.source_dataset,
+            repo_type="dataset"
+        )
+        print("Appended EditLens statistics to Dataset README.md on HuggingFace Hub.")
+    except Exception as e:
+        print(f"Error updating README on HuggingFace Hub: {e}")
+
+    print(f"Pushing updated dataset back to {args.source_dataset}...")
+    result_ds.push_to_hub(args.source_dataset)
     print("Done!")
 
 if __name__ == "__main__":
