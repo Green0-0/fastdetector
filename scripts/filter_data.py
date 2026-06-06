@@ -35,6 +35,49 @@ PUNCT_TRANSLATION = str.maketrans({
     "\u202F": " ",
 })
 
+def check_batch(batch: dict) -> dict:
+    originals = batch["original"]
+    filtered = batch["response_0"]
+    malformed: list[bool] = []
+    deviation_size: list[int] = []
+    updated_filtered: list[str] = []
+    for original, filtered_text in zip(originals, filtered):
+        original = str(original) if original is not None else ""
+        filtered_text = str(filtered_text) if filtered_text is not None else ""
+        
+        orig_norm = original.translate(PUNCT_TRANSLATION)
+        filt_norm = filtered_text.translate(PUNCT_TRANSLATION)
+        
+        orig_canon_parts = []
+        orig_mapping = []
+        for i, c in enumerate(original):
+            norm_c = c.translate(PUNCT_TRANSLATION)
+            for nc in norm_c:
+                if not nc.isspace():
+                    lowered = nc.lower()
+                    orig_canon_parts.append(lowered)
+                    orig_mapping.extend([i] * len(lowered))
+        orig_canon = "".join(orig_canon_parts)
+        
+        filt_canon = "".join(c.lower() for c in filt_norm if not c.isspace())
+        
+        if not filt_canon or filt_canon not in orig_canon:
+            malformed.append(True)
+            updated_filtered.append(filtered_text)
+        else:
+            malformed.append(False)
+            start_idx = orig_canon.find(filt_canon)
+            end_idx = start_idx + len(filt_canon) - 1
+            orig_start = orig_mapping[start_idx]
+            orig_end = orig_mapping[end_idx]
+            updated_filtered.append(original[orig_start:orig_end+1])
+            
+        original_words = len(orig_norm.split())
+        filtered_words = len(filt_norm.split())
+        deviation_size.append(max(0, original_words - filtered_words))
+        
+    return {"malformed": malformed, "deviation_size": deviation_size, "response_0": updated_filtered}
+    
 def main():
     parser = argparse.ArgumentParser(description="Filter data using an LLM server.")
     parser.add_argument("--model-name", type=str, default="google/gemma-4-E4B-it", help="Model name to launch.")
@@ -81,49 +124,6 @@ def main():
 
     # Validate that filtered outputs are contiguous subsets of the originals
     print("Validating filtered outputs...")
-    def check_batch(batch: dict) -> dict:
-        originals = batch["original"]
-        filtered = batch["response_0"]
-        malformed: list[bool] = []
-        deviation_size: list[int] = []
-        updated_filtered: list[str] = []
-        for original, filtered_text in zip(originals, filtered):
-            original = str(original) if original is not None else ""
-            filtered_text = str(filtered_text) if filtered_text is not None else ""
-            
-            orig_norm = original.translate(PUNCT_TRANSLATION)
-            filt_norm = filtered_text.translate(PUNCT_TRANSLATION)
-            
-            orig_canon_parts = []
-            orig_mapping = []
-            for i, c in enumerate(original):
-                norm_c = c.translate(PUNCT_TRANSLATION)
-                for nc in norm_c:
-                    if not nc.isspace():
-                        lowered = nc.lower()
-                        orig_canon_parts.append(lowered)
-                        orig_mapping.extend([i] * len(lowered))
-            orig_canon = "".join(orig_canon_parts)
-            
-            filt_canon = "".join(c.lower() for c in filt_norm if not c.isspace())
-            
-            if not filt_canon or filt_canon not in orig_canon:
-                malformed.append(True)
-                updated_filtered.append(filtered_text)
-            else:
-                malformed.append(False)
-                start_idx = orig_canon.find(filt_canon)
-                end_idx = start_idx + len(filt_canon) - 1
-                orig_start = orig_mapping[start_idx]
-                orig_end = orig_mapping[end_idx]
-                updated_filtered.append(original[orig_start:orig_end+1])
-                
-            original_words = len(orig_norm.split())
-            filtered_words = len(filt_norm.split())
-            deviation_size.append(max(0, original_words - filtered_words))
-            
-        return {"malformed": malformed, "deviation_size": deviation_size, "response_0": updated_filtered}
-
     result_ds = result_ds.map(check_batch, batched=True)
     malformed_count = sum(result_ds["malformed"])
     print(f"Malformed rows: {malformed_count}/{len(result_ds)}")
