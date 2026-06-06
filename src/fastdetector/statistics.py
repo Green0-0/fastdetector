@@ -51,7 +51,7 @@ def ngram_analysis(text: str, n: int) -> dict[str, float]:
     total = sum(counts.values())
     return {k: v / total for k, v in counts.items()}
 
-def jacard_ngram(text1: str, text2: str, n: int) -> float:
+def jaccard_ngram(text1: str, text2: str, n: int) -> float:
     """Compute the Jaccard similarity between two texts using n-grams.
     Args:
         text1 (str): First text.

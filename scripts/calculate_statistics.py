@@ -5,122 +5,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from huggingface_hub import HfApi
 from datasets import load_dataset
+
 from fastdetector.llm_utils import llm_server_context
-from fastdetector.statistics import jacard_ngram, levenshtein, ngram_analysis
-from fastdetector.statistics import batch_compute_llm_stats
-from fastdetector.statistics import batch_gen_embeddings, pairwise_cossim_all, human_human_cossim_all, ai_ai_cossim_all, human_ai_cossim_all, ai_human_cossim_all, pairwise_cross_encoder_all
+from fastdetector.statistics_new import (
+    global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
+    entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
+    pairwise_cossim, self_cossim_all, opposite_cossim_all
+)
+from fastdetector.statistics_api import (
+    fetch_logprobs_all, batch_gen_embeddings, batch_cross_encoder
+)
 
-def main():
-    start_time = time.time()
-    parser = argparse.ArgumentParser(description="Calculate statistics for a HuggingFace dataset.")
-    parser.add_argument("--dataset", type=str, default="G-reen/cc-contiguous-rewritten", help="Dataset to analyze")
-    args = parser.parse_args()
-
-    print(f"Downloading dataset {args.dataset}...")
-    result_ds = load_dataset(args.dataset, split="train")
-
-    print("Adding pairwise text statistics...")
-    
-    def compute_text_stats(batch):
-        human_texts = batch["original"]
-        ai_texts = [batch[f"response_{idx}"][i] for i, idx in enumerate(batch["final_response_index"])]
-        
-        j1 = [jacard_ngram(h, a, 1) for h, a in zip(human_texts, ai_texts)]
-        j2 = [jacard_ngram(h, a, 2) for h, a in zip(human_texts, ai_texts)]
-        lev = [levenshtein(h, a) for h, a in zip(human_texts, ai_texts)]
-        
-        return {
-            "pairwise_jacard_1": j1,
-            "pairwise_jacard_2": j2,
-            "pairwise_levenshtein": lev
-        }
-        
-    result_ds = result_ds.map(compute_text_stats, batched=True, batch_size=100)
-    
-    print("Computing global text statistics...")
-    human_texts_list = result_ds["original"]
-    
-    resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
-    final_indices = result_ds["final_response_index"]
-    ai_texts_list = [resp_cols[f"response_{idx}"][i] for i, idx in enumerate(final_indices)]
-    
-    from collections import Counter
-    def get_global_ngrams(texts, n):
-        counts = Counter()
-        for text in texts:
-            tokens = text.split()
-            if len(tokens) >= n:
-                counts.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
-        total = sum(counts.values())
-        return {k: v / total for k, v in counts.items()} if total > 0 else {}
-        
-    def get_global_jaccard(texts1, texts2, n):
-        t1 = set()
-        t2 = set()
-        for text in texts1:
-            tokens = text.split()
-            if len(tokens) >= n:
-                t1.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
-        for text in texts2:
-            tokens = text.split()
-            if len(tokens) >= n:
-                t2.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
-        if not t1 and not t2: return 1.0
-        if not t1 or not t2: return 0.0
-        return len(t1.intersection(t2)) / len(t1.union(t2))
-
-    global_stats = []
-    global_stats.append("## N-gram Analysis (Top 10)")
-    for n in [1, 2, 3]:
-        human_ngrams = get_global_ngrams(human_texts_list, n)
-        ai_ngrams = get_global_ngrams(ai_texts_list, n)
-        
-        human_top10 = sorted(human_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
-        ai_top10 = sorted(ai_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
-        
-        global_stats.append(f"\n### n={n}")
-        global_stats.append("**Human:**")
-        for k, v in human_top10: global_stats.append(f"- '{k}': {v:.4f}")
-        global_stats.append("**AI:**")
-        for k, v in ai_top10: global_stats.append(f"- '{k}': {v:.4f}")
-        
-    global_jacard = get_global_jaccard(human_texts_list, ai_texts_list, 1)
-    global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jacard:.4f}")
-    print("Text-based global stats computed.")
-
-    print("Launching unsloth/Llama-3.2-1B to calculate LLM statistics...")
-    
-    with llm_server_context(engine="vllm", model_name="unsloth/Llama-3.2-1B", port=None, max_logprobs=100, gpu_memory_utilization=0.75) as stat_api_url:
-        result_ds = batch_compute_llm_stats(result_ds, stat_api_url, p=0.9, k=50)
-        
-    print("Computing ModernBERT embeddings and cosine similarities...")
-    
-    result_ds = batch_gen_embeddings(result_ds)
-    result_ds = pairwise_cossim_all(result_ds)
-    result_ds = human_human_cossim_all(result_ds)
-    result_ds = ai_ai_cossim_all(result_ds)
-    result_ds = human_ai_cossim_all(result_ds)
-    result_ds = ai_human_cossim_all(result_ds)
-
-    print("Computing pairwise cross encoder similarities...")
-    result_ds = pairwise_cross_encoder_all(result_ds)
-
-    
-    global_stats.append("\n## LLM Statistics (Average)")
-    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
-        h_mean = np.mean(result_ds[f"human_{stat}"])
-        a_mean = np.mean(result_ds[f"ai_{stat}"])
-        global_stats.append(f"- **{stat.capitalize()}**: Human {h_mean:.4f} | AI {a_mean:.4f}")
-        
-    global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
-    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cossim']):.4f}")
-    global_stats.append(f"- **Human-Human**: {np.mean(result_ds['human_human_cossim']):.4f}")
-    global_stats.append(f"- **AI-AI**: {np.mean(result_ds['ai_ai_cossim']):.4f}")
-    global_stats.append(f"- **Human-AI**: {np.mean(result_ds['human_ai_cossim']):.4f}")
-    global_stats.append(f"- **AI-Human**: {np.mean(result_ds['ai_human_cossim']):.4f}")
-    global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
-
-    print("Generating charts...")
+def generate_charts(result_ds):
     charts = {}
 
     def get_classifier_plot(human_scores, ai_scores, title):
@@ -177,8 +73,13 @@ def main():
     charts["hist_pairwise_cossim.png"] = get_histogram(result_ds["pairwise_cossim"], None, "Pairwise Cosine Similarity", None, "Histogram: Pairwise Cosine Similarity")
     charts["hist_pairwise_crossencoder.png"] = get_histogram(result_ds["pairwise_cross_encoder"], None, "Pairwise Cross-Encoder", None, "Histogram: Pairwise Cross-Encoder")
     charts["hist_pairwise_levenshtein.png"] = get_histogram(result_ds["pairwise_levenshtein"], None, "Pairwise Levenshtein", None, "Histogram: Pairwise Levenshtein")
-    charts["hist_pairwise_jacard.png"] = get_histogram(result_ds["pairwise_jacard_1"], None, "Pairwise Jaccard (n=1)", None, "Histogram: Pairwise Jaccard (n=1)")
+    charts["hist_pairwise_jaccard.png"] = get_histogram(result_ds["pairwise_jaccard_1"], None, "Pairwise Jaccard (n=1)", None, "Histogram: Pairwise Jaccard (n=1)")
 
+    return charts
+
+def build_readme(global_stats, total_runtime):
+    readme_content = "\n".join(global_stats)
+    
     readme_content += "\n\n## Classifiers\n"
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
         readme_content += f"![Classifier {stat}](classifier_{stat}.png)\n"
@@ -186,36 +87,125 @@ def main():
     readme_content += "\n## Histograms\n"
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
-    for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jacard"]:
+    for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
 
-    total_runtime = time.time() - start_time
+    readme_content += f"\n# Total Runtime: {total_runtime:.2f} seconds\n"
+    return readme_content
 
-    readme_content += f"# Total Runtime: {total_runtime:.2f} seconds\n"
-
-    result_ds.push_to_hub(args.dataset)
-
-    print(f"Dataset pushed to '{args.dataset}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
+def upload_results(dataset_name, result_ds, readme_content, charts):
+    result_ds.push_to_hub(dataset_name)
+    print(f"Dataset pushed to '{dataset_name}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
 
     try:
         api = HfApi()
         api.upload_file(
             path_or_fileobj=readme_content.encode("utf-8"),
             path_in_repo="README.md",
-            repo_id=args.dataset,
+            repo_id=dataset_name,
             repo_type="dataset"
         )
         for filename, data in charts.items():
             api.upload_file(
                 path_or_fileobj=data,
                 path_in_repo=filename,
-                repo_id=args.dataset,
+                repo_id=dataset_name,
                 repo_type="dataset"
             )
         print("Global stats and charts written to Dataset README.md on HuggingFace Hub.")
     except Exception as e:
         print(f"Error uploading README to HuggingFace Hub: {e}")
 
+def main():
+    start_time = time.time()
+    parser = argparse.ArgumentParser(description="Calculate statistics for a HuggingFace dataset.")
+    parser.add_argument("--dataset", type=str, default="G-reen/cc-contiguous-rewritten", help="Dataset to analyze")
+    args = parser.parse_args()
+
+    print(f"Downloading dataset {args.dataset}...")
+    result_ds = load_dataset(args.dataset, split="train")
+
+    human_texts = result_ds["original"]
+    resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
+    final_indices = result_ds["final_response_index"]
+    ai_texts = [resp_cols[f"response_{idx}"][i] for i, idx in enumerate(final_indices)]
+
+    print("Adding pairwise text statistics...")
+    result_ds = result_ds.add_column("pairwise_jaccard_1", pairwise_jaccards(human_texts, ai_texts, 1))
+    result_ds = result_ds.add_column("pairwise_jaccard_2", pairwise_jaccards(human_texts, ai_texts, 2))
+    result_ds = result_ds.add_column("pairwise_levenshtein", pairwise_levenshteins(human_texts, ai_texts))
+    
+    print("Computing global text statistics...")
+    global_stats = []
+    global_stats.append("## N-gram Analysis (Top 10)")
+    for n in [1, 2, 3]:
+        human_ngrams = global_ngram_analysis(human_texts, n)
+        ai_ngrams = global_ngram_analysis(ai_texts, n)
+        
+        human_top10 = sorted(human_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
+        ai_top10 = sorted(ai_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        global_stats.append(f"\n### n={n}")
+        global_stats.append("**Human:**")
+        for k, v in human_top10: global_stats.append(f"- '{k}': {v:.4f}")
+        global_stats.append("**AI:**")
+        for k, v in ai_top10: global_stats.append(f"- '{k}': {v:.4f}")
+        
+    global_jaccard = pairwise_jaccards([" ".join(human_texts)], [" ".join(ai_texts)], 1)[0]
+    global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jaccard:.4f}")
+    print("Text-based global stats computed.")
+
+    print("Launching unsloth/Llama-3.2-1B to calculate LLM statistics...")
+    with llm_server_context(engine="vllm", model_name="unsloth/Llama-3.2-1B", port=None, max_logprobs=100, gpu_memory_utilization=0.75) as stat_api_url:
+        print("Fetching human logprobs...")
+        h_tokens, h_top = fetch_logprobs_all(human_texts, stat_api_url, top_logprobs_k=100)
+        print("Fetching AI logprobs...")
+        a_tokens, a_top = fetch_logprobs_all(ai_texts, stat_api_url, top_logprobs_k=100)
+
+    print("Computing LLM statistics...")
+    result_ds = result_ds.add_column("human_perplexity", perplexities(human_texts, h_tokens))
+    result_ds = result_ds.add_column("ai_perplexity", perplexities(ai_texts, a_tokens))
+    result_ds = result_ds.add_column("human_entropy", entropies_approx(human_texts, h_top))
+    result_ds = result_ds.add_column("ai_entropy", entropies_approx(ai_texts, a_top))
+    result_ds = result_ds.add_column("human_top_p_outlier", top_p_outlier_percentages(human_texts, h_top, h_tokens, 0.9))
+    result_ds = result_ds.add_column("ai_top_p_outlier", top_p_outlier_percentages(ai_texts, a_top, a_tokens, 0.9))
+    result_ds = result_ds.add_column("human_top_k_outlier", top_k_outlier_percentages(human_texts, h_top, h_tokens, 50))
+    result_ds = result_ds.add_column("ai_top_k_outlier", top_k_outlier_percentages(ai_texts, a_top, a_tokens, 50))
+        
+    print("Computing ModernBERT embeddings and cosine similarities...")
+    human_embs = batch_gen_embeddings(human_texts)
+    ai_embs = batch_gen_embeddings(ai_texts)
+    
+    result_ds = result_ds.add_column("pairwise_cossim", pairwise_cossim(human_embs, ai_embs))
+    result_ds = result_ds.add_column("human_human_cossim", self_cossim_all(human_embs))
+    result_ds = result_ds.add_column("ai_ai_cossim", self_cossim_all(ai_embs))
+    result_ds = result_ds.add_column("human_ai_cossim", opposite_cossim_all(human_embs, ai_embs))
+    result_ds = result_ds.add_column("ai_human_cossim", opposite_cossim_all(ai_embs, human_embs))
+
+    print("Computing pairwise cross encoder similarities...")
+    result_ds = result_ds.add_column("pairwise_cross_encoder", batch_cross_encoder(human_texts, ai_texts))
+
+    global_stats.append("\n## LLM Statistics (Average)")
+    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+        h_mean = np.mean(result_ds[f"human_{stat}"])
+        a_mean = np.mean(result_ds[f"ai_{stat}"])
+        global_stats.append(f"- **{stat.capitalize()}**: Human {h_mean:.4f} | AI {a_mean:.4f}")
+        
+    global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
+    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cossim']):.4f}")
+    global_stats.append(f"- **Human-Human**: {np.mean(result_ds['human_human_cossim']):.4f}")
+    global_stats.append(f"- **AI-AI**: {np.mean(result_ds['ai_ai_cossim']):.4f}")
+    global_stats.append(f"- **Human-AI**: {np.mean(result_ds['human_ai_cossim']):.4f}")
+    global_stats.append(f"- **AI-Human**: {np.mean(result_ds['ai_human_cossim']):.4f}")
+    global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
+
+    print("Generating charts...")
+    charts = generate_charts(result_ds)
+    
+    total_runtime = time.time() - start_time
+    readme_content = build_readme(global_stats, total_runtime)
+    
+    upload_results(args.dataset, result_ds, readme_content, charts)
     print("Done!")
 
 if __name__ == "__main__":
