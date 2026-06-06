@@ -72,11 +72,17 @@ class PromptSet:
                 examples=list(template.examples),
                 metadata=dict(template.metadata),
             ))
+            
+            # NOTE: FOR SOME REASON HF DOESN'T ALLOW EMPTY DICTIONARIES...
+            meta = dict(template.metadata)
+            if not meta:
+                meta["_dummy"] = True
+                
             prompt_labels.append({
                 "chat_turns": template.chat_turns,
                 "use_multiturn": template.use_multiturn,
                 "examples": template.examples,
-                "metadata": template.metadata,
+                "metadata": meta,
             })
         return mapped, prompt_labels
 
