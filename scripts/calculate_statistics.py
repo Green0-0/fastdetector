@@ -3,7 +3,7 @@ import io
 import time
 import matplotlib.pyplot as plt
 import numpy as np
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import HfApi
 from datasets import load_dataset
 
 from fastdetector.llm_utils import llm_server_context
@@ -99,17 +99,8 @@ def upload_results(dataset_name, result_ds, readme_content, charts):
 
     try:
         api = HfApi()
-        
-        try:
-            existing_readme_path = hf_hub_download(repo_id=dataset_name, filename="README.md", repo_type="dataset")
-            with open(existing_readme_path, "r") as f:
-                existing_readme = f.read()
-            final_readme_content = existing_readme + "\n\n" + readme_content
-        except Exception:
-            final_readme_content = readme_content
-
         api.upload_file(
-            path_or_fileobj=final_readme_content.encode("utf-8"),
+            path_or_fileobj=readme_content.encode("utf-8"),
             path_in_repo="README.md",
             repo_id=dataset_name,
             repo_type="dataset"
@@ -129,6 +120,7 @@ def main():
     start_time = time.time()
     parser = argparse.ArgumentParser(description="Calculate statistics for a HuggingFace dataset.")
     parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten", help="Dataset to analyze")
+    parser.add_argument("--target-dataset", type=str, default="G-reen/cc-2021-rewritten-stat", help="Dataset to push to")
     parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-1B", help="Model name to launch.")
     parser.add_argument("--embed-model", type=str, default="Qwen/Qwen3-Embedding-4B", help="Embedding model name.")
     parser.add_argument("--rerank-model", type=str, default="Qwen/Qwen3-Reranker-4B", help="Reranker model name.")
@@ -217,7 +209,7 @@ def main():
     total_runtime = time.time() - start_time
     readme_content = build_readme(global_stats, total_runtime)
     
-    upload_results(args.source_dataset, result_ds, readme_content, charts)
+    upload_results(args.target_dataset, result_ds, readme_content, charts)
     print("Done!")
 
 if __name__ == "__main__":

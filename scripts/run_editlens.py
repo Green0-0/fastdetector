@@ -167,7 +167,8 @@ def compute_editlens_scores(texts: list, model, tokenizer, is_qlora: bool, n_buc
 
 def main():
     parser = argparse.ArgumentParser(description="Run EditLens inference on the dataset produced by calculate_statistics")
-    parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten", help="HuggingFace dataset name to process")
+    parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten-stat", help="HuggingFace dataset name to process")
+    parser.add_argument("--target-dataset", type=str, default="G-reen/cc-2021-rewritten-stat-editlens", help="HuggingFace dataset name to push to")
     parser.add_argument("--checkpoint", type=str, default="pangram/editlens_roberta-large", help="Model checkpoint path or HF repo")
     parser.add_argument("--base-model", type=str, default="FacebookAI/roberta-large", help="Base model name")
     parser.add_argument("--max-length", type=int, default=512, help="Max length for tokenizer")
@@ -244,26 +245,18 @@ def main():
 
     try:
         api = HfApi()
-        try:
-            existing_readme_path = hf_hub_download(repo_id=args.source_dataset, filename="README.md", repo_type="dataset")
-            with open(existing_readme_path, "r") as f:
-                existing_readme = f.read()
-            final_readme = existing_readme + "\n\n" + stats_md
-        except Exception:
-            final_readme = stats_md
-
         api.upload_file(
-            path_or_fileobj=final_readme.encode("utf-8"),
+            path_or_fileobj=stats_md.encode("utf-8"),
             path_in_repo="README.md",
-            repo_id=args.source_dataset,
+            repo_id=args.target_dataset,
             repo_type="dataset"
         )
-        print("Appended EditLens statistics to Dataset README.md on HuggingFace Hub.")
+        print("Uploaded EditLens statistics to Dataset README.md on HuggingFace Hub.")
     except Exception as e:
         print(f"Error updating README on HuggingFace Hub: {e}")
 
-    print(f"Pushing updated dataset back to {args.source_dataset}...")
-    result_ds.push_to_hub(args.source_dataset)
+    print(f"Pushing updated dataset back to {args.target_dataset}...")
+    result_ds.push_to_hub(args.target_dataset)
     print("Done!")
 
 if __name__ == "__main__":
