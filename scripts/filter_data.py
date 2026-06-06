@@ -12,7 +12,7 @@ SOURCE_DATASET = "G-reen/cc-2021-raw"
 SOURCE_COLUMN = "trafilatura_text"
 NUM_SAMPLES = 5_000
 
-TARGET_DATASET = "G-reen/cc-contiguous"
+TARGET_DATASET = "G-reen/cc-2021-filtered"
 FILTERED_COLUMN = "response_0"
 ORIGINAL_COLUMN = "original"
 FILTERING_GENERATION_PARAMS = {
@@ -141,7 +141,7 @@ def main():
         print("Loading tokenizer...")
         tokenizer = AutoTokenizer.from_pretrained(args.model_name)
         max_length = args.max_model_len // 2 - 1000
-        samples = load_samples(SOURCE_DATASET, SOURCE_CONFIG, SOURCE_COLUMN, NUM_SAMPLES, tokenizer, max_length)
+        samples = load_samples(SOURCE_DATASET, SOURCE_COLUMN, NUM_SAMPLES, tokenizer, max_length)
 
         # Filter locally
         result_ds = build_dataset(
