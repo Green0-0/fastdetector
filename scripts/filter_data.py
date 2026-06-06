@@ -64,13 +64,17 @@ def add_validation_columns(dataset: Dataset, original_col: str, filtered_col: st
             orig_norm = normalize_text(original)
             filt_norm = normalize_text(filtered_text)
             
-            orig_canon = ""
+            orig_canon_parts = []
             orig_mapping = []
-            for i, c in enumerate(orig_norm):
-                if not c.isspace():
-                    orig_canon += c.lower()
-                    orig_mapping.append(i)
-                    
+            for i, c in enumerate(original):
+                norm_c = normalize_text(c)
+                for nc in norm_c:
+                    if not nc.isspace():
+                        lowered = nc.lower()
+                        orig_canon_parts.append(lowered)
+                        orig_mapping.extend([i] * len(lowered))
+            orig_canon = "".join(orig_canon_parts)
+            
             filt_canon = "".join(c.lower() for c in filt_norm if not c.isspace())
             
             if not filt_canon or filt_canon not in orig_canon:
