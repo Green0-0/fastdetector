@@ -7,7 +7,7 @@ from huggingface_hub import HfApi
 from datasets import load_dataset
 
 from fastdetector.llm_utils import llm_server_context
-from fastdetector.statistics_new import (
+from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
     pairwise_cossim, self_cossim_all, opposite_cossim_all
