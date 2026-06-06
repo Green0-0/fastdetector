@@ -172,7 +172,7 @@ def main():
     result_ds = result_ds.add_column("human_top_k_outlier", top_k_outlier_percentages(human_texts, h_top, h_tokens, 50))
     result_ds = result_ds.add_column("ai_top_k_outlier", top_k_outlier_percentages(ai_texts, a_top, a_tokens, 50))
         
-    print("Computing ModernBERT embeddings and cosine similarities...")
+    print("Computing Qwen3 embeddings and cosine similarities...")
     human_embs = batch_gen_embeddings(human_texts)
     ai_embs = batch_gen_embeddings(ai_texts)
     
