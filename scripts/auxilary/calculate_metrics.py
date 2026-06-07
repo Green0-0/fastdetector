@@ -1,3 +1,5 @@
+# TODO: REVIEW
+
 import argparse
 import io
 import time
@@ -13,12 +15,7 @@ from fastdetector.statistics import (
     pairwise_cossim, self_cossim_all, opposite_cossim_all
 )
 
-def get_column_texts(ds, col_name):
-    if col_name == "FINAL_RESPONSE_INDEX_COLUMN" and "final_response_index" in ds.column_names:
-        resp_cols = {col: ds[col] for col in ds.column_names if col.startswith("response_")}
-        final_indices = ds["final_response_index"]
-        return [str(resp_cols[f"response_{idx}"][i]) if resp_cols[f"response_{idx}"][i] is not None else "" for i, idx in enumerate(final_indices)]
-    return [str(t) if t is not None else "" for t in ds[col_name]]
+
 
 def generate_charts(result_ds):
     charts = {}
@@ -103,14 +100,14 @@ def main():
     parser.add_argument("--source-dataset", type=str, required=True, help="Dataset to analyze")
     parser.add_argument("--target-dataset", type=str, required=True, help="Dataset to push to")
     parser.add_argument("--col-human", type=str, default="original", help="Human column.")
-    parser.add_argument("--col-ai", type=str, default="response_0", help="AI column.")
+    parser.add_argument("--col-ai", type=str, default="final_response", help="AI column.")
     args = parser.parse_args()
 
     print(f"Downloading dataset {args.source_dataset}...")
     result_ds = load_dataset(args.source_dataset, split="train")
 
-    human_texts = get_column_texts(result_ds, args.col_human)
-    ai_texts = get_column_texts(result_ds, args.col_ai)
+    human_texts = result_ds[args.col_human]
+    ai_texts = result_ds[args.col_ai]
 
     print("Adding pairwise text statistics...")
     result_ds = result_ds.add_column("pairwise_jaccard_1", pairwise_jaccards(human_texts, ai_texts, 1))
@@ -169,7 +166,6 @@ def main():
     result_ds = result_ds.add_column("ai_top_p_outlier", top_p_outlier_percentages(ai_texts, a_top, a_tokens, 0.9))
     result_ds = result_ds.add_column("human_top_k_outlier", top_k_outlier_percentages(human_texts, h_top, h_tokens, 50))
     result_ds = result_ds.add_column("ai_top_k_outlier", top_k_outlier_percentages(ai_texts, a_top, a_tokens, 50))
-
 
     global_stats.append("\n## LLM Statistics (Average)")
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:

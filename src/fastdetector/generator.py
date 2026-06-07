@@ -178,7 +178,7 @@ def build_dataset(
         dataset_columns[col_name] = turn_responses
         print(f"  -> Column '{col_name}' created with {len(active_indices)} active responses.")
 
-    dataset_columns["final_response_index"] = [len(p.chat_turns) - 1 for p in mapped_prompts]
+    dataset_columns["final_response"] = [responses[-1] if responses else "" for responses in responses_grouped]
 
     print(f"Dataset dict built with {len(samples)} rows and {len(dataset_columns)} columns.")
 

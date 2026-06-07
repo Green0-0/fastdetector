@@ -107,9 +107,7 @@ def main():
     result_ds = load_dataset(args.source_dataset, split="train")
 
     human_texts = result_ds["original"]
-    resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
-    final_indices = result_ds["final_response_index"]
-    ai_texts = [resp_cols[f"response_{idx}"][i] for i, idx in enumerate(final_indices)]
+    ai_texts = result_ds["final_response"]
 
     print("Adding pairwise text statistics...")
     result_ds = result_ds.add_column("pairwise_jaccard_1", pairwise_jaccards(human_texts, ai_texts, 1))

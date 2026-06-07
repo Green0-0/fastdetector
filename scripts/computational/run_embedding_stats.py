@@ -4,14 +4,6 @@ from datasets import load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics_api import batch_gen_embeddings
 
-def get_column_texts(ds, col_name):
-    if col_name == "FINAL_RESPONSE_INDEX_COLUMN" and "final_response_index" in ds.column_names:
-        resp_cols = {col: ds[col] for col in ds.column_names if col.startswith("response_")}
-        final_indices = ds["final_response_index"]
-        return [str(resp_cols[f"response_{idx}"][i]) if resp_cols[f"response_{idx}"][i] is not None else "" for i, idx in enumerate(final_indices)]
-    return [str(t) if t is not None else "" for t in ds[col_name]]
-
-
 def main():
     parser = argparse.ArgumentParser(description="Calculate embeddings for specified columns.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
@@ -27,14 +19,13 @@ def main():
     columns = [c.strip() for c in args.columns.split(",")]
     
     for col in columns:
-        if col != "FINAL_RESPONSE_INDEX_COLUMN" and col not in ds.column_names:
+        if col not in ds.column_names:
             print(f"Warning: column {col} not found in dataset. Skipping.")
             continue
             
         print(f"Computing embeddings for column: {col}...")
-        texts = get_column_texts(ds, col)
         
-        embs = batch_gen_embeddings(texts, model_name=args.model_name, batch_size=args.batch_size)
+        embs = batch_gen_embeddings(ds[col], model_name=args.model_name, batch_size=args.batch_size)
         
         col_name = f"{col}_embedding"
         ds = ds.add_column(col_name, embs.tolist())

@@ -36,7 +36,7 @@ python scripts/computational/run_embedding_stats.py \
     --source-dataset G-reen/cc-2021-rewritten \
     --target-dataset G-reen/cc-2021-rewritten-emb \
     --model-name Qwen/Qwen3-Embedding-4B \
-    --columns original,FINAL_RESPONSE_INDEX_COLUMN
+    --columns original,final_response
 
 echo "Computing reranker scores..."
 python scripts/computational/run_reranker_stat.py \
@@ -44,14 +44,14 @@ python scripts/computational/run_reranker_stat.py \
     --target-dataset G-reen/cc-2021-rewritten-rerank \
     --model-name Qwen/Qwen3-Reranker-4B \
     --col-a original \
-    --col-b FINAL_RESPONSE_INDEX_COLUMN
+    --col-b final_response
 
 echo "Computing LLM logprobs..."
 python scripts/computational/run_llm_stat.py \
     --source-dataset G-reen/cc-2021-rewritten-rerank \
     --target-dataset G-reen/cc-2021-rewritten-llm \
     --model-name unsloth/Llama-3.2-1B \
-    --columns original,FINAL_RESPONSE_INDEX_COLUMN \
+    --columns original,final_response \
     --top-logprobs-k 100
 
 echo "Calculating final metrics..."
@@ -59,4 +59,4 @@ python scripts/auxilary/calculate_metrics.py \
     --source-dataset G-reen/cc-2021-rewritten-llm \
     --target-dataset G-reen/cc-2021-rewritten-stat \
     --col-human original \
-    --col-ai FINAL_RESPONSE_INDEX_COLUMN
+    --col-ai final_response

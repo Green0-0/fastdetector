@@ -1,3 +1,5 @@
+# TODO: REVIEW
+
 import argparse
 import glob
 import os
@@ -181,13 +183,11 @@ def main():
     print(f"Downloading dataset {args.source_dataset}...")
     result_ds = load_dataset(args.source_dataset, split="train")
 
-    if "original" not in result_ds.column_names or "final_response_index" not in result_ds.column_names:
-        raise ValueError("Dataset does not appear to have 'original' and 'final_response_index' columns. Are you sure it was produced by calculate_statistics?")
+    if "original" not in result_ds.column_names or "final_response" not in result_ds.column_names:
+        raise ValueError("Dataset does not appear to have 'original' and 'final_response' columns. Are you sure it was produced by calculate_statistics?")
 
     human_texts = result_ds["original"]
-    resp_cols = {col: result_ds[col] for col in result_ds.column_names if col.startswith("response_")}
-    final_indices = result_ds["final_response_index"]
-    ai_texts = [resp_cols[f"response_{idx}"][i] for i, idx in enumerate(final_indices)]
+    ai_texts = result_ds["final_response"]
 
     print(f"Loading EditLens model from checkpoint: {args.checkpoint}")
     n_buckets = infer_n_buckets(args.checkpoint)

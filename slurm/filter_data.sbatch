@@ -46,7 +46,7 @@ python scripts/computational/run_pipeline.py \
 python scripts/auxilary/filter_data_pairs.py \
     --source-dataset G-reen/cc-2021-processed \
     --original-column original \
-    --new-column response_0 \
+    --new-column final_response \
     --target-dataset G-reen/cc-2021-processed-stats
 
 python scripts/auxilary/subset_data.py \

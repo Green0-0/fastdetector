@@ -157,7 +157,7 @@ def main():
     parser = argparse.ArgumentParser(description="Filter data pairs to find subsets and calculate statistics.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--original-column", type=str, default="original", help="Original column name.")
-    parser.add_argument("--new-column", type=str, default="response_0", help="New column name (filtered).")
+    parser.add_argument("--new-column", type=str, default="final_response", help="New column name (filtered).")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     args = parser.parse_args()
 
