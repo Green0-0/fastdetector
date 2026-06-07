@@ -76,7 +76,7 @@ def fetch_logprobs_all(texts: list[str], api_url: str, top_logprobs_k: int = 100
         
     return token_logprobs_list, top_logprobs_list
 
-def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embedding-4B", batch_size: int = 32) -> np.ndarray:
+def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embedding-4B", batch_size: int = 8) -> np.ndarray:
     """Generate normalized embeddings for a list of texts.
     
     Args:
@@ -91,7 +91,7 @@ def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embeddi
     embeddings = model.encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
     return embeddings
 
-def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str = "Qwen/Qwen3-Reranker-4B", batch_size: int = 4) -> list[float]:
+def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str = "Qwen/Qwen3-Reranker-4B", batch_size: int = 2) -> list[float]:
     """Compute cross-encoder scores for aligned pairs of texts.
     
     Args:
