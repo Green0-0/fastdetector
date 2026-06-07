@@ -5,7 +5,6 @@ import sys
 from datasets import load_dataset
 from huggingface_hub import HfApi, hf_hub_download
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from fastdetector.utils import upload_dataset
 
 def parse_conditions(condition_string):

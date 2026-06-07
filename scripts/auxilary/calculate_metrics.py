@@ -20,7 +20,6 @@ def get_column_texts(ds, col_name):
         return [str(resp_cols[f"response_{idx}"][i]) if resp_cols[f"response_{idx}"][i] is not None else "" for i, idx in enumerate(final_indices)]
     return [str(t) if t is not None else "" for t in ds[col_name]]
 
-
 def generate_charts(result_ds):
     charts = {}
 
@@ -149,7 +148,6 @@ def main():
     result_ds = result_ds.add_column("ai_human_cossim", opposite_cossim_all(ai_embs, human_embs))
 
     print("Retrieving pairwise cross encoder similarities...")
-    # Just rename or fetch the existing column for compatibility with charts
     ce_col = f"pairwise_cross_encoder_{args.col_human}_{args.col_ai}"
     if ce_col in result_ds.column_names:
         if "pairwise_cross_encoder" not in result_ds.column_names:
