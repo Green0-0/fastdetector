@@ -25,7 +25,7 @@ async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str,
             print(f"Error fetching logprobs: {e}")
             return {}
 
-async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logprobs_k: int, concurrency: int = 64):
+async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logprobs_k: int, concurrency: int = 256):
     api_url = api_url.rstrip("/")
     client = AsyncOpenAI(base_url=api_url, api_key="EMPTY", max_retries=5, timeout=600.0)
     try:
