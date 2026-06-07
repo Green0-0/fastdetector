@@ -9,7 +9,7 @@ def main():
     parser = argparse.ArgumentParser(description="Calculate LLM statistics (logprobs) for specified columns.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
-    parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-1B", help="LLM model name.")
+    parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-3B-Instruct", help="LLM model name.")
     parser.add_argument("--columns", type=str, required=True, help="Comma separated column names.")
     parser.add_argument("--top-logprobs-k", type=int, default=100, help="Top logprobs K to fetch.")
     args = parser.parse_args()
@@ -25,7 +25,7 @@ def main():
             if col not in ds.column_names:
                 print(f"Warning: column {col} not found in dataset. Skipping.")
                 continue
-                
+            
             print(f"Fetching logprobs for column: {col}...")            
             tokens_list, top_logprobs_list = fetch_logprobs_all(ds[col], stat_api_url, top_logprobs_k=args.top_logprobs_k)
             

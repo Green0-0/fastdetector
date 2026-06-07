@@ -98,7 +98,7 @@ def main():
     parser = argparse.ArgumentParser(description="Calculate statistics for a HuggingFace dataset.")
     parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten", help="Dataset to analyze")
     parser.add_argument("--target-dataset", type=str, default="G-reen/cc-2021-rewritten-stat", help="Dataset to push to")
-    parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-1B", help="Model name to launch.")
+    parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-3B-Instruct", help="Model name to launch.")
     parser.add_argument("--embed-model", type=str, default="Qwen/Qwen3-Embedding-4B", help="Embedding model name.")
     parser.add_argument("--rerank-model", type=str, default="Qwen/Qwen3-Reranker-4B", help="Reranker model name.")
     args = parser.parse_args()
