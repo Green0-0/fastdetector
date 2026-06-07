@@ -26,7 +26,7 @@ try:
     lengths = [len(t.split()) for t in batch_texts]
     print(f"Running inference on texts with word counts: {lengths}")
     
-    embeddings = model.encode(batch_texts, batch_size=8, convert_to_numpy=True, normalize_embeddings=True)
+    embeddings = model.encode(batch_texts, batch_size=4, convert_to_numpy=True, normalize_embeddings=True)
     print("Inference completed successfully!")
     print("Embeddings shape:", embeddings.shape)
 except Exception as e:

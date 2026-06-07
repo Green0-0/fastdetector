@@ -77,7 +77,7 @@ def fetch_logprobs_all(texts: list[str], api_url: str, top_logprobs_k: int = 100
         
     return token_logprobs_list, top_logprobs_list
 
-def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embedding-4B", batch_size: int = 8) -> np.ndarray:
+def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embedding-4B", batch_size: int = 4) -> np.ndarray:
     """Generate normalized embeddings for a list of texts.
     
     Args:
