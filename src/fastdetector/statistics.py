@@ -282,3 +282,48 @@ def opposite_cossim_all(target_embeddings: list[np.ndarray] | np.ndarray, other_
         sims = batch_target @ other_embs.T
         results.extend(np.mean(sims, axis=1).tolist())
     return results
+
+def quantile(values: list[float]) -> list[float]:
+    """Compute the quantile (percentile rank in decimal) for each value in a list of floats.
+    Uses average rank for ties.
+    
+    Args:
+        values: List of floats.
+        
+    Returns:
+        List of floats between 0.0 and 1.0.
+    """
+    if not values:
+        return []
+    n = len(values)
+    if n == 1:
+        return [1.0]
+    arr = np.array(values, dtype=float)
+    sorted_arr = np.sort(arr)
+    
+    left_ranks = np.searchsorted(sorted_arr, arr, side='left')
+    right_ranks = np.searchsorted(sorted_arr, arr, side='right')
+    
+    avg_ranks = (left_ranks + 1 + right_ranks) / 2.0
+    return (avg_ranks / n).tolist()
+
+def min_max_norm(values: list[float]) -> list[float]:
+    """Compute the min-max normalization for a list of floats.
+    
+    Args:
+        values: List of floats.
+        
+    Returns:
+        List of floats scaled between 0.0 and 1.0.
+    """
+    if not values:
+        return []
+    n = len(values)
+    if n == 1:
+        return [0.0]
+    arr = np.array(values, dtype=float)
+    min_val = np.min(arr)
+    max_val = np.max(arr)
+    if min_val == max_val:
+        return [0.0] * n
+    return ((arr - min_val) / (max_val - min_val)).tolist()

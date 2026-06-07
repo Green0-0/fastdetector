@@ -30,6 +30,17 @@ fi
 
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
-python scripts/generate_llm_data.py
+python scripts/computational/run_pipeline.py \
+    --model-name google/gemma-4-E4B-it \
+    --temperature 0.7 \
+    --top-p 0.8 \
+    --presence-penalty 1.5 \
+    --max-model-len 32000 \
+    --max-dataset-len 15000 \
+    --prompt-file prompts/combined_dataset.json \
+    --source-dataset G-reen/cc-2021-filtered \
+    --source-column collected_subset \
+    --num-samples 1000 \
+    --target-dataset G-reen/cc-2021-rewritten
 
 echo "Dataset generation complete."

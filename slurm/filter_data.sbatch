@@ -30,6 +30,28 @@ fi
 
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
-python scripts/filter_data.py
+python scripts/computational/run_pipeline.py \
+    --model-name google/gemma-4-E4B-it \
+    --temperature 0.0 \
+    --top-p 1.0 \
+    --presence-penalty 0.0 \
+    --max-model-len 32000 \
+    --max-dataset-len 15000 \
+    --prompt-file prompts/filter_contiguous_subset.json \
+    --source-dataset G-reen/cc-2021-raw \
+    --source-column trafilatura_text \
+    --num-samples 1000 \
+    --target-dataset G-reen/cc-2021-processed
+
+python scripts/auxilary/filter_data_pairs.py \
+    --source-dataset G-reen/cc-2021-processed \
+    --original-column original \
+    --new-column response_0 \
+    --target-dataset G-reen/cc-2021-processed-stats
+
+python scripts/auxilary/subset_data.py \
+    --source_dataset G-reen/cc-2021-processed-stats \
+    --target_dataset G-reen/cc-2021-filtered \
+    --conditions "is_loose_subset=True"
 
 echo "Dataset generation complete."
