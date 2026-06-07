@@ -1,5 +1,6 @@
 import asyncio
 import numpy as np
+import torch
 from openai import AsyncOpenAI
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from typing import Optional
@@ -87,7 +88,12 @@ def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embeddi
     Returns:
         Numpy array of normalized embeddings.
     """
-    model = SentenceTransformer(model_name, trust_remote_code=True)
+    kwargs = {}
+    if "qwen3" in model_name.lower():
+        kwargs["model_kwargs"] = {"attn_implementation": "flash_attention_2", "torch_dtype": torch.bfloat16}
+        kwargs["processor_kwargs"] = {"padding_side": "left"}
+
+    model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
     embeddings = model.encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
     return embeddings
 
@@ -103,7 +109,12 @@ def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str 
     Returns:
         List of cross-encoder scores.
     """
-    model = CrossEncoder(model_name, trust_remote_code=True)
+    kwargs = {}
+    if "qwen3" in model_name.lower():
+        kwargs["model_kwargs"] = {"attn_implementation": "flash_attention_2", "torch_dtype": torch.bfloat16}
+        kwargs["processor_kwargs"] = {"padding_side": "left"}
+
+    model = CrossEncoder(model_name, trust_remote_code=True, **kwargs)
     pairs = list(zip(texts_a, texts_b))
     scores = model.predict(pairs, batch_size=batch_size)
     return scores.tolist()
