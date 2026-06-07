@@ -113,21 +113,24 @@ def main():
     with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_model_len=args.max_model_len) as api_url:
         print(f"Using API endpoint: {api_url}")
 
-        result_ds = build_dataset(
+        result_dict = build_dataset(
             samples=samples,
-            target=args.target_dataset,
             api_url=api_url,
             prompts=prompts,
-            append=False,
             generation_params=FILTERING_GENERATION_PARAMS,
         )
+        result_ds = Dataset.from_dict(result_dict)
 
     # Validate that filtered outputs are contiguous subsets of the originals
     print("Validating filtered outputs...")
     result_ds = result_ds.map(check_batch, batched=True)
     malformed_count = sum(result_ds["malformed"])
     print(f"Malformed rows: {malformed_count}/{len(result_ds)}")
-    result_ds.push_to_hub(args.target_dataset)
+    from fastdetector.utils import upload_dataset
+    upload_dataset(
+        dataset=result_ds,
+        dataset_name=args.target_dataset
+    )
     print("Done!")
 
 if __name__ == "__main__":

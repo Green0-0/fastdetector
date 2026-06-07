@@ -1,10 +1,10 @@
 import argparse
 import os
 import time
-from huggingface_hub import HfApi
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from fastdetector.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
+from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
 
 GENERATION_PARAMS = {
@@ -48,20 +48,15 @@ def main():
         samples = load_samples(args.source_dataset, args.source_column, args.num_samples)
 
         # Generate locally
-        result_ds = build_dataset(
+        result_dict = build_dataset(
             samples=samples,
-            target=args.target_dataset,
             api_url=api_url,
             prompts=prompts,
-            append=False,
             generation_params=GENERATION_PARAMS,
         )
+        result_ds = Dataset.from_dict(result_dict)
 
-    result_ds.push_to_hub(args.target_dataset)
-    print(f"Dataset pushed to '{args.target_dataset}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
-    
     total_runtime = time.time() - start_time
-    
     readme_content = f"""# Generation Configuration
 - Source Dataset: {args.source_dataset}
 - Source Column: {args.source_column}
@@ -71,17 +66,12 @@ def main():
 - Engine: vllm
 - Total Runtime: {total_runtime:.2f} seconds
 """
-    try:
-        api = HfApi()
-        api.upload_file(
-            path_or_fileobj=readme_content.encode("utf-8"),
-            path_in_repo="README.md",
-            repo_id=args.target_dataset,
-            repo_type="dataset"
-        )
-        print("Configuration details written to Dataset README.md on HuggingFace Hub.")
-    except Exception as e:
-        print(f"Error uploading README to HuggingFace Hub: {e}")
+
+    upload_dataset(
+        dataset=result_ds,
+        dataset_name=args.target_dataset,
+        readme_content=readme_content
+    )
 
     print("Done!")
 

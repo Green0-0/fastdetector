@@ -1,6 +1,5 @@
 import asyncio
 from openai import AsyncOpenAI
-from datasets import load_dataset, Dataset, concatenate_datasets
 from fastdetector.prompts import Prompt, PromptSet
 
 MAX_RETRIES = 5
@@ -117,15 +116,13 @@ def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> li
 
 def build_dataset(
     samples: list[str],
-    target: str,
     api_url: str,
     prompts: PromptSet,
-    append: bool,
     generation_params: dict,
     use_test: bool = False,
-) -> Dataset:
+) -> dict[str, list]:
     """
-    Iteratively builds the dataset by batching across the prompt dimension.
+    Iteratively builds the dataset dictionary by batching across the prompt dimension.
 
     It creates a batch along the dataset dimension (with one prompt mapped to each row), calling the batch generator, and then
     creates a new column each time the batch generator returns. A column is also created for the
@@ -143,12 +140,13 @@ def build_dataset(
 
     Args:
         samples: List of text samples to process.
-        target: HuggingFace repo to read from when append is True.
         api_url: OpenAI-compatible API base URL.
         prompts: PromptSet to draw prompts from.
-        append: If True, append to any existing dataset at target.
         use_test: If True, use test set prompts instead of train set.
         generation_params: Overrides for sampling params.
+        
+    Returns:
+        A dictionary containing the built dataset columns.
     """
     print(f"Processing {len(samples)} samples...")
 
@@ -182,17 +180,7 @@ def build_dataset(
 
     dataset_columns["final_response_index"] = [len(p.chat_turns) - 1 for p in mapped_prompts]
 
-    # Build the final HuggingFace dataset
-    result_ds = Dataset.from_dict(dataset_columns)
+    print(f"Dataset dict built with {len(samples)} rows and {len(dataset_columns)} columns.")
 
-    if append:
-        try:
-            existing_ds = load_dataset(target, split="train")
-            result_ds = concatenate_datasets([existing_ds, result_ds])
-            print(f"Appended to existing dataset '{target}'.")
-        except Exception:
-            print(f"No existing dataset found at '{target}', creating new.")
+    return dataset_columns
 
-    print(f"Dataset built with {len(result_ds)} rows and {len(dataset_columns)} columns (not pushed).")
-
-    return result_ds

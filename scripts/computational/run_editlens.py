@@ -7,7 +7,7 @@ import emoji
 import numpy as np
 import torch
 from datasets import load_dataset, Dataset
-from huggingface_hub import hf_hub_download, HfApi
+from huggingface_hub import hf_hub_download
 from safetensors import safe_open
 from scipy.special import softmax
 from transformers import (
@@ -18,6 +18,8 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+from fastdetector.utils import upload_dataset
 
 class NormedLinear(torch.nn.Module):
     """Linear layer preceded by LayerNorm to keep logits well-scaled."""
@@ -243,20 +245,11 @@ def main():
 - **False Positives (Human misclassified as AI)**: {fp} ({(fp / len(human_true) * 100) if len(human_true) else 0:.2f}%)
 """
 
-    try:
-        api = HfApi()
-        api.upload_file(
-            path_or_fileobj=stats_md.encode("utf-8"),
-            path_in_repo="README.md",
-            repo_id=args.target_dataset,
-            repo_type="dataset"
-        )
-        print("Uploaded EditLens statistics to Dataset README.md on HuggingFace Hub.")
-    except Exception as e:
-        print(f"Error updating README on HuggingFace Hub: {e}")
-
-    print(f"Pushing updated dataset back to {args.target_dataset}...")
-    result_ds.push_to_hub(args.target_dataset)
+    upload_dataset(
+        dataset=result_ds,
+        dataset_name=args.target_dataset,
+        readme_content=stats_md
+    )
     print("Done!")
 
 if __name__ == "__main__":

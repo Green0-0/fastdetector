@@ -1,5 +1,6 @@
 import sys
 import torch
+from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
 
 model_name = "Qwen/Qwen3-Embedding-4B"
@@ -14,11 +15,21 @@ try:
     model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
     print("Model loaded successfully!")
     
-    texts = ["Hello world, this is a test.", "Another test text for embedding."]
-    print("Running inference...")
-    embeddings = model.encode(texts, batch_size=8, convert_to_numpy=True, normalize_embeddings=True)
+    print("Loading dataset G-reen/cc-2021-rewritten...")
+    ds = load_dataset("G-reen/cc-2021-rewritten", split="train")
+    
+    # Sort texts by length to ensure we get the longest sequences to reproduce OOM
+    texts = ds["original"]
+    texts = sorted(texts, key=lambda x: len(x.split()), reverse=True)
+    batch_texts = texts[:8]
+    
+    lengths = [len(t.split()) for t in batch_texts]
+    print(f"Running inference on texts with word counts: {lengths}")
+    
+    embeddings = model.encode(batch_texts, batch_size=8, convert_to_numpy=True, normalize_embeddings=True)
     print("Inference completed successfully!")
     print("Embeddings shape:", embeddings.shape)
 except Exception as e:
-    print(f"Error occurred: {e}", file=sys.stderr)
+    import traceback
+    traceback.print_exc()
     sys.exit(1)

@@ -3,9 +3,9 @@ import io
 import time
 import matplotlib.pyplot as plt
 import numpy as np
-from huggingface_hub import HfApi
 from datasets import load_dataset
 
+from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
 from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
@@ -91,30 +91,7 @@ def build_readme(global_stats, total_runtime):
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
 
     readme_content += f"\n# Total Runtime: {total_runtime:.2f} seconds\n"
-    return readme_content
-
-def upload_results(dataset_name, result_ds, readme_content, charts):
-    result_ds.push_to_hub(dataset_name)
-    print(f"Dataset pushed to '{dataset_name}' with {len(result_ds)} rows and {len(result_ds.column_names)} columns.")
-
-    try:
-        api = HfApi()
-        api.upload_file(
-            path_or_fileobj=readme_content.encode("utf-8"),
-            path_in_repo="README.md",
-            repo_id=dataset_name,
-            repo_type="dataset"
-        )
-        for filename, data in charts.items():
-            api.upload_file(
-                path_or_fileobj=data,
-                path_in_repo=filename,
-                repo_id=dataset_name,
-                repo_type="dataset"
-            )
-        print("Global stats and charts written to Dataset README.md on HuggingFace Hub.")
-    except Exception as e:
-        print(f"Error uploading README to HuggingFace Hub: {e}")
+    return readme_content    
 
 def main():
     start_time = time.time()
@@ -209,7 +186,12 @@ def main():
     total_runtime = time.time() - start_time
     readme_content = build_readme(global_stats, total_runtime)
     
-    upload_results(args.target_dataset, result_ds, readme_content, charts)
+    upload_dataset(
+        dataset=result_ds,
+        dataset_name=args.target_dataset,
+        files=charts,
+        readme_content=readme_content
+    )
     print("Done!")
 
 if __name__ == "__main__":
