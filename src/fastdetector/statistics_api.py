@@ -13,7 +13,7 @@ async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str,
                 max_tokens=1,
                 echo=True,
                 logprobs=top_logprobs_k,
-                timeout=120.0
+                timeout=600.0
             )
             logprobs = response.choices[0].logprobs.model_dump()
             if logprobs:
@@ -25,9 +25,9 @@ async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str,
             print(f"Error fetching logprobs: {e}")
             return {}
 
-async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logprobs_k: int, concurrency: int = 256):
+async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logprobs_k: int, concurrency: int = 64):
     api_url = api_url.rstrip("/")
-    client = AsyncOpenAI(base_url=api_url, api_key="EMPTY", max_retries=5, timeout=360.0)
+    client = AsyncOpenAI(base_url=api_url, api_key="EMPTY", max_retries=5, timeout=600.0)
     try:
         models = await client.models.list(timeout=5.0)
         model_name = models.data[0].id
