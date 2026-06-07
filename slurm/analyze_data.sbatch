@@ -5,8 +5,8 @@
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=256G
 #SBATCH --gres=gpu:a6000:1
 
 # ---- Activate project venv ----
