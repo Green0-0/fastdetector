@@ -17,5 +17,6 @@ dependencies = [
     "scikit-learn>=1.5.0",
     "numpy>=1.26.0",
     "requests>=2.31.0",
-    "matplotlib"
+    "matplotlib",
+    "torch>=2.12.0",
 ]

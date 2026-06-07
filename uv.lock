@@ -458,6 +458,7 @@ dependencies = [
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
+    { name = "torch" },
 ]
 
 [package.metadata]
@@ -471,6 +472,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.31.0" },
     { name = "scikit-learn", specifier = ">=1.5.0" },
     { name = "sentence-transformers", specifier = ">=3.0.0" },
+    { name = "torch", specifier = ">=2.12.0" },
 ]
 
 [[package]]
