@@ -136,6 +136,19 @@ def main():
     global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jaccard:.4f}")
     print("Text-based global stats computed.")
 
+    print(f"Computing {args.embed_model} embeddings and cosine similarities...")
+    human_embs = batch_gen_embeddings(human_texts, model_name=args.embed_model)
+    ai_embs = batch_gen_embeddings(ai_texts, model_name=args.embed_model)
+    
+    result_ds = result_ds.add_column("pairwise_cossim", pairwise_cossim(human_embs, ai_embs))
+    result_ds = result_ds.add_column("human_human_cossim", self_cossim_all(human_embs))
+    result_ds = result_ds.add_column("ai_ai_cossim", self_cossim_all(ai_embs))
+    result_ds = result_ds.add_column("human_ai_cossim", opposite_cossim_all(human_embs, ai_embs))
+    result_ds = result_ds.add_column("ai_human_cossim", opposite_cossim_all(ai_embs, human_embs))
+
+    print(f"Computing {args.rerank_model} pairwise cross encoder similarities...")
+    result_ds = result_ds.add_column("pairwise_cross_encoder", batch_cross_encoder(human_texts, ai_texts, model_name=args.rerank_model))
+
     print(f"Launching {args.model_name} to calculate LLM statistics...")
     with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_logprobs=100, gpu_memory_utilization=0.75) as stat_api_url:
         print("Fetching human logprobs...")
@@ -152,19 +165,7 @@ def main():
     result_ds = result_ds.add_column("ai_top_p_outlier", top_p_outlier_percentages(ai_texts, a_top, a_tokens, 0.9))
     result_ds = result_ds.add_column("human_top_k_outlier", top_k_outlier_percentages(human_texts, h_top, h_tokens, 50))
     result_ds = result_ds.add_column("ai_top_k_outlier", top_k_outlier_percentages(ai_texts, a_top, a_tokens, 50))
-        
-    print(f"Computing {args.embed_model} embeddings and cosine similarities...")
-    human_embs = batch_gen_embeddings(human_texts, model_name=args.embed_model)
-    ai_embs = batch_gen_embeddings(ai_texts, model_name=args.embed_model)
-    
-    result_ds = result_ds.add_column("pairwise_cossim", pairwise_cossim(human_embs, ai_embs))
-    result_ds = result_ds.add_column("human_human_cossim", self_cossim_all(human_embs))
-    result_ds = result_ds.add_column("ai_ai_cossim", self_cossim_all(ai_embs))
-    result_ds = result_ds.add_column("human_ai_cossim", opposite_cossim_all(human_embs, ai_embs))
-    result_ds = result_ds.add_column("ai_human_cossim", opposite_cossim_all(ai_embs, human_embs))
 
-    print(f"Computing {args.rerank_model} pairwise cross encoder similarities...")
-    result_ds = result_ds.add_column("pairwise_cross_encoder", batch_cross_encoder(human_texts, ai_texts, model_name=args.rerank_model))
 
     global_stats.append("\n## LLM Statistics (Average)")
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
