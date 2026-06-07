@@ -52,6 +52,6 @@ python scripts/auxilary/filter_data_pairs.py \
 python scripts/auxilary/subset_data.py \
     --source_dataset G-reen/cc-2021-processed-stats \
     --target_dataset G-reen/cc-2021-filtered \
-    --conditions "is_loose_subset=True"
+    --conditions "is_loose_subset=True,deviated_lines_proportion_quantile<0.9,deviated_words_proportion_quantile<0.9,deviated_characters_proportion_quantile<0.9"
 
 echo "Dataset generation complete."

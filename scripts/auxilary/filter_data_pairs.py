@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics import quantile, min_max_norm
+from fastdetector.statistics import quantile
 
 PUNCT_TRANSLATION = str.maketrans({
     "\u2018": "'", "\u2019": "'", "\u201C": "\"", "\u201D": "\"",
@@ -69,19 +69,22 @@ def process_batch(batch: dict, orig_col: str, new_col: str) -> dict:
         new_lines_count = len(new_norm.splitlines()) if new_norm else 0
         dl = abs(orig_lines_count - new_lines_count)
         dev_lines.append(dl)
-        prop_dev_lines.append(dl / orig_lines_count if orig_lines_count > 0 else 0.0)
+        max_lines = max(orig_lines_count, new_lines_count)
+        prop_dev_lines.append(dl / max_lines if max_lines > 0 else 0.0)
         
         orig_words_count = len(orig_norm.split())
         new_words_count = len(new_norm.split())
         dw = abs(orig_words_count - new_words_count)
         dev_words.append(dw)
-        prop_dev_words.append(dw / orig_words_count if orig_words_count > 0 else 0.0)
+        max_words = max(orig_words_count, new_words_count)
+        prop_dev_words.append(dw / max_words if max_words > 0 else 0.0)
         
         orig_chars_count = len(orig_norm)
         new_chars_count = len(new_norm)
         dc = abs(orig_chars_count - new_chars_count)
         dev_chars.append(dc)
-        prop_dev_chars.append(dc / orig_chars_count if orig_chars_count > 0 else 0.0)
+        max_chars = max(orig_chars_count, new_chars_count)
+        prop_dev_chars.append(dc / max_chars if max_chars > 0 else 0.0)
 
     return {
         "collected_subset": collected_subsets,
@@ -111,8 +114,7 @@ def generate_charts(ds) -> dict:
         return buf.read()
 
     for stat in ["deviated_lines", "deviated_words", "deviated_characters", 
-                 "proportion_deviated_lines", "proportion_deviated_words", "proportion_deviated_characters",
-                 "deviated_lines_proportion_minmax_norm", "deviated_words_proportion_minmax_norm", "deviated_characters_proportion_minmax_norm"]:
+                 "proportion_deviated_lines", "proportion_deviated_words", "proportion_deviated_characters"]:
         charts[f"hist_{stat}.png"] = get_histogram(ds[stat], f"Histogram: {stat}")
         
     return charts
@@ -147,8 +149,7 @@ def build_readme(ds) -> str:
         
     readme += "\n## Histograms\n"
     for stat in ["deviated_lines", "deviated_words", "deviated_characters", 
-                 "proportion_deviated_lines", "proportion_deviated_words", "proportion_deviated_characters",
-                 "deviated_lines_proportion_minmax_norm", "deviated_words_proportion_minmax_norm", "deviated_characters_proportion_minmax_norm"]:
+                 "proportion_deviated_lines", "proportion_deviated_words", "proportion_deviated_characters"]:
         readme += f"![Histogram {stat}](hist_{stat}.png)\n"
         
     return readme
@@ -171,7 +172,7 @@ def main():
         desc="Processing pairs and calculating metrics"
     )
 
-    print("Calculating quantiles for proportions...")
+    print("Calculating quantiles...")
     prop_lines = ds["proportion_deviated_lines"]
     prop_words = ds["proportion_deviated_words"]
     prop_chars = ds["proportion_deviated_characters"]
@@ -180,17 +181,9 @@ def main():
     q_words = quantile(prop_words)
     q_chars = quantile(prop_chars)
     
-    norm_lines = min_max_norm(prop_lines)
-    norm_words = min_max_norm(prop_words)
-    norm_chars = min_max_norm(prop_chars)
-    
     ds = ds.add_column("deviated_lines_proportion_quantile", q_lines)
     ds = ds.add_column("deviated_words_proportion_quantile", q_words)
     ds = ds.add_column("deviated_characters_proportion_quantile", q_chars)
-    
-    ds = ds.add_column("deviated_lines_proportion_minmax_norm", norm_lines)
-    ds = ds.add_column("deviated_words_proportion_minmax_norm", norm_words)
-    ds = ds.add_column("deviated_characters_proportion_minmax_norm", norm_chars)
 
     print("Generating charts and README...")
     charts = generate_charts(ds)
