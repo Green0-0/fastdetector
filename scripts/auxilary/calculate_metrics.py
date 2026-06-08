@@ -1,10 +1,6 @@
-# TODO: REVIEW
-
 import argparse
-import io
 import time
 import json
-import matplotlib.pyplot as plt
 import numpy as np
 from datasets import load_dataset
 

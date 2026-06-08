@@ -1,7 +1,5 @@
 import argparse
 import re
-import os
-import sys
 from datasets import load_dataset
 from huggingface_hub import HfApi, hf_hub_download
 

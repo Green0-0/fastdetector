@@ -1,6 +1,4 @@
 import argparse
-import io
-import matplotlib.pyplot as plt
 import numpy as np
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset

@@ -1,4 +1,3 @@
-import os
 from fastdetector.prompts import load_prompts
 from fastdetector.prompt_builder import add_example, save_dataset
 
