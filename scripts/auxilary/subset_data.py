@@ -1,5 +1,3 @@
-# TODO: REVIEW
-
 import argparse
 import re
 import os

@@ -3,6 +3,7 @@ import numpy as np
 from collections import Counter
 import Levenshtein
 from typing import Optional
+from unidecode import unidecode
 
 def global_ngram_analysis(texts: list[str], n: int) -> dict[str, float]:
     """Compute the global n-gram distribution across a list of texts.
@@ -328,5 +329,107 @@ def min_max_norm(values: list[float]) -> list[float]:
         return [0.0] * n
     return ((arr - min_val) / (max_val - min_val)).tolist()
 
-# PUT DEVIATED/DEVIATED PROPORTIONS + STRICT/LOOSE SUBSET HERE
+def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
+    """Compute the proportion and raw count of deviated lines between pairs of texts."""
+    proportions = []
+    raw_counts = []
+    for a, b in zip(texts_a, texts_b):
+        a_str = str(a) if a is not None else ""
+        b_str = str(b) if b is not None else ""
+        a_norm = unidecode(a_str)
+        b_norm = unidecode(b_str)
+        
+        a_lines = len(a_norm.splitlines()) if a_norm else 0
+        b_lines = len(b_norm.splitlines()) if b_norm else 0
+        dl = abs(a_lines - b_lines)
+        raw_counts.append(dl)
+        max_lines = max(a_lines, b_lines)
+        proportions.append(dl / max_lines if max_lines > 0 else 0.0)
+    return proportions, raw_counts
+
+def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
+    """Compute the proportion and raw count of deviated words between pairs of texts."""
+    proportions = []
+    raw_counts = []
+    for a, b in zip(texts_a, texts_b):
+        a_str = str(a) if a is not None else ""
+        b_str = str(b) if b is not None else ""
+        a_norm = unidecode(a_str)
+        b_norm = unidecode(b_str)
+        
+        a_words = len(a_norm.split())
+        b_words = len(b_norm.split())
+        dw = abs(a_words - b_words)
+        raw_counts.append(dw)
+        max_words = max(a_words, b_words)
+        proportions.append(dw / max_words if max_words > 0 else 0.0)
+    return proportions, raw_counts
+
+def deviated_characters(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
+    """Compute the proportion and raw count of deviated characters between pairs of texts."""
+    proportions = []
+    raw_counts = []
+    for a, b in zip(texts_a, texts_b):
+        a_str = str(a) if a is not None else ""
+        b_str = str(b) if b is not None else ""
+        a_norm = unidecode(a_str)
+        b_norm = unidecode(b_str)
+        
+        a_chars = len(a_norm)
+        b_chars = len(b_norm)
+        dc = abs(a_chars - b_chars)
+        raw_counts.append(dc)
+        max_chars = max(a_chars, b_chars)
+        proportions.append(dc / max_chars if max_chars > 0 else 0.0)
+    return proportions, raw_counts
+
+def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
+    """Check if texts_b are strictly substrings of texts_a."""
+    results = []
+    for a, b in zip(texts_a, texts_b):
+        a_str = str(a) if a is not None else ""
+        b_str = str(b) if b is not None else ""
+        if not b_str or b_str not in a_str:
+            results.append(False)
+        else:
+            results.append(True)
+    return results
+
+def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool], list[str]]:
+    """Check if texts_b are loose substrings of texts_a, ignoring spaces, case, and unicode differences.
+    Returns a tuple of (is_subset, collected_subset)."""
+    is_subsets = []
+    collected_subsets = []
+    for a, b in zip(texts_a, texts_b):
+        a_str = str(a) if a is not None else ""
+        b_str = str(b) if b is not None else ""
+        
+        b_norm = unidecode(b_str)
+        
+        orig_canon_parts = []
+        orig_mapping = []
+        for i, c in enumerate(a_str):
+            norm_c = unidecode(c)
+            for nc in norm_c:
+                if not nc.isspace():
+                    lowered = nc.lower()
+                    orig_canon_parts.append(lowered)
+                    orig_mapping.extend([i] * len(lowered))
+        orig_canon = "".join(orig_canon_parts)
+        
+        new_canon = "".join(c.lower() for c in b_norm if not c.isspace())
+        
+        if not new_canon or new_canon not in orig_canon:
+            is_subsets.append(False)
+            collected_subsets.append("")
+        else:
+            is_subsets.append(True)
+            start_idx = orig_canon.find(new_canon)
+            end_idx = start_idx + len(new_canon) - 1
+            orig_start = orig_mapping[start_idx]
+            orig_end = orig_mapping[end_idx]
+            collected_subsets.append(a_str[orig_start:orig_end+1])
+            
+    return is_subsets, collected_subsets
+
 # PUT HISTOGRAM BUILDER HERE

@@ -26,10 +26,7 @@ async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str,
             print(f"Error fetching logprobs: {e}")
             return {}
 
-async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logprobs_k: int, concurrency: int = 256, user_prefill: Optional[str] = None):
-    if user_prefill is None:
-        user_prefill = "Write me a document or piece of web text that you remember seeing from your training data, of your choice. The topic, formatting, and content are yours to decide."
-
+async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logprobs_k: int, concurrency: int = 256):
     api_url = api_url.rstrip("/")
     client = AsyncOpenAI(base_url=api_url, api_key="EMPTY", max_retries=5, timeout=600.0)
     try:
@@ -38,14 +35,6 @@ async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logpro
     except Exception:
         model_name = "default-model"
         
-    num_prefix_tokens = 0
-    tokenizer = None
-    try:
-        from transformers import AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-    except Exception as e:
-        print(f"Warning: Could not load tokenizer for {model_name}: {e}. Falling back to raw text.")
-
     sem = asyncio.Semaphore(concurrency)
     total = len(texts)
     completed = 0
@@ -55,28 +44,7 @@ async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logpro
         if not text.strip():
             result = {}
         else:
-            if tokenizer:
-                messages = [
-                    {"role": "user", "content": user_prefill},
-                    {"role": "assistant", "content": text}
-                ]
-                formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False)
-                
-                prefix_messages = [
-                    {"role": "user", "content": user_prefill},
-                    {"role": "assistant", "content": ""}
-                ]
-                prefix_prompt = tokenizer.apply_chat_template(prefix_messages, tokenize=False)
-                num_prefix_tokens = len(tokenizer.encode(prefix_prompt, add_special_tokens=False))
-            else:
-                formatted_prompt = text
-                num_prefix_tokens = 0
-
-            result = await _fetch_logprobs_async(client, model_name, formatted_prompt, top_logprobs_k, sem)
-            if result and num_prefix_tokens > 0:
-                for key in ["token_logprobs", "top_logprobs", "tokens"]:
-                    if result.get(key) and len(result[key]) > num_prefix_tokens:
-                        result[key] = result[key][num_prefix_tokens:]
+            result = await _fetch_logprobs_async(client, model_name, text, top_logprobs_k, sem)
         completed += 1
         if completed % 100 == 0 or completed == total:
             print(f"  Progress: {completed}/{total} requests complete", flush=True)
@@ -87,7 +55,7 @@ async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logpro
     await client.close()
     return results
 
-def fetch_logprobs_all(texts: list[str], api_url: str, top_logprobs_k: int = 100, concurrency: int = 256, user_prefill: Optional[str] = None) -> tuple[list[list[Optional[float]]], list[list[dict[str, float]]]]:
+def fetch_logprobs_all(texts: list[str], api_url: str, top_logprobs_k: int = 100, concurrency: int = 256) -> tuple[list[list[Optional[float]]], list[list[dict[str, float]]]]:
     """Fetch logprobs for a list of texts using the vLLM API.
     
     Args:
@@ -95,12 +63,11 @@ def fetch_logprobs_all(texts: list[str], api_url: str, top_logprobs_k: int = 100
         api_url: The vLLM API URL.
         top_logprobs_k: The number of top logprobs to fetch per token.
         concurrency: Max concurrent API requests.
-        user_prefill: Optional user message prefill.
         
     Returns:
         Tuple of (token_logprobs_list, top_logprobs_list)
     """
-    results = asyncio.run(_batch_fetch_logprobs_async(api_url, texts, top_logprobs_k, concurrency, user_prefill))
+    results = asyncio.run(_batch_fetch_logprobs_async(api_url, texts, top_logprobs_k, concurrency))
     
     token_logprobs_list = []
     top_logprobs_list = []

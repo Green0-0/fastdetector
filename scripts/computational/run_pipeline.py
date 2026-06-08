@@ -41,7 +41,6 @@ def main():
     print(f"Loading tokenizer and streaming {args.num_samples} samples from {args.source_dataset}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     ds = load_dataset(args.source_dataset, split="train", streaming=True)
-    
     samples = []
     tokens_processed = 0
     for row in ds:
@@ -89,13 +88,7 @@ def main():
 
 - Engine: vllm
 """
-
-    upload_dataset(
-        dataset=result_ds,
-        dataset_name=args.target_dataset,
-        readme_content=readme_content
-    )
-
+    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content)
     print("Done!")
 
 if __name__ == "__main__":
