@@ -13,6 +13,7 @@ def main():
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--columns", type=str, required=True, help="Comma separated column names.")
+    parser.add_argument("--col-suffix", type=str, default="", help="Suffix to append to new columns.")
     parser.add_argument("--top-logprobs-k", type=int, default=100, help="Top logprobs K to fetch.")
     args = parser.parse_args()
 
@@ -33,9 +34,9 @@ def main():
             
             top_logprobs_list_json = [[json.dumps(d) for d in seq] for seq in top_logprobs_list]
             
-            ds = ds.add_column(f"{col}_tokens", tokens_list)
-            ds = ds.add_column(f"{col}_top_logprobs", top_logprobs_list_json)
-            print(f"Added columns: {col}_tokens, {col}_top_logprobs")
+            ds = ds.add_column(f"{col}_tokens{args.col_suffix}", tokens_list)
+            ds = ds.add_column(f"{col}_top_logprobs{args.col_suffix}", top_logprobs_list_json)
+            print(f"Added columns: {col}_tokens{args.col_suffix}, {col}_top_logprobs{args.col_suffix}")
 
     print(f"Uploading to {args.target_dataset}...")
     total_runtime = time.time() - start_time

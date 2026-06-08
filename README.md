@@ -1,0 +1,2 @@
+Note: Need to install flash attn: uv pip install "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.17/flash_attn-2.8.3+cu130torch2.12-cp312-cp312-linux_x86_64.whl"
+and vLLM: https://docs.vllm.ai/en/latest/getting_started/installation/

@@ -4,12 +4,12 @@ import json
 import numpy as np
 from datasets import load_dataset
 
-from fastdetector.statistics_utils import get_histogram
+from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
-    pairwise_cossim, self_cossim_all, opposite_cossim_all, quantile, min_max_norm
+    pairwise_cossim, quantile, min_max_norm
 )
 
 def main():
@@ -90,31 +90,79 @@ def main():
     result_ds = result_ds.add_column("pairwise_cossim_quantile", quantile(result_ds["pairwise_cossim"]))
     result_ds = result_ds.add_column("pairwise_levenshtein_norm", min_max_norm(result_ds["pairwise_levenshtein"]))
     result_ds = result_ds.add_column("pairwise_levenshtein_quantile", quantile(result_ds["pairwise_levenshtein"]))
-    result_ds = result_ds.add_column("pairwise_jaccard_quantile", quantile(result_ds["pairwise_jaccard_1"]))
-    
+    result_ds = result_ds.add_column("pairwise_jaccard_1_quantile", quantile(result_ds["pairwise_jaccard_1"]))
+    result_ds = result_ds.add_column("pairwise_jaccard_2_quantile", quantile(result_ds["pairwise_jaccard_2"]))
     result_ds = result_ds.add_column("pairwise_cross_encoder_norm", min_max_norm(result_ds["pairwise_cross_encoder"]))
     result_ds = result_ds.add_column("pairwise_cross_encoder_quantile", quantile(result_ds["pairwise_cross_encoder"]))
 
     print("Computing LLM statistics from precomputed logprobs...")
-    h_tokens = result_ds[f"{args.col_human}_tokens"]
-    h_top = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_human}_top_logprobs"]]
-    a_tokens = result_ds[f"{args.col_ai}_tokens"]
-    a_top = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_ai}_top_logprobs"]]
+    h_tokens_llama = result_ds[f"{args.col_human}_tokens_llama"]
+    h_top_llama = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_human}_top_logprobs_llama"]]
+    a_tokens_llama = result_ds[f"{args.col_ai}_tokens_llama"]
+    a_top_llama = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_ai}_top_logprobs_llama"]]
+    
+    h_tokens_gemma = result_ds[f"{args.col_human}_tokens_gemma"]
+    h_top_gemma = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_human}_top_logprobs_gemma"]]
+    a_tokens_gemma = result_ds[f"{args.col_ai}_tokens_gemma"]
+    a_top_gemma = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_ai}_top_logprobs_gemma"]]
 
-    result_ds = result_ds.add_column("human_perplexity", perplexities(human_texts, h_tokens))
-    result_ds = result_ds.add_column("ai_perplexity", perplexities(ai_texts, a_tokens))
-    result_ds = result_ds.add_column("human_entropy", entropies_approx(human_texts, h_top))
-    result_ds = result_ds.add_column("ai_entropy", entropies_approx(ai_texts, a_top))
-    result_ds = result_ds.add_column("human_top_p_outlier", top_p_outlier_percentages(human_texts, h_top, h_tokens, 0.9))
-    result_ds = result_ds.add_column("ai_top_p_outlier", top_p_outlier_percentages(ai_texts, a_top, a_tokens, 0.9))
-    result_ds = result_ds.add_column("human_top_k_outlier", top_k_outlier_percentages(human_texts, h_top, h_tokens, 50))
-    result_ds = result_ds.add_column("ai_top_k_outlier", top_k_outlier_percentages(ai_texts, a_top, a_tokens, 50))
+    result_ds = result_ds.add_column("human_perplexity_llama", perplexities(human_texts, h_tokens_llama))
+    result_ds = result_ds.add_column("ai_perplexity_llama", perplexities(ai_texts, a_tokens_llama))
+    result_ds = result_ds.add_column("human_entropy_llama", entropies_approx(human_texts, h_top_llama))
+    result_ds = result_ds.add_column("ai_entropy_llama", entropies_approx(ai_texts, a_top_llama))
+    result_ds = result_ds.add_column("human_top_p_outlier_llama", top_p_outlier_percentages(human_texts, h_top_llama, h_tokens_llama, 0.9))
+    result_ds = result_ds.add_column("ai_top_p_outlier_llama", top_p_outlier_percentages(ai_texts, a_top_llama, a_tokens_llama, 0.9))
+    result_ds = result_ds.add_column("human_top_k_outlier_llama", top_k_outlier_percentages(human_texts, h_top_llama, h_tokens_llama, 50))
+    result_ds = result_ds.add_column("ai_top_k_outlier_llama", top_k_outlier_percentages(ai_texts, a_top_llama, a_tokens_llama, 50))
+
+    result_ds = result_ds.add_column("human_perplexity_gemma", perplexities(human_texts, h_tokens_gemma))
+    result_ds = result_ds.add_column("ai_perplexity_gemma", perplexities(ai_texts, a_tokens_gemma))
+    result_ds = result_ds.add_column("human_entropy_gemma", entropies_approx(human_texts, h_top_gemma))
+    result_ds = result_ds.add_column("ai_entropy_gemma", entropies_approx(ai_texts, a_top_gemma))
+    result_ds = result_ds.add_column("human_top_p_outlier_gemma", top_p_outlier_percentages(human_texts, h_top_gemma, h_tokens_gemma, 0.9))
+    result_ds = result_ds.add_column("ai_top_p_outlier_gemma", top_p_outlier_percentages(ai_texts, a_top_gemma, a_tokens_gemma, 0.9))
+    result_ds = result_ds.add_column("human_top_k_outlier_gemma", top_k_outlier_percentages(human_texts, h_top_gemma, h_tokens_gemma, 50))
+    result_ds = result_ds.add_column("ai_top_k_outlier_gemma", top_k_outlier_percentages(ai_texts, a_top_gemma, a_tokens_gemma, 50))
+
+    hp_llama = np.array(result_ds["human_perplexity_llama"])
+    ap_llama = np.array(result_ds["ai_perplexity_llama"])
+    hp_gemma = np.array(result_ds["human_perplexity_gemma"])
+    ap_gemma = np.array(result_ds["ai_perplexity_gemma"])
+    
+    h_bino = np.divide(hp_llama, hp_gemma, out=np.zeros_like(hp_llama), where=hp_gemma!=0)
+    a_bino = np.divide(ap_llama, ap_gemma, out=np.zeros_like(ap_gemma), where=ap_gemma!=0)
+    
+    result_ds = result_ds.add_column("human_binocular_ratio", h_bino.tolist())
+    result_ds = result_ds.add_column("ai_binocular_ratio", a_bino.tolist())
+
+    h_bino_entropy = np.divide(np.array(result_ds["human_entropy_llama"]), np.array(result_ds["human_entropy_gemma"]), out=np.zeros_like(hp_llama), where=np.array(result_ds["human_entropy_gemma"])!=0)
+    a_bino_entropy = np.divide(np.array(result_ds["ai_entropy_llama"]), np.array(result_ds["ai_entropy_gemma"]), out=np.zeros_like(ap_llama), where=np.array(result_ds["ai_entropy_gemma"])!=0)
+    result_ds = result_ds.add_column("human_binocular_entropy", h_bino_entropy.tolist())
+    result_ds = result_ds.add_column("ai_binocular_entropy", a_bino_entropy.tolist())
+
+    h_bino_top_p = np.divide(np.array(result_ds["human_top_p_outlier_llama"]), np.array(result_ds["human_top_p_outlier_gemma"]), out=np.zeros_like(hp_llama), where=np.array(result_ds["human_top_p_outlier_gemma"])!=0)
+    a_bino_top_p = np.divide(np.array(result_ds["ai_top_p_outlier_llama"]), np.array(result_ds["ai_top_p_outlier_gemma"]), out=np.zeros_like(ap_llama), where=np.array(result_ds["ai_top_p_outlier_gemma"])!=0)
+    result_ds = result_ds.add_column("human_binocular_top_p", h_bino_top_p.tolist())
+    result_ds = result_ds.add_column("ai_binocular_top_p", a_bino_top_p.tolist())
+
+    h_bino_top_k = np.divide(np.array(result_ds["human_top_k_outlier_llama"]), np.array(result_ds["human_top_k_outlier_gemma"]), out=np.zeros_like(hp_llama), where=np.array(result_ds["human_top_k_outlier_gemma"])!=0)
+    a_bino_top_k = np.divide(np.array(result_ds["ai_top_k_outlier_llama"]), np.array(result_ds["ai_top_k_outlier_gemma"]), out=np.zeros_like(ap_llama), where=np.array(result_ds["ai_top_k_outlier_gemma"])!=0)
+    result_ds = result_ds.add_column("human_binocular_top_k", h_bino_top_k.tolist())
+    result_ds = result_ds.add_column("ai_binocular_top_k", a_bino_top_k.tolist())
 
     global_stats.append("\n## LLM Statistics (Average)")
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
-        h_mean = np.mean(result_ds[f"human_{stat}"])
-        a_mean = np.mean(result_ds[f"ai_{stat}"])
-        global_stats.append(f"- **{stat.capitalize()}**: Human {h_mean:.4f} | AI {a_mean:.4f}")
+        h_mean_llama = np.mean(result_ds[f"human_{stat}_llama"])
+        a_mean_llama = np.mean(result_ds[f"ai_{stat}_llama"])
+        h_mean_gemma = np.mean(result_ds[f"human_{stat}_gemma"])
+        a_mean_gemma = np.mean(result_ds[f"ai_{stat}_gemma"])
+        global_stats.append(f"- **{stat}_llama**: Human {h_mean_llama:.4f} | AI {a_mean_llama:.4f}")
+        global_stats.append(f"- **{stat}_gemma**: Human {h_mean_gemma:.4f} | AI {a_mean_gemma:.4f}")
+        
+    for b_stat in ["binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
+        h_mean_bino = np.mean(result_ds[f"human_{b_stat}"])
+        a_mean_bino = np.mean(result_ds[f"ai_{b_stat}"])
+        global_stats.append(f"- **{b_stat}**: Human {h_mean_bino:.4f} | AI {a_mean_bino:.4f}")
         
     global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
     global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cossim']):.4f}")
@@ -144,21 +192,31 @@ def main():
     charts = {}
 
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
-        human_vals = result_ds[f"human_{stat}"]
-        ai_vals = result_ds[f"ai_{stat}"]
-        charts[f"hist_{stat}.png"] = get_histogram([human_vals, ai_vals], ["Human", "AI"], f"Histogram: {stat.capitalize()}")
+        human_vals_llama = result_ds[f"human_{stat}_llama"]
+        ai_vals_llama = result_ds[f"ai_{stat}_llama"]
+        human_vals_gemma = result_ds[f"human_{stat}_gemma"]
+        ai_vals_gemma = result_ds[f"ai_{stat}_gemma"]
+        charts[f"hist_{stat}.png"] = get_histogram([human_vals_llama, ai_vals_llama, human_vals_gemma, ai_vals_gemma], ["Human (Llama)", "AI (Llama)", "Human (Gemma)", "AI (Gemma)"], f"Histogram: {stat}")
+        
+    for b_stat in ["binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
+        charts[f"hist_{b_stat}.png"] = get_histogram([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], ["Human", "AI"], f"Histogram: {b_stat}")
+        charts[f"classifier_{b_stat}.png"] = get_sweeping_classifier_plot([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, False, ["Human Accuracy", "AI Accuracy"], f"Naive Classifier: {b_stat}")
 
     charts["hist_pairwise_cossim.png"] = get_histogram([result_ds["pairwise_cossim"]], ["Pairwise Cosine Similarity"], "Histogram: Pairwise Cosine Similarity")
     charts["hist_pairwise_crossencoder.png"] = get_histogram([result_ds["pairwise_cross_encoder"]], ["Pairwise Cross-Encoder"], "Histogram: Pairwise Cross-Encoder")
     charts["hist_pairwise_levenshtein.png"] = get_histogram([result_ds["pairwise_levenshtein"]], ["Pairwise Levenshtein"], "Histogram: Pairwise Levenshtein")
-    charts["hist_pairwise_jaccard.png"] = get_histogram([result_ds["pairwise_jaccard_1"]], ["Pairwise Jaccard (n=1)"], "Histogram: Pairwise Jaccard (n=1)")
+    charts["hist_pairwise_jaccard.png"] = get_histogram([result_ds["pairwise_jaccard_1"], result_ds["pairwise_jaccard_2"]], ["Pairwise Jaccard (n=1)", "Pairwise Jaccard (n=2)"], "Histogram: Pairwise Jaccard")
     
     total_runtime = time.time() - start_time
     
     readme_content = "\n".join(global_stats)
 
-    readme_content += "\n\n## Histograms\n"
-    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+    readme_content += "\n\n## Classifiers\n"
+    for b_stat in ["binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
+        readme_content += f"![Classifier {b_stat}](classifier_{b_stat}.png)\n"
+
+    readme_content += "\n## Histograms\n"
+    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier", "binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
     for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
