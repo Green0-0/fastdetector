@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=analyze_data
-#SBATCH --output=analyze_data_%j.out
-#SBATCH --error=analyze_data_%j.err
+#SBATCH --job-name=calc_stats
+#SBATCH --output=calc_stats_%j.out
+#SBATCH --error=calc_stats_%j.err
 #SBATCH --time=12:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

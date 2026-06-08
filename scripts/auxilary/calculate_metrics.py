@@ -43,8 +43,8 @@ def main():
         changes_shared = []
         changes_exclusive = []
         for k in all_keys:
-            h_val = human_ngrams.get(k, 0.0)
-            a_val = ai_ngrams.get(k, 0.0)
+            h_val = human_ngrams.get(k, 0)
+            a_val = ai_ngrams.get(k, 0)
             diff = a_val - h_val
             if h_val > 0 and a_val > 0:
                 prop_change = diff / h_val
@@ -56,17 +56,17 @@ def main():
         top5_exclusive = sorted(changes_exclusive, key=lambda x: abs(x[1]), reverse=True)[:5]
         
         global_stats.append(f"\n### n={n}")
-        global_stats.append("**\nShared N-grams (Top 5 by Proportion Change):**")
+        global_stats.append("\n**Shared N-grams (Top 5 by Proportion Change):**")
         if not top5_shared:
             global_stats.append("- None")
         for k, diff, prop_change, h_val, a_val in top5_shared:
-            global_stats.append(f"- '{k}': {diff:+.4f} ({prop_change:+.2%})")
+            global_stats.append(f"- '{k}': {diff:+d} ({prop_change:+.2%})")
             
-        global_stats.append("**\nExclusive N-grams (Top 5 by Frequency):**")
+        global_stats.append("\n**Exclusive N-grams (Top 5 by Frequency):**")
         if not top5_exclusive:
             global_stats.append("- None")
         for k, diff, h_val, a_val in top5_exclusive:
-            global_stats.append(f"- '{k}': {diff:+.4f} (AI: {a_val:.4f}, Human: {h_val:.4f})")
+            global_stats.append(f"- '{k}': {diff:+d} (AI: {a_val}, Human: {h_val})")
         
     global_jaccard = pairwise_jaccards([" ".join(human_texts)], [" ".join(ai_texts)], 1)[0]
     global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jaccard:.4f}")

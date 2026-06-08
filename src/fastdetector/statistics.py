@@ -5,7 +5,7 @@ import Levenshtein
 from typing import Optional
 from unidecode import unidecode
 
-def global_ngram_analysis(texts: list[str], n: int) -> dict[str, float]:
+def global_ngram_analysis(texts: list[str], n: int) -> dict[str, int]:
     """Compute the global n-gram distribution across a list of texts.
     
     Args:
@@ -13,17 +13,16 @@ def global_ngram_analysis(texts: list[str], n: int) -> dict[str, float]:
         n: The n-gram size.
         
     Returns:
-        Dictionary mapping n-grams to their global frequencies.
+        Dictionary mapping n-grams to their raw frequencies.
     """
     counts = Counter()
     for text in texts:
         tokens = text.split()
         if len(tokens) >= n:
             counts.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
-    total = sum(counts.values())
-    return {k: v / total for k, v in counts.items()} if total > 0 else {}
+    return dict(counts)
 
-def ngram_analysis(texts: list[str], n: int) -> list[dict[str, float]]:
+def ngram_analysis(texts: list[str], n: int) -> list[dict[str, int]]:
     """Compute the n-gram distribution for each text individually.
     
     Args:
@@ -31,7 +30,7 @@ def ngram_analysis(texts: list[str], n: int) -> list[dict[str, float]]:
         n: The n-gram size.
         
     Returns:
-        List of dictionaries mapping n-grams to their frequencies for each text.
+        List of dictionaries mapping n-grams to their raw counts for each text.
     """
     results = []
     for text in texts:
@@ -41,8 +40,7 @@ def ngram_analysis(texts: list[str], n: int) -> list[dict[str, float]]:
         else:
             ngrams = [" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
             counts = Counter(ngrams)
-            total = sum(counts.values())
-            results.append({k: v / total for k, v in counts.items()})
+            results.append(dict(counts))
     return results
 
 def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) -> list[float]:
