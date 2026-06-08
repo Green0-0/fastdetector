@@ -50,7 +50,7 @@ echo "Computing LLM logprobs..."
 python scripts/computational/run_llm_stat.py \
     --source-dataset G-reen/cc-2021-rewritten-rerank \
     --target-dataset G-reen/cc-2021-rewritten-llm \
-    --model-name unsloth/Llama-3.2-1B \
+    --model-name unsloth/Llama-3.2-3B-Instruct \
     --columns original,final_response \
     --top-logprobs-k 100
 
