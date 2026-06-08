@@ -15,8 +15,6 @@ from fastdetector.statistics import (
     pairwise_cossim, self_cossim_all, opposite_cossim_all
 )
 
-
-
 def generate_charts(result_ds):
     charts = {}
 
