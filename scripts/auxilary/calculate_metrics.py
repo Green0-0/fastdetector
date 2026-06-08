@@ -9,7 +9,7 @@ from fastdetector.utils import upload_dataset
 from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
-    pairwise_cossim, self_cossim_all, opposite_cossim_all
+    pairwise_cossim, self_cossim_all, opposite_cossim_all, quantile, min_max_norm
 )
 
 def main():
@@ -39,14 +39,34 @@ def main():
         human_ngrams = global_ngram_analysis(human_texts, n)
         ai_ngrams = global_ngram_analysis(ai_texts, n)
         
-        human_top10 = sorted(human_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
-        ai_top10 = sorted(ai_ngrams.items(), key=lambda x: x[1], reverse=True)[:10]
+        all_keys = set(human_ngrams.keys()).union(set(ai_ngrams.keys()))
+        changes_shared = []
+        changes_exclusive = []
+        for k in all_keys:
+            h_val = human_ngrams.get(k, 0.0)
+            a_val = ai_ngrams.get(k, 0.0)
+            diff = a_val - h_val
+            if h_val > 0 and a_val > 0:
+                prop_change = diff / h_val
+                changes_shared.append((k, diff, prop_change, h_val, a_val))
+            else:
+                changes_exclusive.append((k, diff, h_val, a_val))
+            
+        top5_shared = sorted(changes_shared, key=lambda x: (abs(x[2]), abs(x[1])), reverse=True)[:5]
+        top5_exclusive = sorted(changes_exclusive, key=lambda x: abs(x[1]), reverse=True)[:5]
         
         global_stats.append(f"\n### n={n}")
-        global_stats.append("**Human:**")
-        for k, v in human_top10: global_stats.append(f"- '{k}': {v:.4f}")
-        global_stats.append("**AI:**")
-        for k, v in ai_top10: global_stats.append(f"- '{k}': {v:.4f}")
+        global_stats.append("**\nShared N-grams (Top 5 by Proportion Change):**")
+        if not top5_shared:
+            global_stats.append("- None")
+        for k, diff, prop_change, h_val, a_val in top5_shared:
+            global_stats.append(f"- '{k}': {diff:+.4f} ({prop_change:+.2%})")
+            
+        global_stats.append("**\nExclusive N-grams (Top 5 by Frequency):**")
+        if not top5_exclusive:
+            global_stats.append("- None")
+        for k, diff, h_val, a_val in top5_exclusive:
+            global_stats.append(f"- '{k}': {diff:+.4f} (AI: {a_val:.4f}, Human: {h_val:.4f})")
         
     global_jaccard = pairwise_jaccards([" ".join(human_texts)], [" ".join(ai_texts)], 1)[0]
     global_stats.append(f"\n## Global Jaccard (n=1)\n{global_jaccard:.4f}")
@@ -57,10 +77,6 @@ def main():
     ai_embs = np.array(result_ds[f"{args.col_ai}_embedding"])
     
     result_ds = result_ds.add_column("pairwise_cossim", pairwise_cossim(human_embs, ai_embs))
-    result_ds = result_ds.add_column("human_human_cossim", self_cossim_all(human_embs))
-    result_ds = result_ds.add_column("ai_ai_cossim", self_cossim_all(ai_embs))
-    result_ds = result_ds.add_column("human_ai_cossim", opposite_cossim_all(human_embs, ai_embs))
-    result_ds = result_ds.add_column("ai_human_cossim", opposite_cossim_all(ai_embs, human_embs))
 
     print("Retrieving pairwise cross encoder similarities...")
     ce_col = f"pairwise_cross_encoder_{args.col_human}_{args.col_ai}"
@@ -69,6 +85,14 @@ def main():
             result_ds = result_ds.add_column("pairwise_cross_encoder", result_ds[ce_col])
     else:
         print(f"Warning: cross encoder column {ce_col} not found. Charts might fail.")
+
+    print("Computing minmax norms and percentiles...")
+    result_ds = result_ds.add_column("pairwise_levenshtein_norm", min_max_norm(result_ds["pairwise_levenshtein"]))
+    result_ds = result_ds.add_column("pairwise_levenshtein_quantile", quantile(result_ds["pairwise_levenshtein"]))
+    result_ds = result_ds.add_column("pairwise_jaccard_quantile", quantile(result_ds["pairwise_jaccard_1"]))
+    
+    result_ds = result_ds.add_column("pairwise_cross_encoder_norm", min_max_norm(result_ds["pairwise_cross_encoder"]))
+    result_ds = result_ds.add_column("pairwise_cross_encoder_quantile", quantile(result_ds["pairwise_cross_encoder"]))
 
     print("Computing LLM statistics from precomputed logprobs...")
     h_tokens = result_ds[f"{args.col_human}_tokens"]
@@ -93,12 +117,20 @@ def main():
         
     global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
     global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cossim']):.4f}")
-    global_stats.append(f"- **Human-Human**: {np.mean(result_ds['human_human_cossim']):.4f}")
-    global_stats.append(f"- **AI-AI**: {np.mean(result_ds['ai_ai_cossim']):.4f}")
-    global_stats.append(f"- **Human-AI**: {np.mean(result_ds['human_ai_cossim']):.4f}")
-    global_stats.append(f"- **AI-Human**: {np.mean(result_ds['ai_human_cossim']):.4f}")
-    if "pairwise_cross_encoder" in result_ds.column_names:
-        global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
+    global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
+    
+    lq = np.array(result_ds["pairwise_levenshtein_quantile"])
+    cq = np.array(result_ds["pairwise_cross_encoder_quantile"])
+    jq = np.array(result_ds["pairwise_jaccard_quantile"])
+    
+    diff_lq_cq = np.mean(np.abs(lq - cq))
+    diff_lq_jq = np.mean(np.abs(lq - jq))
+    diff_cq_jq = np.mean(np.abs(cq - jq))
+    
+    global_stats.append("\n## Average Absolute Percentile Differences")
+    global_stats.append(f"- **Levenshtein vs Cross-Encoder**: {diff_lq_cq:.4f}")
+    global_stats.append(f"- **Levenshtein vs Jaccard**: {diff_lq_jq:.4f}")
+    global_stats.append(f"- **Cross-Encoder vs Jaccard**: {diff_cq_jq:.4f}")
 
     print("Generating charts...")
     charts = {}
