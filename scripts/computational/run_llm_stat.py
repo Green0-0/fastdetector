@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-3B-Instruct", help="LLM model name.")
     parser.add_argument("--columns", type=str, required=True, help="Comma separated column names.")
     parser.add_argument("--top-logprobs-k", type=int, default=100, help="Top logprobs K to fetch.")
+    parser.add_argument("--user-prefill", type=str, default=None, help="Optional user message prefill to construct chat context.")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
@@ -27,7 +28,7 @@ def main():
                 continue
             
             print(f"Fetching logprobs for column: {col}...")            
-            tokens_list, top_logprobs_list = fetch_logprobs_all(ds[col], stat_api_url, top_logprobs_k=args.top_logprobs_k)
+            tokens_list, top_logprobs_list = fetch_logprobs_all(ds[col], stat_api_url, top_logprobs_k=args.top_logprobs_k, user_prefill=args.user_prefill)
             
             top_logprobs_list_json = [[json.dumps(d) for d in seq] for seq in top_logprobs_list]
             
