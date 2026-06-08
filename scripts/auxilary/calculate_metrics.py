@@ -64,10 +64,13 @@ def generate_charts(result_ds):
         return buf.read()
 
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
-        human_vals = result_ds[f"human_{stat}"]
-        ai_vals = result_ds[f"ai_{stat}"]
+        human_vals = np.array(result_ds[f"human_{stat}"])
+        ai_vals = np.array(result_ds[f"ai_{stat}"])
         charts[f"classifier_{stat}.png"] = get_classifier_plot(human_vals, ai_vals, f"Naive Classifier: {stat.capitalize()}")
         charts[f"hist_{stat}.png"] = get_histogram(human_vals, ai_vals, "Human", "AI", f"Histogram: {stat.capitalize()}")
+        
+        diff_vals = human_vals - ai_vals
+        charts[f"hist_diff_{stat}.png"] = get_histogram(diff_vals, None, "Human - AI", None, f"Pairwise Diff: {stat.capitalize()}")
 
     charts["hist_pairwise_cossim.png"] = get_histogram(result_ds["pairwise_cossim"], None, "Pairwise Cosine Similarity", None, "Histogram: Pairwise Cosine Similarity")
     charts["hist_pairwise_crossencoder.png"] = get_histogram(result_ds["pairwise_cross_encoder"], None, "Pairwise Cross-Encoder", None, "Histogram: Pairwise Cross-Encoder")
@@ -86,6 +89,7 @@ def build_readme(global_stats, total_runtime):
     readme_content += "\n## Histograms\n"
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
+        readme_content += f"![Pairwise Diff {stat}](hist_diff_{stat}.png)\n"
     for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
 

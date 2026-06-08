@@ -327,3 +327,6 @@ def min_max_norm(values: list[float]) -> list[float]:
     if min_val == max_val:
         return [0.0] * n
     return ((arr - min_val) / (max_val - min_val)).tolist()
+
+# PUT DEVIATED/DEVIATED PROPORTIONS + STRICT/LOOSE SUBSET HERE
+# PUT HISTOGRAM BUILDER HERE
