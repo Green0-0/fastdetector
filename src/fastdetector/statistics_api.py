@@ -5,45 +5,23 @@ from openai import AsyncOpenAI
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from typing import Optional
 
-async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str, top_logprobs_k: int, sem: asyncio.Semaphore, user_prefill: str):
+async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str, top_logprobs_k: int, sem: asyncio.Semaphore):
     async with sem:
         try:
-            messages = [
-                {"role": "user", "content": user_prefill},
-                {"role": "assistant", "content": text}
-            ]
-            response = await client.chat.completions.create(
+            response = await client.completions.create(
                 model=model_name,
-                messages=messages,
+                prompt=text,
                 max_tokens=1,
-                logprobs=True,
-                top_logprobs=top_logprobs_k,
-                extra_body={"echo": True},
+                echo=True,
+                logprobs=top_logprobs_k,
                 timeout=600.0
             )
-            
-            content = response.choices[0].logprobs.content
-            if content:
-                content = content[:-1] # strip generated token
-                
-            token_logprobs = []
-            top_logprobs = []
-            tokens = []
-            
-            for item in content:
-                tokens.append(item.token)
-                token_logprobs.append(item.logprob)
-                tops = {}
-                if item.top_logprobs:
-                    for t in item.top_logprobs:
-                        tops[t.token] = t.logprob
-                top_logprobs.append(tops)
-                
-            return {
-                "token_logprobs": token_logprobs,
-                "top_logprobs": top_logprobs,
-                "tokens": tokens
-            }
+            logprobs = response.choices[0].logprobs.model_dump()
+            if logprobs:
+                for key in ["token_logprobs", "top_logprobs", "tokens"]:
+                    if logprobs.get(key):
+                        logprobs[key] = logprobs[key][:-1]
+            return logprobs
         except Exception as e:
             print(f"Error fetching logprobs: {e}")
             return {}
@@ -61,18 +39,12 @@ async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logpro
         model_name = "default-model"
         
     num_prefix_tokens = 0
+    tokenizer = None
     try:
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        prefix_messages = [
-            {"role": "user", "content": user_prefill},
-            {"role": "assistant", "content": ""}
-        ]
-        prefix_prompt = tokenizer.apply_chat_template(prefix_messages, tokenize=False)
-        num_prefix_tokens = len(tokenizer.encode(prefix_prompt, add_special_tokens=False))
     except Exception as e:
-        print(f"Warning: Could not determine prefix length using tokenizer for {model_name}: {e}. Perplexity will include the prefill prompt.")
-        num_prefix_tokens = 0
+        print(f"Warning: Could not load tokenizer for {model_name}: {e}. Falling back to raw text.")
 
     sem = asyncio.Semaphore(concurrency)
     total = len(texts)
@@ -83,7 +55,24 @@ async def _batch_fetch_logprobs_async(api_url: str, texts: list[str], top_logpro
         if not text.strip():
             result = {}
         else:
-            result = await _fetch_logprobs_async(client, model_name, text, top_logprobs_k, sem, user_prefill)
+            if tokenizer:
+                messages = [
+                    {"role": "user", "content": user_prefill},
+                    {"role": "assistant", "content": text}
+                ]
+                formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+                
+                prefix_messages = [
+                    {"role": "user", "content": user_prefill},
+                    {"role": "assistant", "content": ""}
+                ]
+                prefix_prompt = tokenizer.apply_chat_template(prefix_messages, tokenize=False)
+                num_prefix_tokens = len(tokenizer.encode(prefix_prompt, add_special_tokens=False))
+            else:
+                formatted_prompt = text
+                num_prefix_tokens = 0
+
+            result = await _fetch_logprobs_async(client, model_name, formatted_prompt, top_logprobs_k, sem)
             if result and num_prefix_tokens > 0:
                 for key in ["token_logprobs", "top_logprobs", "tokens"]:
                     if result.get(key) and len(result[key]) > num_prefix_tokens:
