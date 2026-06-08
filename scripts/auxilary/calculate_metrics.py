@@ -4,7 +4,7 @@ import json
 import numpy as np
 from datasets import load_dataset
 
-from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot
+from fastdetector.statistics_utils import get_histogram
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
@@ -87,6 +87,7 @@ def main():
         print(f"Warning: cross encoder column {ce_col} not found. Charts might fail.")
 
     print("Computing minmax norms and percentiles...")
+    result_ds = result_ds.add_column("pairwise_cossim_quantile", quantile(result_ds["pairwise_cossim"]))
     result_ds = result_ds.add_column("pairwise_levenshtein_norm", min_max_norm(result_ds["pairwise_levenshtein"]))
     result_ds = result_ds.add_column("pairwise_levenshtein_quantile", quantile(result_ds["pairwise_levenshtein"]))
     result_ds = result_ds.add_column("pairwise_jaccard_quantile", quantile(result_ds["pairwise_jaccard_1"]))
@@ -122,15 +123,22 @@ def main():
     lq = np.array(result_ds["pairwise_levenshtein_quantile"])
     cq = np.array(result_ds["pairwise_cross_encoder_quantile"])
     jq = np.array(result_ds["pairwise_jaccard_quantile"])
+    sq = np.array(result_ds["pairwise_cossim_quantile"])
     
     diff_lq_cq = np.mean(np.abs(lq - cq))
     diff_lq_jq = np.mean(np.abs(lq - jq))
     diff_cq_jq = np.mean(np.abs(cq - jq))
+    diff_sq_lq = np.mean(np.abs(sq - lq))
+    diff_sq_cq = np.mean(np.abs(sq - cq))
+    diff_sq_jq = np.mean(np.abs(sq - jq))
     
     global_stats.append("\n## Average Absolute Percentile Differences")
     global_stats.append(f"- **Levenshtein vs Cross-Encoder**: {diff_lq_cq:.4f}")
     global_stats.append(f"- **Levenshtein vs Jaccard**: {diff_lq_jq:.4f}")
     global_stats.append(f"- **Cross-Encoder vs Jaccard**: {diff_cq_jq:.4f}")
+    global_stats.append(f"- **Cosine vs Levenshtein**: {diff_sq_lq:.4f}")
+    global_stats.append(f"- **Cosine vs Cross-Encoder**: {diff_sq_cq:.4f}")
+    global_stats.append(f"- **Cosine vs Jaccard**: {diff_sq_jq:.4f}")
 
     print("Generating charts...")
     charts = {}
@@ -138,7 +146,6 @@ def main():
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
         human_vals = result_ds[f"human_{stat}"]
         ai_vals = result_ds[f"ai_{stat}"]
-        charts[f"classifier_{stat}.png"] = get_sweeping_classifier_plot([human_vals, ai_vals], [True, False], False, False, ["Human Accuracy", "AI Accuracy"], f"Naive Classifier: {stat.capitalize()}")
         charts[f"hist_{stat}.png"] = get_histogram([human_vals, ai_vals], ["Human", "AI"], f"Histogram: {stat.capitalize()}")
 
     charts["hist_pairwise_cossim.png"] = get_histogram([result_ds["pairwise_cossim"]], ["Pairwise Cosine Similarity"], "Histogram: Pairwise Cosine Similarity")
@@ -149,12 +156,8 @@ def main():
     total_runtime = time.time() - start_time
     
     readme_content = "\n".join(global_stats)
-    
-    readme_content += "\n\n## Classifiers\n"
-    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
-        readme_content += f"![Classifier {stat}](classifier_{stat}.png)\n"
 
-    readme_content += "\n## Histograms\n"
+    readme_content += "\n\n## Histograms\n"
     for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
     for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard"]:
