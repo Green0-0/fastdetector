@@ -172,34 +172,23 @@ def main():
     global_stats.append(f"- **Pairwise BERTScore F1**: {np.mean(result_ds['pairwise_bertscore_f1']):.4f}")
     global_stats.append(f"- **Pairwise MoverScore**: {np.mean(result_ds['pairwise_moverscore']):.4f}")
     
-    lq = np.array(result_ds["pairwise_levenshtein_quantile"])
-    cq = np.array(result_ds["pairwise_cross_encoder_quantile"])
-    jq = np.array(result_ds["pairwise_jaccard_1_quantile"])
-    sq = np.array(result_ds["pairwise_cossim_quantile"])
-    snq = np.array(result_ds["pairwise_softngram_quantile"])
-    bq = np.array(result_ds["pairwise_bertscore_f1_quantile"])
-    mq = np.array(result_ds["pairwise_moverscore_quantile"])
-    
-    diff_lq_cq = np.mean(np.abs(lq - cq))
-    diff_lq_jq = np.mean(np.abs(lq - jq))
-    diff_cq_jq = np.mean(np.abs(cq - jq))
-    diff_sq_lq = np.mean(np.abs(sq - lq))
-    diff_sq_cq = np.mean(np.abs(sq - cq))
-    diff_sq_jq = np.mean(np.abs(sq - jq))
-    diff_sq_snq = np.mean(np.abs(sq - snq))
-    diff_sq_bq = np.mean(np.abs(sq - bq))
-    diff_sq_mq = np.mean(np.abs(sq - mq))
+    metrics_data = [
+        ("Levenshtein", np.array(result_ds["pairwise_levenshtein_quantile"])),
+        ("Cross-Encoder", np.array(result_ds["pairwise_cross_encoder_quantile"])),
+        ("Jaccard", np.array(result_ds["pairwise_jaccard_1_quantile"])),
+        ("Cosine", np.array(result_ds["pairwise_cossim_quantile"])),
+        ("Soft N-Gram", np.array(result_ds["pairwise_softngram_quantile"])),
+        ("BERTScore F1", np.array(result_ds["pairwise_bertscore_f1_quantile"])),
+        ("MoverScore", np.array(result_ds["pairwise_moverscore_quantile"]))
+    ]
     
     global_stats.append("\n## Average Absolute Percentile Differences")
-    global_stats.append(f"- **Levenshtein vs Cross-Encoder**: {diff_lq_cq:.4f}")
-    global_stats.append(f"- **Levenshtein vs Jaccard**: {diff_lq_jq:.4f}")
-    global_stats.append(f"- **Cross-Encoder vs Jaccard**: {diff_cq_jq:.4f}")
-    global_stats.append(f"- **Cosine vs Levenshtein**: {diff_sq_lq:.4f}")
-    global_stats.append(f"- **Cosine vs Cross-Encoder**: {diff_sq_cq:.4f}")
-    global_stats.append(f"- **Cosine vs Jaccard**: {diff_sq_jq:.4f}")
-    global_stats.append(f"- **Cosine vs Soft N-Gram**: {diff_sq_snq:.4f}")
-    global_stats.append(f"- **Cosine vs BERTScore F1**: {diff_sq_bq:.4f}")
-    global_stats.append(f"- **Cosine vs MoverScore**: {diff_sq_mq:.4f}")
+    for i in range(len(metrics_data)):
+        for j in range(i + 1, len(metrics_data)):
+            name1, arr1 = metrics_data[i]
+            name2, arr2 = metrics_data[j]
+            diff = np.mean(np.abs(arr1 - arr2))
+            global_stats.append(f"- **{name1} vs {name2}**: {diff:.4f}")
 
     print("Generating charts...")
     charts = {}
