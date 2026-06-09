@@ -181,6 +181,77 @@ def fastdetectgpt_scores_approx(texts: list[str], token_logprobs: list[list[Opti
             
     return results
 
+def binoculars_scores_approx(texts: list[str],
+                             token_logprobs_m1: list[list[Optional[float]]], 
+                             top_logprobs_m1: list[list[dict[str, float]]],
+                             top_logprobs_m2: list[list[dict[str, float]]]) -> list[float]:
+    """Approximate Binoculars score using top-N logprobs.
+    B = log(PPL_M1) / log(X-PPL_M1_M2)
+    log(PPL_M1) = - 1/N sum log p_M1(x_i)
+    log(X-PPL_M1_M2) = 1/N sum_i H(M2_i, M1_i)
+    H(M2_i, M1_i) = - sum_v p_M2(v) log p_M1(v)
+    
+    Args:
+        texts: List of strings.
+        token_logprobs_m1: Actual token logprobs from M1 (Observer).
+        top_logprobs_m1: Top logprobs dicts from M1 (Observer).
+        top_logprobs_m2: Top logprobs dicts from M2 (Performer).
+        
+    Returns:
+        List of approximated Binoculars scores.
+    """
+    results = []
+    for text, token_lps_m1, top_lps_m1, top_lps_m2 in zip(texts, token_logprobs_m1, top_logprobs_m1, top_logprobs_m2):
+        if not text.strip() or not token_lps_m1 or not top_lps_m1 or not top_lps_m2:
+            results.append(0.0)
+            continue
+            
+        total_lp_m1 = 0.0
+        total_cross_entropy = 0.0
+        valid_tokens = 0
+        
+        for lp_m1, top_m1, top_m2 in zip(token_lps_m1, top_lps_m1, top_lps_m2):
+            if lp_m1 is None or not top_m1 or not top_m2:
+                continue
+                
+            p_m1_dict = {k: math.exp(v) for k, v in top_m1.items()}
+            p_m2_dict = {k: math.exp(v) for k, v in top_m2.items()}
+            
+            Z_m1 = sum(p_m1_dict.values())
+            M_m1 = max(0.0, 1.0 - Z_m1)
+            p_min_m1 = min(p_m1_dict.values()) if p_m1_dict else 0.0
+            p_bound_m1 = min(p_min_m1, M_m1)
+            lp_tail_m1 = math.log(p_bound_m1 + 1e-12)
+            
+            Z_m2 = sum(p_m2_dict.values())
+            M_m2 = max(0.0, 1.0 - Z_m2)
+            
+            cross_entropy = 0.0
+            for v, p_m2_v in p_m2_dict.items():
+                if v in top_m1:
+                    lp_m1_v = top_m1[v]
+                else:
+                    lp_m1_v = lp_tail_m1
+                cross_entropy -= p_m2_v * lp_m1_v
+                
+            # Add tail cross entropy (where M2 predicts a token not in M1's top-k)
+            # We assume the entire remaining M2 mass falls into the tail of M1
+            cross_entropy -= M_m2 * lp_tail_m1
+            
+            total_lp_m1 += lp_m1
+            total_cross_entropy += cross_entropy
+            valid_tokens += 1
+            
+        if valid_tokens > 0 and total_cross_entropy > 1e-6:
+            # log(PPL_M1) = -total_lp_m1 / N
+            # log(X-PPL) = total_cross_entropy / N
+            # Ratio = (-total_lp_m1) / total_cross_entropy
+            results.append(-total_lp_m1 / total_cross_entropy)
+        else:
+            results.append(0.0)
+            
+    return results
+
 def perplexities(texts: list[str], token_logprobs: list[list[Optional[float]]]) -> list[float]:
     """Compute perplexity for each text.
     

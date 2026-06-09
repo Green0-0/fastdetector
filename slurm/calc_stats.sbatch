@@ -55,13 +55,13 @@ python scripts/computational/run_llm_stat.py \
     --col-suffix _llama \
     --top-logprobs-k 100
 
-echo "Computing LLM logprobs (Gemma)..."
+echo "Computing LLM logprobs (Llama Base)..."
 python scripts/computational/run_llm_stat.py \
     --source-dataset G-reen/cc-2021-rewritten-llm \
     --target-dataset G-reen/cc-2021-rewritten-llm2 \
-    --model-name google/gemma-3-4b-it \
+    --model-name unsloth/Llama-3.2-3B \
     --columns original,final_response \
-    --col-suffix _gemma \
+    --col-suffix _llama_base \
     --top-logprobs-k 100
 
 echo "Calculating final metrics..."
