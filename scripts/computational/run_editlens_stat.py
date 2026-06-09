@@ -218,8 +218,8 @@ def main():
         prompt_types = []
         for p in result_ds[prompt_col]:
             ptype = "Unknown"
-            if p and isinstance(p, dict) and "metadata" in p and p["metadata"]:
-                ptype = p["metadata"].get("PROMPT_TYPE", "Unknown")
+            if p and isinstance(p, dict) and isinstance(p.get("metadata"), dict):
+                ptype = str(p["metadata"].get("PROMPT_TYPE", "Unknown"))
             prompt_types.append(ptype)
     else:
         prompt_types = None
