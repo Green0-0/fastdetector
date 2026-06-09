@@ -4,7 +4,7 @@ import json
 import numpy as np
 from datasets import load_dataset
 
-from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot
+from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
@@ -173,6 +173,9 @@ def main():
     print("Generating charts...")
     charts = {}
 
+    optimal_thresholds = {}
+    conf_matrices = {}
+
     for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier"]:
         human_vals_llama = result_ds[f"human_{stat}_llama"]
         ai_vals_llama = result_ds[f"ai_{stat}_llama"]
@@ -180,12 +183,18 @@ def main():
         ai_vals_llama_base = result_ds[f"ai_{stat}_llama_base"]
         charts[f"hist_{stat}.png"] = get_histogram([human_vals_llama, ai_vals_llama, human_vals_llama_base, ai_vals_llama_base], ["Human (Llama)", "AI (Llama)", "Human (Llama Base)", "AI (Llama Base)"], f"Histogram: {stat}")
         if stat == "fastdetectgpt":
-            charts[f"classifier_fastdetectgpt_llama.png"] = get_sweeping_classifier_plot([human_vals_llama, ai_vals_llama], [False, True], False, True, ["Human Accuracy", "AI Accuracy"], "Naive Classifier: FastDetectGPT (Llama)")
-            charts[f"classifier_fastdetectgpt_llama_base.png"] = get_sweeping_classifier_plot([human_vals_llama_base, ai_vals_llama_base], [False, True], False, True, ["Human Accuracy", "AI Accuracy"], "Naive Classifier: FastDetectGPT (Llama Base)")
+            charts[f"classifier_fastdetectgpt_llama.png"], opt_t_llama, opt_acc_llama = get_sweeping_classifier_plot([human_vals_llama, ai_vals_llama], [False, True], False, True, ["Human Accuracy", "AI Accuracy"], "Naive Classifier: FastDetectGPT (Llama)")
+            charts[f"classifier_fastdetectgpt_llama_base.png"], opt_t_llama_base, opt_acc_llama_base = get_sweeping_classifier_plot([human_vals_llama_base, ai_vals_llama_base], [False, True], False, True, ["Human Accuracy", "AI Accuracy"], "Naive Classifier: FastDetectGPT (Llama Base)")
+            optimal_thresholds["FastDetectGPT (Llama)"] = (opt_t_llama, opt_acc_llama)
+            optimal_thresholds["FastDetectGPT (Llama Base)"] = (opt_t_llama_base, opt_acc_llama_base)
+            conf_matrices["FastDetectGPT (Llama)"] = get_confusion_matrix([human_vals_llama, ai_vals_llama], [False, True], False, opt_t_llama, "Confusion Matrix: FastDetectGPT (Llama)")
+            conf_matrices["FastDetectGPT (Llama Base)"] = get_confusion_matrix([human_vals_llama_base, ai_vals_llama_base], [False, True], False, opt_t_llama_base, "Confusion Matrix: FastDetectGPT (Llama Base)")
         
     for b_stat in ["binoculars"]:
         charts[f"hist_{b_stat}.png"] = get_histogram([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], ["Human", "AI"], f"Histogram: {b_stat}")
-        charts[f"classifier_{b_stat}.png"] = get_sweeping_classifier_plot([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, True, ["Human Accuracy", "AI Accuracy"], f"Naive Classifier: {b_stat}")
+        charts[f"classifier_{b_stat}.png"], opt_t_bino, opt_acc_bino = get_sweeping_classifier_plot([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, True, ["Human Accuracy", "AI Accuracy"], f"Naive Classifier: {b_stat}")
+        optimal_thresholds[f"Binoculars ({b_stat})"] = (opt_t_bino, opt_acc_bino)
+        conf_matrices[f"Binoculars ({b_stat})"] = get_confusion_matrix([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, opt_t_bino, f"Confusion Matrix: {b_stat}")
 
     charts["hist_pairwise_cossim.png"] = get_histogram([result_ds["pairwise_cossim"]], ["Pairwise Cosine Similarity"], "Histogram: Pairwise Cosine Similarity")
     charts["hist_pairwise_crossencoder.png"] = get_histogram([result_ds["pairwise_cross_encoder"]], ["Pairwise Cross-Encoder"], "Histogram: Pairwise Cross-Encoder")
@@ -196,7 +205,15 @@ def main():
     
     readme_content = "\n".join(global_stats)
 
-    readme_content += "\n\n## Classifiers\n"
+    readme_content += "\n\n## Classifier Optimal Thresholds\n"
+    for k, v in optimal_thresholds.items():
+        opt_t, opt_acc = v
+        readme_content += f"- **{k}**: Threshold {opt_t:.4f} (Accuracy {opt_acc * 100:.2f}%)\n"
+
+    for k, cm in conf_matrices.items():
+        readme_content += f"\n{cm}\n"
+
+    readme_content += "\n## Classifiers\n"
     readme_content += f"![Classifier FastDetectGPT (Llama)](classifier_fastdetectgpt_llama.png)\n"
     readme_content += f"![Classifier FastDetectGPT (Llama Base)](classifier_fastdetectgpt_llama_base.png)\n"
     for b_stat in ["binoculars"]:

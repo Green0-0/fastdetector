@@ -22,7 +22,7 @@ from transformers import (
 )
 
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot
+from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
 
 class NormedLinear(torch.nn.Module):
     """Linear layer preceded by LayerNorm to keep logits well-scaled."""
@@ -55,7 +55,6 @@ def is_qlora_checkpoint(checkpoint: str) -> bool:
     """Check whether checkpoint is a QLora adapter (local path or HF repo)."""
     if os.path.isdir(checkpoint):
         return os.path.exists(os.path.join(checkpoint, "adapter_config.json"))
-    # HF repo — check if adapter_config.json exists in the repo
     try:
         hf_hub_download(checkpoint, "adapter_config.json")
         return True
@@ -68,13 +67,11 @@ def infer_n_buckets(checkpoint: str) -> int:
     if not is_qlora_checkpoint(checkpoint):
         return AutoConfig.from_pretrained(checkpoint).num_labels
 
-    # LoRA: find n_buckets from the saved score head weight shape
     if os.path.isdir(checkpoint):
         safetensor_files = glob.glob(os.path.join(checkpoint, "*.safetensors"))
         safetensor_path = safetensor_files[0] if safetensor_files else None
         bin_path = os.path.join(checkpoint, "adapter_model.bin")
     else:
-        # HF repo — download the adapter weights
         try:
             safetensor_path = hf_hub_download(checkpoint, "adapter_model.safetensors")
         except Exception:
@@ -202,12 +199,10 @@ def main():
     print("Computing EditLens scores for AI texts...")
     ai_buckets, ai_scores = compute_editlens_scores(ai_texts, model, tokenizer, is_qlora, n_buckets, args.max_length, args.batch_size)
 
-    # Remove existing columns if they are present to avoid ValueError on rerun
     for col in ["human_editlens_bucket", "human_editlens_score", "ai_editlens_bucket", "ai_editlens_score"]:
         if col in result_ds.column_names:
             result_ds = result_ds.remove_columns(col)
 
-    # Prefix columns with a tag derived from base_model if wanted, but standardizing to human/ai is consistent with calculate_statistics
     result_ds = result_ds.add_column("human_editlens_bucket", human_buckets)
     result_ds = result_ds.add_column("human_editlens_score", human_scores)
     result_ds = result_ds.add_column("ai_editlens_bucket", ai_buckets)
@@ -217,17 +212,7 @@ def main():
     print(f"Human score stats: mean={np.mean(human_scores):.4f}, std={np.std(human_scores):.4f}")
     print(f"AI score stats: mean={np.mean(ai_scores):.4f}, std={np.std(ai_scores):.4f}")
 
-    ai_true = np.array(ai_scores)
-    human_true = np.array(human_scores)
-    
-    threshold = 0.5
-    tp = np.sum(ai_true > threshold)
-    fn = np.sum(ai_true <= threshold)
-    tn = np.sum(human_true <= threshold)
-    fp = np.sum(human_true > threshold)
-    
-    total = len(ai_true) + len(human_true)
-    accuracy = (tp + tn) / total if total > 0 else 0
+
     
     charts = {}
     charts["hist_editlens_score.png"] = get_histogram(
@@ -235,12 +220,19 @@ def main():
         ["Human", "AI"], 
         "Histogram: EditLens Scores"
     )
-    charts["classifier_editlens_score.png"] = get_sweeping_classifier_plot(
+    charts["classifier_editlens_score.png"], opt_threshold, opt_accuracy = get_sweeping_classifier_plot(
         [human_scores, ai_scores],
         [False, True], 
         False, True,
         ["Human Accuracy", "AI Accuracy"],
         "Naive Classifier: EditLens Scores"
+    )
+    conf_matrix = get_confusion_matrix(
+        [human_scores, ai_scores],
+        [False, True],
+        False,
+        opt_threshold,
+        "Confusion Matrix: EditLens Scores"
     )
     
     stats_md = f"""
@@ -252,12 +244,11 @@ def main():
 - **Human Scores**: Mean = {np.mean(human_scores):.4f}, Std = {np.std(human_scores):.4f}
 - **AI Scores**: Mean = {np.mean(ai_scores):.4f}, Std = {np.std(ai_scores):.4f}
 
-### Classification (Threshold = {threshold})
-- **Overall Accuracy**: {accuracy * 100:.2f}%
-- **True Positives (AI correctly identified)**: {tp} ({(tp / len(ai_true) * 100) if len(ai_true) else 0:.2f}%)
-- **False Negatives (AI missed)**: {fn} ({(fn / len(ai_true) * 100) if len(ai_true) else 0:.2f}%)
-- **True Negatives (Human correctly identified)**: {tn} ({(tn / len(human_true) * 100) if len(human_true) else 0:.2f}%)
-- **False Positives (Human misclassified as AI)**: {fp} ({(fp / len(human_true) * 100) if len(human_true) else 0:.2f}%)
+### Optimal Classifier
+- **Optimal Threshold**: {opt_threshold:.4f}
+- **Optimal Accuracy**: {opt_accuracy * 100:.2f}%
+
+{conf_matrix}
 
 ## Classifiers
 ![Classifier EditLens Scores](classifier_editlens_score.png)

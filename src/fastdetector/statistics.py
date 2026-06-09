@@ -234,8 +234,6 @@ def binoculars_scores_approx(texts: list[str],
                     lp_m1_v = lp_tail_m1
                 cross_entropy -= p_m2_v * lp_m1_v
                 
-            # Add tail cross entropy (where M2 predicts a token not in M1's top-k)
-            # We assume the entire remaining M2 mass falls into the tail of M1
             cross_entropy -= M_m2 * lp_tail_m1
             
             total_lp_m1 += lp_m1
@@ -243,9 +241,6 @@ def binoculars_scores_approx(texts: list[str],
             valid_tokens += 1
             
         if valid_tokens > 0 and total_cross_entropy > 1e-6:
-            # log(PPL_M1) = -total_lp_m1 / N
-            # log(X-PPL) = total_cross_entropy / N
-            # Ratio = (-total_lp_m1) / total_cross_entropy
             results.append(-total_lp_m1 / total_cross_entropy)
         else:
             results.append(0.0)
