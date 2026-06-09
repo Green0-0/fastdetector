@@ -33,7 +33,7 @@ export PYTHONUNBUFFERED=1
 # ---- Run the dataset analysis ----
 echo "Computing soft ngram scores..."
 python scripts/computational/run_softngram_stat.py \
-    --source-dataset G-reen/cc-2021-rewritten-llm2 \
+    --source-dataset G-reen/cc-2021-rewritten \
     --target-dataset G-reen/cc-2021-rewritten-sn \
     --col-human original \
     --col-ai final_response
@@ -46,7 +46,7 @@ python scripts/computational/run_token_embedding_stat.py \
     
 echo "Computing embeddings..."
 python scripts/computational/run_embedding_stats.py \
-    --source-dataset G-reen/cc-2021-rewritten \
+    --source-dataset G-reen/cc-2021-rewritten-tok \
     --target-dataset G-reen/cc-2021-rewritten-emb \
     --model-name Qwen/Qwen3-Embedding-4B \
     --columns original,final_response
@@ -79,7 +79,7 @@ python scripts/computational/run_llm_stat.py \
 
 echo "Calculating final metrics..."
 python scripts/auxilary/calculate_metrics.py \
-    --source-dataset G-reen/cc-2021-rewritten-tok \
+    --source-dataset G-reen/cc-2021-rewritten-llm2 \
     --target-dataset G-reen/cc-2021-rewritten-stat \
     --col-human original \
     --col-ai final_response
