@@ -7,12 +7,12 @@ from fastdetector.statistics_api import batch_soft_ngram_scores
 def main():
     start_time = time.time()
     parser = argparse.ArgumentParser(description="Calculate soft ngram scores.")
-    parser.add_argument("--model-name", type=str, default="Qwen/Qwen3-Embedding-4B", help="Embedding model.")
+    parser.add_argument("--model-name", type=str, default="all-MiniLM-L6-v2", help="Embedding model.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--col-human", type=str, default="original", help="Human column.")
     parser.add_argument("--col-ai", type=str, default="final_response", help="AI column.")
-    parser.add_argument("--phrase-batch-size", type=int, default=256, help="Batch size for phrase embedding.")
+    parser.add_argument("--phrase-batch-size", type=int, default=2048, help="Batch size for phrase embedding.")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")

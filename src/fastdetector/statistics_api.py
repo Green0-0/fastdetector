@@ -128,7 +128,7 @@ def batch_soft_ngram_scores(
     threshold: float = 0.8,
     min_length: int = 6,
     max_length: int = 12,
-    phrase_batch_size: int = 256,
+    phrase_batch_size: int = 2048,
 ) -> list[float]:
     """Compute soft n-gram distance between pairs of source and edited texts.
     
