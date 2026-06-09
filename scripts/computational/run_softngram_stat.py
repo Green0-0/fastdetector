@@ -12,7 +12,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--col-human", type=str, default="original", help="Human column.")
     parser.add_argument("--col-ai", type=str, default="final_response", help="AI column.")
-    parser.add_argument("--phrase-batch-size", type=int, default=1024, help="Batch size for phrase embedding.")
+    parser.add_argument("--phrase-batch-size", type=int, default=256, help="Batch size for phrase embedding.")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
