@@ -32,12 +32,12 @@ def main():
 
     argilla_texts = argilla_texts[:num_to_pair]
     
-    # We take the final_response from the filtered dataset
-    filtered_responses = filtered_ds["final_response"][:num_to_pair]
+    # We take the original text from the filtered dataset
+    filtered_originals = filtered_ds["original"][:num_to_pair]
 
     new_ds = Dataset.from_dict({
-        "original": argilla_texts,
-        "final_response": filtered_responses
+        "original": filtered_originals,
+        "final_response": argilla_texts
     })
 
     print(f"Created new dataset with {len(new_ds)} rows.")
