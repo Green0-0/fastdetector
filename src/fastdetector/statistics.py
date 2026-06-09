@@ -117,6 +117,70 @@ def entropies_approx(texts: list[str], top_logprobs: list[list[dict[str, float]]
         results.append(float(np.mean(entropies)) if entropies else 0.0)
     return results
 
+def fastdetectgpt_scores_approx(texts: list[str], token_logprobs: list[list[Optional[float]]], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
+    """Approximate FastDetectGPT score for each text using top-N logprobs.
+    Score = mean((log_prob(x_i) - E[log_prob(x_i)]) / Std[log_prob(x_i)])
+    
+    Args:
+        texts: List of strings.
+        token_logprobs: Logprobs of the actual tokens.
+        top_logprobs: For each text, a list of dictionaries mapping top tokens to their logprobs.
+        
+    Returns:
+        List of approximated FastDetectGPT scores.
+    """
+    results = []
+    for text, text_token_lps, text_top_lps in zip(texts, token_logprobs, top_logprobs):
+        if not text.strip() or not text_token_lps or not text_top_lps:
+            results.append(0.0)
+            continue
+            
+        total_lp = 0.0
+        total_expected_lp = 0.0
+        total_variance = 0.0
+        valid_tokens = 0
+        
+        for lp, top_lps in zip(text_token_lps, text_top_lps):
+            if lp is None or top_lps is None or len(top_lps) == 0:
+                continue
+                
+            p = np.array([math.exp(v) for v in top_lps.values()])
+            log_p = np.log(p + 1e-12)
+            
+            h_top = -np.sum(p * log_p)
+            var_top = np.sum(p * (log_p ** 2))
+            
+            Z = np.sum(p)
+            M = max(0.0, 1.0 - Z)
+            
+            if M > 0:
+                p_min = np.min(p)
+                p_bound = min(p_min, M)
+                log_p_tail = math.log(p_bound + 1e-12)
+                h_tail = -M * log_p_tail
+                var_tail = M * (log_p_tail ** 2)
+            else:
+                h_tail = 0.0
+                var_tail = 0.0
+                
+            expected_lp = -(h_top + h_tail)
+            expected_lp_sq = var_top + var_tail
+            
+            variance = max(0.0, expected_lp_sq - (expected_lp ** 2))
+            
+            total_lp += lp
+            total_expected_lp += expected_lp
+            total_variance += variance
+            valid_tokens += 1
+            
+        if valid_tokens > 0 and total_variance > 1e-6:
+            sequence_score = (total_lp - total_expected_lp) / math.sqrt(total_variance)
+            results.append(sequence_score)
+        else:
+            results.append(0.0)
+            
+    return results
+
 def perplexities(texts: list[str], token_logprobs: list[list[Optional[float]]]) -> list[float]:
     """Compute perplexity for each text.
     

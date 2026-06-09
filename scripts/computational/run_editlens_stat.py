@@ -238,7 +238,7 @@ def main():
     charts["classifier_editlens_score.png"] = get_sweeping_classifier_plot(
         [human_scores, ai_scores],
         [False, True], 
-        False, False,
+        False, True,
         ["Human Accuracy", "AI Accuracy"],
         "Naive Classifier: EditLens Scores"
     )

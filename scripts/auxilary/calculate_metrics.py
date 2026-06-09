@@ -9,7 +9,7 @@ from fastdetector.utils import upload_dataset
 from fastdetector.statistics import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
-    pairwise_cossim, quantile, min_max_norm
+    fastdetectgpt_scores_approx, pairwise_cossim, quantile, min_max_norm
 )
 
 def main():
@@ -110,6 +110,8 @@ def main():
     result_ds = result_ds.add_column("ai_perplexity_llama", perplexities(ai_texts, a_tokens_llama))
     result_ds = result_ds.add_column("human_entropy_llama", entropies_approx(human_texts, h_top_llama))
     result_ds = result_ds.add_column("ai_entropy_llama", entropies_approx(ai_texts, a_top_llama))
+    result_ds = result_ds.add_column("human_fastdetectgpt_llama", fastdetectgpt_scores_approx(human_texts, h_tokens_llama, h_top_llama))
+    result_ds = result_ds.add_column("ai_fastdetectgpt_llama", fastdetectgpt_scores_approx(ai_texts, a_tokens_llama, a_top_llama))
     result_ds = result_ds.add_column("human_top_p_outlier_llama", top_p_outlier_percentages(human_texts, h_top_llama, h_tokens_llama, 0.9))
     result_ds = result_ds.add_column("ai_top_p_outlier_llama", top_p_outlier_percentages(ai_texts, a_top_llama, a_tokens_llama, 0.9))
     result_ds = result_ds.add_column("human_top_k_outlier_llama", top_k_outlier_percentages(human_texts, h_top_llama, h_tokens_llama, 50))
@@ -119,6 +121,8 @@ def main():
     result_ds = result_ds.add_column("ai_perplexity_gemma", perplexities(ai_texts, a_tokens_gemma))
     result_ds = result_ds.add_column("human_entropy_gemma", entropies_approx(human_texts, h_top_gemma))
     result_ds = result_ds.add_column("ai_entropy_gemma", entropies_approx(ai_texts, a_top_gemma))
+    result_ds = result_ds.add_column("human_fastdetectgpt_gemma", fastdetectgpt_scores_approx(human_texts, h_tokens_gemma, h_top_gemma))
+    result_ds = result_ds.add_column("ai_fastdetectgpt_gemma", fastdetectgpt_scores_approx(ai_texts, a_tokens_gemma, a_top_gemma))
     result_ds = result_ds.add_column("human_top_p_outlier_gemma", top_p_outlier_percentages(human_texts, h_top_gemma, h_tokens_gemma, 0.9))
     result_ds = result_ds.add_column("ai_top_p_outlier_gemma", top_p_outlier_percentages(ai_texts, a_top_gemma, a_tokens_gemma, 0.9))
     result_ds = result_ds.add_column("human_top_k_outlier_gemma", top_k_outlier_percentages(human_texts, h_top_gemma, h_tokens_gemma, 50))
@@ -151,7 +155,7 @@ def main():
     result_ds = result_ds.add_column("ai_binocular_top_k", a_bino_top_k.tolist())
 
     global_stats.append("\n## LLM Statistics (Average)")
-    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+    for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier"]:
         h_mean_llama = np.mean(result_ds[f"human_{stat}_llama"])
         a_mean_llama = np.mean(result_ds[f"ai_{stat}_llama"])
         h_mean_gemma = np.mean(result_ds[f"human_{stat}_gemma"])
@@ -191,16 +195,19 @@ def main():
     print("Generating charts...")
     charts = {}
 
-    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier"]:
+    for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier"]:
         human_vals_llama = result_ds[f"human_{stat}_llama"]
         ai_vals_llama = result_ds[f"ai_{stat}_llama"]
         human_vals_gemma = result_ds[f"human_{stat}_gemma"]
         ai_vals_gemma = result_ds[f"ai_{stat}_gemma"]
         charts[f"hist_{stat}.png"] = get_histogram([human_vals_llama, ai_vals_llama, human_vals_gemma, ai_vals_gemma], ["Human (Llama)", "AI (Llama)", "Human (Gemma)", "AI (Gemma)"], f"Histogram: {stat}")
+        if stat == "fastdetectgpt":
+            charts[f"classifier_fastdetectgpt_llama.png"] = get_sweeping_classifier_plot([human_vals_llama, ai_vals_llama], [False, True], False, True, ["Human Accuracy", "AI Accuracy"], "Naive Classifier: FastDetectGPT (Llama)")
+            charts[f"classifier_fastdetectgpt_gemma.png"] = get_sweeping_classifier_plot([human_vals_gemma, ai_vals_gemma], [False, True], False, True, ["Human Accuracy", "AI Accuracy"], "Naive Classifier: FastDetectGPT (Gemma)")
         
     for b_stat in ["binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
         charts[f"hist_{b_stat}.png"] = get_histogram([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], ["Human", "AI"], f"Histogram: {b_stat}")
-        charts[f"classifier_{b_stat}.png"] = get_sweeping_classifier_plot([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, False, ["Human Accuracy", "AI Accuracy"], f"Naive Classifier: {b_stat}")
+        charts[f"classifier_{b_stat}.png"] = get_sweeping_classifier_plot([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, True, ["Human Accuracy", "AI Accuracy"], f"Naive Classifier: {b_stat}")
 
     charts["hist_pairwise_cossim.png"] = get_histogram([result_ds["pairwise_cossim"]], ["Pairwise Cosine Similarity"], "Histogram: Pairwise Cosine Similarity")
     charts["hist_pairwise_crossencoder.png"] = get_histogram([result_ds["pairwise_cross_encoder"]], ["Pairwise Cross-Encoder"], "Histogram: Pairwise Cross-Encoder")
@@ -212,11 +219,13 @@ def main():
     readme_content = "\n".join(global_stats)
 
     readme_content += "\n\n## Classifiers\n"
+    readme_content += f"![Classifier FastDetectGPT (Llama)](classifier_fastdetectgpt_llama.png)\n"
+    readme_content += f"![Classifier FastDetectGPT (Gemma)](classifier_fastdetectgpt_gemma.png)\n"
     for b_stat in ["binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
         readme_content += f"![Classifier {b_stat}](classifier_{b_stat}.png)\n"
 
     readme_content += "\n## Histograms\n"
-    for stat in ["perplexity", "entropy", "top_p_outlier", "top_k_outlier", "binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
+    for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier", "binocular_ratio", "binocular_entropy", "binocular_top_p", "binocular_top_k"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
     for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
