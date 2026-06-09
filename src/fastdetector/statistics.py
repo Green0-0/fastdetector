@@ -1,5 +1,8 @@
 import math
 import numpy as np
+import torch
+import scipy.optimize
+import ot
 from collections import Counter
 import Levenshtein
 from typing import Optional
@@ -41,6 +44,35 @@ def ngram_analysis(texts: list[str], n: int) -> list[dict[str, int]]:
             ngrams = [" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
             counts = Counter(ngrams)
             results.append(dict(counts))
+    return results
+
+def extract_ngrams(texts: list[str], min_length: int = 6, max_length: int = 12) -> list[list[str]]:
+    """Extract all contiguous word n-grams of lengths between min_length and max_length for each text.
+    
+    Args:
+        texts: List of input texts.
+        min_length: Minimum n-gram length in words.
+        max_length: Maximum n-gram length in words.
+        
+    Returns:
+        List of lists, where each inner list contains the n-gram phrases for the corresponding text.
+    """
+    results = []
+    for text in texts:
+        words = text.split()
+        if not words:
+            results.append([])
+            continue
+            
+        current_min_length = min_length
+        if len(words) < current_min_length:
+            current_min_length = len(words)
+            
+        phrases = []
+        for length in range(current_min_length, max_length + 1):
+            for i in range(len(words) - length + 1):
+                phrases.append(" ".join(words[i : i + length]))
+        results.append(phrases)
     return results
 
 def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) -> list[float]:
@@ -560,4 +592,114 @@ def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool],
             
     return is_subsets, collected_subsets
 
-# PUT HISTOGRAM BUILDER HERE
+def _compute_idf(tokens_lists: list[list[str]]) -> dict[str, float]:
+    df = Counter()
+    for tokens in tokens_lists:
+        for token in set(tokens):
+            df[token] += 1
+    N = max(1, len(tokens_lists))
+    return {token: math.log((N + 1) / (count + 1)) for token, count in df.items()}
+
+def _get_idf_weights(tokens: list[str], idf_dict: dict[str, float]) -> np.ndarray:
+    if not tokens:
+        return np.array([])
+    w = np.array([idf_dict.get(token, 0.0) for token in tokens])
+    w = np.maximum(w, 0.0)
+    if w.sum() <= 1e-12:
+        w = np.ones(len(tokens))
+    return w / w.sum()
+
+def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: Optional[list[list[str]]] = None, edit_tokens_list: Optional[list[list[str]]] = None) -> tuple[list[float], list[float], list[float]]:
+    """Compute BERTScore (Precision, Recall, F1) for aligned lists of token embedding matrices.
+    
+    Args:
+        src_embeddings_list: List of token embeddings for reference texts (each N x D).
+        edit_embeddings_list: List of token embeddings for candidate texts (each M x D).
+        src_tokens_list: Optional list of tokenized reference texts for IDF term weighting.
+        edit_tokens_list: Optional list of tokenized candidate texts for IDF term weighting.
+        
+    Returns:
+        Tuple of (precisions, recalls, f1s), each a list of floats.
+    """
+    precisions = []
+    recalls = []
+    f1s = []
+    
+    src_idf = _compute_idf(src_tokens_list) if src_tokens_list is not None else None
+    edit_idf = _compute_idf(edit_tokens_list) if edit_tokens_list is not None else None
+    
+    for i, (src, edit) in enumerate(zip(src_embeddings_list, edit_embeddings_list)):
+        if isinstance(src, np.ndarray):
+            src = torch.from_numpy(src)
+        if isinstance(edit, np.ndarray):
+            edit = torch.from_numpy(edit)
+            
+        sim_matrix = torch.mm(edit, src.t())  # M x N
+        
+        if src_tokens_list is not None and edit_tokens_list is not None:
+            w_src = _get_idf_weights(src_tokens_list[i], src_idf)
+            w_edit = _get_idf_weights(edit_tokens_list[i], edit_idf)
+            
+            w_src_t = torch.from_numpy(w_src).to(src.device).float()
+            w_edit_t = torch.from_numpy(w_edit).to(edit.device).float()
+            
+            precision = (sim_matrix.max(dim=1)[0] * w_edit_t).sum().item() if sim_matrix.size(0) > 0 else 0.0
+            recall = (sim_matrix.max(dim=0)[0] * w_src_t).sum().item() if sim_matrix.size(1) > 0 else 0.0
+        else:
+            precision = sim_matrix.max(dim=1)[0].mean().item() if sim_matrix.size(0) > 0 else 0.0
+            recall = sim_matrix.max(dim=0)[0].mean().item() if sim_matrix.size(1) > 0 else 0.0
+            
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        
+        precisions.append(precision)
+        recalls.append(recall)
+        f1s.append(f1)
+        
+    return precisions, recalls, f1s
+
+def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: Optional[list[list[str]]] = None, edit_tokens_list: Optional[list[list[str]]] = None) -> list[float]:
+    """Compute MoverScore (Earth Mover's Distance) for aligned lists of token embedding matrices.
+    
+    Args:
+        src_embeddings_list: List of token embeddings for reference texts (each N x D).
+        edit_embeddings_list: List of token embeddings for candidate texts (each M x D).
+        src_tokens_list: Optional list of tokenized reference texts for IDF term weighting.
+        edit_tokens_list: Optional list of tokenized candidate texts for IDF term weighting.
+        
+    Returns:
+        List of Earth Mover's Distances (lower is better, 0 means identical).
+    """
+    results = []
+    
+    src_idf = _compute_idf(src_tokens_list) if src_tokens_list is not None else None
+    edit_idf = _compute_idf(edit_tokens_list) if edit_tokens_list is not None else None
+    
+    for i, (src, edit) in enumerate(zip(src_embeddings_list, edit_embeddings_list)):
+        if isinstance(src, torch.Tensor):
+            src = src.detach().cpu().numpy()
+        if isinstance(edit, torch.Tensor):
+            edit = edit.detach().cpu().numpy()
+            
+        N, D = src.shape
+        M, _ = edit.shape
+        
+        if N == 0 or M == 0:
+            results.append(1.0)
+            continue
+            
+        sim_matrix = src @ edit.T
+        
+        # Euclidean distance for normalized embeddings is sqrt(max(0, 2 - 2 * cos_sim))
+        cost_matrix = np.sqrt(np.maximum(2.0 - 2.0 * sim_matrix, 0.0))
+        
+        if src_tokens_list is not None and edit_tokens_list is not None:
+            weights_a = _get_idf_weights(src_tokens_list[i], src_idf)
+            weights_b = _get_idf_weights(edit_tokens_list[i], edit_idf)
+        else:
+            weights_a = np.ones(N) / N
+            weights_b = np.ones(M) / M
+        
+        distance = ot.emd2(weights_a, weights_b, cost_matrix)
+        results.append(float(distance))
+        
+    return results
