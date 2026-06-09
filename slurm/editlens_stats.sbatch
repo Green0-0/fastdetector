@@ -31,4 +31,4 @@ fi
 export PYTHONUNBUFFERED=1
 
 # ---- Run the dataset analysis ----
-python scripts/run_editlens.py
+python scripts/computational/run_editlens_stat.py --fastdetector-prompt-metadata-column prompt
