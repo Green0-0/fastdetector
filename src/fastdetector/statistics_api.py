@@ -179,25 +179,21 @@ def batch_soft_ngram_scores(
     return results
 
 def batch_extract_token_embeddings(
-    source_texts: list[str],
-    edited_texts: list[str],
+    texts: list[str],
     model_name: str = "answerdotai/ModernBERT-base",
     batch_size: int = 4,
-) -> tuple[list[torch.Tensor], list[torch.Tensor], list[list[str]], list[list[str]]]:
+) -> tuple[list[torch.Tensor], list[list[str]]]:
     """Extract normalized token-level embeddings and subword tokens using a bidirectional encoder.
     
     Args:
-        source_texts: List of original texts.
-        edited_texts: List of edited/generated texts.
+        texts: List of texts.
         model_name: HuggingFace model identifier for a bidirectional encoder.
         batch_size: Inference batch size.
         
     Returns:
-        Tuple of (src_embs, edit_embs, src_tokens, edit_tokens) where:
-            - src_embs is a list of NxD tensors.
-            - edit_embs is a list of MxD tensors.
-            - src_tokens is a list of lists of subword strings.
-            - edit_tokens is a list of lists of subword strings.
+        Tuple of (embs, tokens) where:
+            - embs is a list of NxD tensors.
+            - tokens is a list of lists of subword strings.
     """
     from transformers import AutoModel, AutoTokenizer
     
@@ -208,66 +204,39 @@ def batch_extract_token_embeddings(
     if torch.cuda.is_available():
         model = model.cuda()
         
-    all_src_embs = []
-    all_edit_embs = []
-    all_src_tokens = []
-    all_edit_tokens = []
+    all_embs = []
+    all_tokens = []
     
-    for i in range(0, len(source_texts), batch_size):
-        src_batch = source_texts[i:i+batch_size]
-        edit_batch = edited_texts[i:i+batch_size]
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i:i+batch_size]
         
-        src_inputs = tokenizer(src_batch, padding=True, return_tensors="pt", truncation=True, max_length=512)
-        edit_inputs = tokenizer(edit_batch, padding=True, return_tensors="pt", truncation=True, max_length=512)
+        inputs = tokenizer(batch_texts, padding=True, return_tensors="pt", truncation=True, max_length=512)
         
         if torch.cuda.is_available():
-            src_inputs = {k: v.cuda() for k, v in src_inputs.items()}
-            edit_inputs = {k: v.cuda() for k, v in edit_inputs.items()}
+            inputs = {k: v.cuda() for k, v in inputs.items()}
             
         with torch.no_grad():
-            src_outputs = model(**src_inputs)
-            edit_outputs = model(**edit_inputs)
+            outputs = model(**inputs)
             
-        batch_src_embs = []
-        batch_edit_embs = []
-        batch_src_tokens = []
-        batch_edit_tokens = []
-        valid_indices = []
+        batch_embs = []
+        batch_tokens = []
         
-        for b_idx in range(len(src_batch)):
-            src_mask = src_inputs['attention_mask'][b_idx]
-            edit_mask = edit_inputs['attention_mask'][b_idx]
+        for b_idx in range(len(batch_texts)):
+            mask = inputs['attention_mask'][b_idx]
+            length = mask.sum().item()
             
-            src_len = src_mask.sum().item()
-            edit_len = edit_mask.sum().item()
-            
-            if src_len > 2 and edit_len > 2:
-                src_embs = src_outputs.last_hidden_state[b_idx, 1:src_len-1]
-                edit_embs = edit_outputs.last_hidden_state[b_idx, 1:edit_len-1]
+            if length > 2:
+                embs = outputs.last_hidden_state[b_idx, 1:length-1]
+                embs = torch.nn.functional.normalize(embs, p=2, dim=1)
+                batch_embs.append(embs)
                 
-                # Normalize the embeddings before passing them to statistics.py
-                src_embs = torch.nn.functional.normalize(src_embs, p=2, dim=1)
-                edit_embs = torch.nn.functional.normalize(edit_embs, p=2, dim=1)
-                
-                batch_src_embs.append(src_embs)
-                batch_edit_embs.append(edit_embs)
-                
-                src_ids = src_inputs['input_ids'][b_idx, 1:src_len-1]
-                edit_ids = edit_inputs['input_ids'][b_idx, 1:edit_len-1]
-                batch_src_tokens.append(tokenizer.convert_ids_to_tokens(src_ids))
-                batch_edit_tokens.append(tokenizer.convert_ids_to_tokens(edit_ids))
-                
-                valid_indices.append(b_idx)
+                ids = inputs['input_ids'][b_idx, 1:length-1]
+                batch_tokens.append(tokenizer.convert_ids_to_tokens(ids))
             else:
-                batch_src_embs.append(torch.empty((0, src_outputs.size(-1))))
-                batch_edit_embs.append(torch.empty((0, edit_outputs.size(-1))))
-                batch_src_tokens.append([])
-                batch_edit_tokens.append([])
-                valid_indices.append(b_idx)
+                batch_embs.append(torch.empty((0, outputs.last_hidden_state.size(-1))))
+                batch_tokens.append([])
                 
-        all_src_embs.extend([emb.cpu() for emb in batch_src_embs])
-        all_edit_embs.extend([emb.cpu() for emb in batch_edit_embs])
-        all_src_tokens.extend(batch_src_tokens)
-        all_edit_tokens.extend(batch_edit_tokens)
+        all_embs.extend([emb.cpu() for emb in batch_embs])
+        all_tokens.extend(batch_tokens)
             
-    return all_src_embs, all_edit_embs, all_src_tokens, all_edit_tokens
+    return all_embs, all_tokens
