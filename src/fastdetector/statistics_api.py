@@ -128,7 +128,7 @@ def batch_soft_ngram_scores(
     threshold: float = 0.8,
     min_length: int = 6,
     max_length: int = 12,
-    batch_size: int = 32,
+    phrase_batch_size: int = 1024,
 ) -> list[float]:
     """Compute soft n-gram distance between pairs of source and edited texts.
     
@@ -139,7 +139,7 @@ def batch_soft_ngram_scores(
         threshold: Cosine similarity threshold for counting a phrase as matched.
         min_length: Minimum n-gram length in words.
         max_length: Maximum n-gram length in words.
-        batch_size: Encoding batch size.
+        phrase_batch_size: Encoding batch size for soft n-gram phrases.
         
     Returns:
         List of distance scores (1 - precision).
@@ -155,17 +155,34 @@ def batch_soft_ngram_scores(
     src_phrases_list = extract_ngrams(source_texts, min_length=min_length, max_length=max_length)
     edit_phrases_list = extract_ngrams(edited_texts, min_length=min_length, max_length=max_length)
     
+    unique_phrases = list(set(
+        phrase 
+        for phrases in src_phrases_list + edit_phrases_list 
+        for phrase in phrases
+    ))
+    
+    print(f"Encoding {len(unique_phrases)} unique soft n-grams with batch size {phrase_batch_size}...")
+    
+    all_embeddings = model.encode(
+        unique_phrases, 
+        convert_to_tensor=True, 
+        batch_size=phrase_batch_size, 
+        normalize_embeddings=True,
+        show_progress_bar=True
+    )
+    
+    phrase_to_idx = {phrase: i for i, phrase in enumerate(unique_phrases)}
+    
     for src_phrases, edit_phrases in zip(src_phrases_list, edit_phrases_list):
         if not src_phrases or not edit_phrases:
             results.append(1.0)
             continue
             
-        # Encode all phrases together
-        all_phrases = src_phrases + edit_phrases
-        all_embeddings = model.encode(all_phrases, convert_to_tensor=True, batch_size=batch_size, normalize_embeddings=True)
+        src_indices = [phrase_to_idx[p] for p in src_phrases]
+        edit_indices = [phrase_to_idx[p] for p in edit_phrases]
         
-        src_embeddings = all_embeddings[: len(src_phrases)]
-        edit_embeddings = all_embeddings[len(src_phrases) :]
+        src_embeddings = all_embeddings[src_indices]
+        edit_embeddings = all_embeddings[edit_indices]
         
         # Compute similarity matrix
         similarity_matrix = torch.mm(src_embeddings, edit_embeddings.t())

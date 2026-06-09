@@ -12,7 +12,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--col-human", type=str, default="original", help="Human column.")
     parser.add_argument("--col-ai", type=str, default="final_response", help="AI column.")
-    parser.add_argument("--batch-size", type=int, default=4, help="Batch size.")
+    parser.add_argument("--phrase-batch-size", type=int, default=1024, help="Batch size for phrase embedding.")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
@@ -22,7 +22,7 @@ def main():
     ai_texts = ds[args.col_ai]
 
     print(f"Computing soft ngram scores...")
-    scores = batch_soft_ngram_scores(human_texts, ai_texts, model_name=args.model_name, batch_size=args.batch_size)
+    scores = batch_soft_ngram_scores(human_texts, ai_texts, model_name=args.model_name, phrase_batch_size=args.phrase_batch_size)
     
     col_name = f"pairwise_softngram_{args.col_human}_{args.col_ai}"
     ds = ds.add_column(col_name, scores)
@@ -36,7 +36,7 @@ def main():
 - Target Dataset: {args.target_dataset}
 - Human Column: {args.col_human}
 - AI Column: {args.col_ai}
-- Batch Size: {args.batch_size}
+- Phrase Batch Size: {args.phrase_batch_size}
 - Total Runtime: {total_runtime:.2f} seconds
 """
     upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content)
