@@ -22,6 +22,7 @@ from transformers import (
 )
 
 from fastdetector.utils import upload_dataset
+from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot
 
 class NormedLinear(torch.nn.Module):
     """Linear layer preceded by LayerNorm to keep logits well-scaled."""
@@ -228,6 +229,20 @@ def main():
     total = len(ai_true) + len(human_true)
     accuracy = (tp + tn) / total if total > 0 else 0
     
+    charts = {}
+    charts["hist_editlens_score.png"] = get_histogram(
+        [human_scores, ai_scores], 
+        ["Human", "AI"], 
+        "Histogram: EditLens Scores"
+    )
+    charts["classifier_editlens_score.png"] = get_sweeping_classifier_plot(
+        [human_scores, ai_scores],
+        [False, True], 
+        False, False,
+        ["Human Accuracy", "AI Accuracy"],
+        "Naive Classifier: EditLens Scores"
+    )
+    
     stats_md = f"""
 ## EditLens Inference Statistics
 - **Checkpoint**: {args.checkpoint}
@@ -243,11 +258,18 @@ def main():
 - **False Negatives (AI missed)**: {fn} ({(fn / len(ai_true) * 100) if len(ai_true) else 0:.2f}%)
 - **True Negatives (Human correctly identified)**: {tn} ({(tn / len(human_true) * 100) if len(human_true) else 0:.2f}%)
 - **False Positives (Human misclassified as AI)**: {fp} ({(fp / len(human_true) * 100) if len(human_true) else 0:.2f}%)
+
+## Classifiers
+![Classifier EditLens Scores](classifier_editlens_score.png)
+
+## Histograms
+![Histogram EditLens Scores](hist_editlens_score.png)
 """
 
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
+        files=charts,
         readme_content=stats_md
     )
     print("Done!")

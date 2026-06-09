@@ -170,7 +170,7 @@ def main():
     
     lq = np.array(result_ds["pairwise_levenshtein_quantile"])
     cq = np.array(result_ds["pairwise_cross_encoder_quantile"])
-    jq = np.array(result_ds["pairwise_jaccard_quantile"])
+    jq = np.array(result_ds["pairwise_jaccard_1_quantile"])
     sq = np.array(result_ds["pairwise_cossim_quantile"])
     
     diff_lq_cq = np.mean(np.abs(lq - cq))
