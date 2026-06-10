@@ -4,7 +4,7 @@ import time
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
-from fastdetector.statistics_api import fetch_logprobs_all
+from fastdetector.statistics.statistics_api import fetch_logprobs_all
 
 def main():
     start_time = time.time()

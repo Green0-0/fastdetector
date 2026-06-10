@@ -2,8 +2,8 @@ import argparse
 import numpy as np
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics_utils import get_histogram
-from fastdetector.statistics import (
+from fastdetector.statistics.statistics_utils import get_histogram
+from fastdetector.statistics.statistics_basic import (
     quantile,
     deviated_lines,
     deviated_words,

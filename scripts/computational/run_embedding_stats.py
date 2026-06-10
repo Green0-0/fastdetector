@@ -2,7 +2,7 @@ import argparse
 import time
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics_api import batch_gen_embeddings
+from fastdetector.statistics.statistics_api import batch_gen_embeddings
 
 def main():
     start_time = time.time()

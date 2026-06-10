@@ -155,9 +155,7 @@ def get_confusion_matrix(data_lists: list[list[float]], correct_labels: list[boo
     FN = np.sum((actual == True) & (predicted == False))
     
     actual_pos = TP + FN
-    actual_neg = FP + TN
     pred_pos = TP + FP
-    pred_neg = FN + TN
     
     total = TP + FP + TN + FN
     

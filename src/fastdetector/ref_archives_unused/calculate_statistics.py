@@ -7,12 +7,16 @@ from datasets import load_dataset
 
 from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
-from fastdetector.statistics import (
-    global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
-    entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
+from fastdetector.statistics.statistics_basic import (
+    global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins
+)
+from fastdetector.statistics.statistics_llm import (
+    entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages
+)
+from fastdetector.statistics.statistics_embedding import (
     pairwise_cossim, self_cossim_all, opposite_cossim_all
 )
-from fastdetector.statistics_api import (
+from fastdetector.statistics.statistics_api import (
     fetch_logprobs_all, batch_gen_embeddings, batch_cross_encoder
 )
 

@@ -5,7 +5,7 @@ from openai import AsyncOpenAI
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from typing import Optional
 
-from fastdetector.statistics import extract_ngrams
+from fastdetector.statistics.statistics_basic import extract_ngrams
 
 async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str, top_logprobs_k: int, sem: asyncio.Semaphore):
     async with sem:

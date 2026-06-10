@@ -22,7 +22,7 @@ from transformers import (
 )
 
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
+from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
 
 class NormedLinear(torch.nn.Module):
     """Linear layer preceded by LayerNorm to keep logits well-scaled."""

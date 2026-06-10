@@ -2,7 +2,7 @@ import argparse
 import time
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics_api import batch_cross_encoder
+from fastdetector.statistics.statistics_api import batch_cross_encoder
 
 def main():
     start_time = time.time()

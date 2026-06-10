@@ -2,7 +2,7 @@ import argparse
 import time
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics_api import batch_soft_ngram_scores
+from fastdetector.statistics.statistics_api import batch_soft_ngram_scores
 
 def main():
     start_time = time.time()

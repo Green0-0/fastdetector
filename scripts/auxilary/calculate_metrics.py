@@ -4,13 +4,18 @@ import json
 import numpy as np
 from datasets import load_dataset
 
-from fastdetector.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
+from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics import (
+from fastdetector.statistics.statistics_basic import (
     global_ngram_analysis, pairwise_jaccards, pairwise_levenshteins,
+    quantile, min_max_norm
+)
+from fastdetector.statistics.statistics_llm import (
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
-    fastdetectgpt_scores_approx, binoculars_scores_approx, pairwise_cossim, quantile, min_max_norm,
-    bertscore, moverscore
+    fastdetectgpt_scores_approx, binoculars_scores_approx
+)
+from fastdetector.statistics.statistics_embedding import (
+    pairwise_cossim, bertscore, moverscore
 )
 
 def main():

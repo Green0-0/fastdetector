@@ -141,7 +141,6 @@ class PromptSet:
         rng.shuffle(self._train)
         self._train_cursor = 0
 
-
 def load_prompts(all_paths: list[str]) -> list[Prompt]:
     """
     Load prompts from JSON files. Each file must contain a JSON list of objects
