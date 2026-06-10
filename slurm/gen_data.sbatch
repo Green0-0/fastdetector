@@ -30,7 +30,7 @@ fi
 
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
-python scripts/computational/run_pipeline.py \
+python scripts/computational/gen_pipeline.py \
     --model-name google/gemma-4-E4B-it \
     --temperature 0.7 \
     --top-p 0.8 \

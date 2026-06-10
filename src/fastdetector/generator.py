@@ -1,6 +1,6 @@
 import asyncio
 from openai import AsyncOpenAI
-from fastdetector.prompts import Prompt, PromptSet
+from fastdetector.prompting.prompts import Prompt, PromptSet
 
 MAX_RETRIES = 5
 

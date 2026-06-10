@@ -3,7 +3,7 @@ import os
 import time
 from transformers import AutoTokenizer
 from datasets import load_dataset, Dataset
-from fastdetector.prompts import PromptSet, load_prompts
+from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context

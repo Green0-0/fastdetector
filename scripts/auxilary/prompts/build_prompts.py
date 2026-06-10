@@ -1,6 +1,6 @@
 import random
 
-from fastdetector.prompt_builder import (
+from fastdetector.prompting.prompt_builder import (
     shuffle, resize, partial_stack, force_reformat,
     apply_recursive_format, load_raw_samples, generate_dataset, save_dataset,
     add_metadata

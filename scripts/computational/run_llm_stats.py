@@ -12,7 +12,7 @@ def main():
     parser.add_argument("--model-name", type=str, default="unsloth/Llama-3.2-3B-Instruct", help="LLM model name.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
-    parser.add_argument("--columns", type=str, required=True, help="Comma separated column names.")
+    parser.add_argument("--columns", nargs='+', required=True, help="List of column names.")
     parser.add_argument("--col-suffix", type=str, default="", help="Suffix to append to new columns.")
     parser.add_argument("--top-logprobs-k", type=int, default=100, help="Top logprobs K to fetch.")
     args = parser.parse_args()
@@ -20,11 +20,9 @@ def main():
     print(f"Loading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train")
 
-    columns = [c.strip() for c in args.columns.split(",")]
-    
     print(f"Launching {args.model_name} to fetch logprobs...")
     with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_logprobs=args.top_logprobs_k, gpu_memory_utilization=0.75) as stat_api_url:
-        for col in columns:
+        for col in args.columns:
             if col not in ds.column_names:
                 print(f"Warning: column {col} not found in dataset. Skipping.")
                 continue
@@ -44,7 +42,7 @@ def main():
 - Model Name: {args.model_name}
 - Source Dataset: {args.source_dataset}
 - Target Dataset: {args.target_dataset}
-- Columns Processed: {args.columns}
+- Columns Processed: {', '.join(args.columns)}
 - Top Logprobs K: {args.top_logprobs_k}
 - Total Runtime: {total_runtime:.2f} seconds
 - Engine: vllm

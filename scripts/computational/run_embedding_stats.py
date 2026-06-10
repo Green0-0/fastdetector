@@ -10,16 +10,14 @@ def main():
     parser.add_argument("--model-name", type=str, default="Qwen/Qwen3-Embedding-4B", help="Embedding model.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
-    parser.add_argument("--columns", type=str, required=True, help="Comma separated column names.")
+    parser.add_argument("--columns", nargs='+', required=True, help="List of column names.")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size.")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train")
 
-    columns = [c.strip() for c in args.columns.split(",")]
-    
-    for col in columns:
+    for col in args.columns:
         if col not in ds.column_names:
             print(f"Warning: column {col} not found in dataset. Skipping.")
             continue
@@ -35,7 +33,7 @@ def main():
 - Model Name: {args.model_name}
 - Source Dataset: {args.source_dataset}
 - Target Dataset: {args.target_dataset}
-- Columns Processed: {args.columns}
+- Columns Processed: {', '.join(args.columns)}
 - Batch Size: {args.batch_size}
 - Total Runtime: {total_runtime:.2f} seconds
 """

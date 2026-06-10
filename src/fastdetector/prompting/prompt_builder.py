@@ -2,7 +2,7 @@ import json
 import random
 import os
 from typing import List
-from fastdetector.prompts import Prompt
+from fastdetector.prompting.prompts import Prompt
 
 def shuffle(items: list[list[str]], seed: int = 42) -> list[list[str]]:
     """

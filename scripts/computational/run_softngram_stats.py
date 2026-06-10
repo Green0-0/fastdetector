@@ -1,5 +1,6 @@
 import argparse
 import time
+import itertools
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics.statistics_api import batch_soft_ngram_scores
@@ -10,23 +11,25 @@ def main():
     parser.add_argument("--model-name", type=str, default="all-MiniLM-L6-v2", help="Embedding model.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
-    parser.add_argument("--col-human", type=str, default="original", help="Human column.")
-    parser.add_argument("--col-ai", type=str, default="final_response", help="AI column.")
+    parser.add_argument("--columns", nargs='+', required=True, help="List of column names to compute pairwise scores for.")
     parser.add_argument("--phrase-batch-size", type=int, default=2048, help="Batch size for phrase embedding.")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train")
 
-    human_texts = ds[args.col_human]
-    ai_texts = ds[args.col_ai]
+    if any(col not in ds.column_names for col in args.columns):
+        raise ValueError(f"All columns in {args.columns} must exist in the dataset.")
 
-    print(f"Computing soft ngram scores...")
-    scores = batch_soft_ngram_scores(human_texts, ai_texts, model_name=args.model_name, phrase_batch_size=args.phrase_batch_size)
-    
-    col_name = f"pairwise_softngram_{args.col_human}_{args.col_ai}"
-    ds = ds.add_column(col_name, scores)
-    print(f"Added column: {col_name}")
+    added_columns = []
+    for col_a, col_b in itertools.combinations(args.columns, 2):
+        print(f"Computing soft ngram scores between {col_a} and {col_b}...")
+        scores = batch_soft_ngram_scores(ds[col_a], ds[col_b], model_name=args.model_name, phrase_batch_size=args.phrase_batch_size)
+        
+        col_name = f"pairwise_softngram_{col_a}_{col_b}"
+        ds = ds.add_column(col_name, scores)
+        added_columns.append(col_name)
+        print(f"Added column: {col_name}")
 
     print(f"Uploading to {args.target_dataset}...")
     total_runtime = time.time() - start_time
@@ -34,8 +37,8 @@ def main():
 - Model Name: {args.model_name}
 - Source Dataset: {args.source_dataset}
 - Target Dataset: {args.target_dataset}
-- Human Column: {args.col_human}
-- AI Column: {args.col_ai}
+- Columns: {', '.join(args.columns)}
+- Added Columns: {', '.join(added_columns)}
 - Phrase Batch Size: {args.phrase_batch_size}
 - Total Runtime: {total_runtime:.2f} seconds
 """

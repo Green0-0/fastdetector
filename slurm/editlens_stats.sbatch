@@ -32,3 +32,5 @@ export PYTHONUNBUFFERED=1
 
 # ---- Run the dataset analysis ----
 python scripts/computational/run_editlens_stat.py --source-dataset G-reen/cc-2021-rewritten --fastdetector-prompt-metadata-column prompt
+
+python scripts/auxilary/metrics/build_editlens_readme.py --source-dataset G-reen/cc-2021-rewritten-stat-editlens --target-dataset G-reen/cc-2021-rewritten-stat-editlens --fastdetector-prompt-metadata-column prompt
