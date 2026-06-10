@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 from datasets import load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix
+from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
 from fastdetector.statistics.statistics_basic import global_ngram_analysis, pairwise_jaccards
 
 def main():
@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True, help="Dataset to push to")
     parser.add_argument("--summary-stat-columns", nargs='*', default=[], help="Columns to compute mean, max, min, std for.")
     parser.add_argument("--histogram-columns", nargs='*', default=[], help="Histogram setups, e.g., 'A/B' 'C' 'D/E/F'")
+    parser.add_argument("--scatterplot-columns", nargs='*', default=[], help="Scatterplot setups, e.g., 'X/Y1/Y2'")
     parser.add_argument("--classifier-columns", nargs='*', default=[], help="Classifier setups, e.g., 'A:true/B:false'")
     parser.add_argument("--text-columns-analyze", nargs='*', default=[], help="Columns to compute global n-gram and jaccard.")
     parser.add_argument("--pairwise-average-differences", nargs='*', default=[], help="Columns to compute pairwise absolute mean differences.")
@@ -179,6 +180,45 @@ def main():
             
             charts[img_name] = get_histogram(arrays, legend_labels, title)
             readme_content += f"![Histogram]({img_name})\n"
+        readme_content += "\n"
+
+    if args.scatterplot_columns:
+        readme_content += "## Scatterplots\n"
+        for setup in args.scatterplot_columns:
+            cols = setup.split('/')
+            if len(cols) < 2:
+                print(f"Warning: Invalid scatterplot format '{setup}'. Expected X/Y1[/Y2...].")
+                continue
+            x_col = cols[0]
+            y_cols = cols[1:]
+            
+            if x_col not in ds.column_names:
+                print(f"Warning: x column {x_col} not found for scatterplot setup '{setup}'. Skipping setup.")
+                continue
+                
+            x_data = ds[x_col]
+            y_data_lists = []
+            legend_labels = []
+            valid = True
+            for y_col in y_cols:
+                if y_col not in ds.column_names:
+                    print(f"Warning: y column {y_col} not found for scatterplot setup '{setup}'. Skipping setup.")
+                    valid = False
+                    break
+                y_data_lists.append(ds[y_col])
+                legend_labels.append(y_col)
+                
+            if not valid:
+                continue
+                
+            title_suffix = f"{', '.join(y_cols)} vs {x_col}"
+            file_suffix = f"{'_'.join(y_cols)}_vs_{x_col}".replace(' ', '_')
+            
+            img_name = f"scatter_{file_suffix}.png"
+            title = f"Scatterplot: {title_suffix}"
+            
+            charts[img_name] = get_scatterplot(x_data, y_data_lists, legend_labels, title, xlabel=x_col, ylabel="Values")
+            readme_content += f"![Scatterplot]({img_name})\n"
         readme_content += "\n"
 
     print(f"Uploading dataset to {args.target_dataset}...")

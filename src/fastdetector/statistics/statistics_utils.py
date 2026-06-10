@@ -175,3 +175,42 @@ def get_confusion_matrix(data_lists: list[list[float]], correct_labels: list[boo
     md += f"| **Actual Negative** | {FP} ({fp_prop:.2%}) | {TN} ({tn_prop:.2%}) |\n"
     
     return md
+
+def get_scatterplot(x_data: list[float] | list[list[float]], y_data_lists: list[list[float]], labels: list[str], title: str, xlabel: str = "X", ylabel: str = "Y", figsize: tuple[int, int] = (8, 5)) -> bytes:
+    """Generates a scatterplot of multiple y datasets against a single x dataset.
+
+    Args:
+        x_data (list[float] | list[list[float]]): The x-axis data, or a list of x-axis data lists corresponding to y_data_lists.
+        y_data_lists (list[list[float]]): List of y-axis data lists.
+        labels (list[str]): List of labels for each y dataset.
+        title (str): Title of the plot.
+        xlabel (str, optional): Label for the x-axis. Defaults to "X".
+        ylabel (str, optional): Label for the y-axis. Defaults to "Y".
+        figsize (tuple[int, int], optional): Size of the figure. Defaults to (8, 5).
+
+    Returns:
+        bytes: The generated scatterplot image as bytes.
+    """
+    plt.figure(figsize=figsize)
+    
+    if len(x_data) > 0 and isinstance(x_data[0], (list, np.ndarray)):
+        x_lists = x_data
+    else:
+        x_lists = [x_data] * len(y_data_lists)
+        
+    for x_vals, y_vals, label in zip(x_lists, y_data_lists, labels):
+        if x_vals is not None and y_vals is not None and len(x_vals) == len(y_vals):
+            plt.scatter(x_vals, y_vals, alpha=0.5, label=label, marker='o', s=15)
+            
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    if labels and any(labels):
+        plt.legend()
+    plt.grid(True)
+    
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
+    plt.close()
+    return buf.read()
