@@ -39,7 +39,7 @@ python scripts/computational/gen_pipeline.py \
     --max-dataset-len 15000 \
     --prompt-file prompts/combined_dataset.json \
     --source-dataset G-reen/cc-2021-filtered \
-    --source-column collected_subset \
+    --source-column collected_subset_original_final_response \
     --num-samples 1000 \
     --target-dataset G-reen/cc-2021-rewritten
 
