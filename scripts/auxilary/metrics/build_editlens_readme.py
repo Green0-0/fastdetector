@@ -69,7 +69,7 @@ def main():
             f"Confusion Matrix: EditLens Scores ({subset_name})"
         )
         
-        return f"""
+        md = f"""
 ### Score Distributions ({subset_name})
 - **Human Scores**: Mean = {np.mean(h_scores):.4f}, Std = {np.std(h_scores):.4f}
 - **AI Scores**: Mean = {np.mean(a_scores):.4f}, Std = {np.std(a_scores):.4f}
