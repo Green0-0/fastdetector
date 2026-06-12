@@ -88,39 +88,93 @@ def main():
 """
         
         if args.distance_metrics:
-            md += f"\n## Distance Metrics vs EditLens ({subset_name})\n"
+            md += f"\n## Distance Metric Quantiles vs EditLens (AI Only) ({subset_name})\n"
+            y_data_lists = []
+            legend_labels = []
+            
             for metric in args.distance_metrics:
-                if metric not in result_ds.column_names:
-                    print(f"Warning: {metric} not found in dataset. Skipping scatterplot.")
+                q_metric = metric if metric.endswith("_quantile") else f"{metric}_quantile"
+                if q_metric not in result_ds.column_names:
+                    print(f"Warning: {q_metric} not found in dataset. Skipping.")
                     continue
                     
-                dist_vals = np.array(result_ds[metric])
+                dist_vals = np.array(result_ds[q_metric])
                 if mask is not None:
                     dist_vals = dist_vals[mask]
-                
-                # Scatterplot: EditLens Score vs Distance Metric
-                scat_score_name = f"scatter_score_{metric}{suffix}.png"
+                    
+                y_data_lists.append(dist_vals)
+                legend_labels.append(q_metric.replace('_original_final_response_quantile', '').replace('pairwise_', ''))
+            
+            if y_data_lists:
+                # Scatterplot: AI EditLens Score vs All Distance Quantiles
+                scat_score_name = f"scatter_score_all_quantiles{suffix}.png"
                 charts[scat_score_name] = get_scatterplot(
-                    x_data=[h_scores, a_scores],
-                    y_data_lists=[dist_vals, dist_vals],
-                    labels=["Human", "AI"],
-                    title=f"EditLens Score vs {metric} ({subset_name})",
-                    xlabel="EditLens Score",
-                    ylabel=metric
+                    x_data=[a_scores] * len(y_data_lists),
+                    y_data_lists=y_data_lists,
+                    labels=legend_labels,
+                    title=f"AI EditLens Score vs Distance Quantiles ({subset_name})",
+                    xlabel="AI EditLens Score",
+                    ylabel="Distance Quantile",
+                    figsize=(10, 6)
                 )
-                md += f"![Scatterplot Score {metric}]({scat_score_name})\n"
+                md += f"![Scatterplot Score]({scat_score_name})\n"
                 
-                # Scatterplot: EditLens Bin vs Distance Metric
-                scat_bin_name = f"scatter_bin_{metric}{suffix}.png"
+                # Scatterplot: AI EditLens Bin vs All Distance Quantiles
+                scat_bin_name = f"scatter_bin_all_quantiles{suffix}.png"
                 charts[scat_bin_name] = get_scatterplot(
-                    x_data=[h_bins, a_bins],
-                    y_data_lists=[dist_vals, dist_vals],
-                    labels=["Human", "AI"],
-                    title=f"EditLens Bin vs {metric} ({subset_name})",
-                    xlabel="EditLens Bin",
-                    ylabel=metric
+                    x_data=[a_bins] * len(y_data_lists),
+                    y_data_lists=y_data_lists,
+                    labels=legend_labels,
+                    title=f"AI EditLens Bin vs Distance Quantiles ({subset_name})",
+                    xlabel="AI EditLens Bin",
+                    ylabel="Distance Quantile",
+                    figsize=(10, 6)
                 )
-                md += f"![Scatterplot Bin {metric}]({scat_bin_name})\n"
+                md += f"![Scatterplot Bin]({scat_bin_name})\n"
+                
+            md += f"\n## Distance Metric Minimax Norms vs EditLens (AI Only) ({subset_name})\n"
+            y_data_lists_mm = []
+            legend_labels_mm = []
+            
+            for metric in args.distance_metrics:
+                m_metric = metric if metric.endswith("_minimax") else f"{metric}_minimax"
+                if m_metric not in result_ds.column_names:
+                    print(f"Warning: {m_metric} not found in dataset. Skipping.")
+                    continue
+                    
+                dist_vals = np.array(result_ds[m_metric])
+                if mask is not None:
+                    dist_vals = dist_vals[mask]
+                    
+                y_data_lists_mm.append(dist_vals)
+                legend_labels_mm.append(m_metric.replace('_original_final_response_minimax', '').replace('pairwise_', ''))
+            
+            if y_data_lists_mm:
+                # Scatterplot: AI EditLens Score vs All Distance Minimax
+                scat_score_name_mm = f"scatter_score_all_minimax{suffix}.png"
+                charts[scat_score_name_mm] = get_scatterplot(
+                    x_data=[a_scores] * len(y_data_lists_mm),
+                    y_data_lists=y_data_lists_mm,
+                    labels=legend_labels_mm,
+                    title=f"AI EditLens Score vs Distance Minimax ({subset_name})",
+                    xlabel="AI EditLens Score",
+                    ylabel="Distance Minimax",
+                    figsize=(10, 6)
+                )
+                md += f"![Scatterplot Score]({scat_score_name_mm})\n"
+                
+                # Scatterplot: AI EditLens Bin vs All Distance Minimax
+                scat_bin_name_mm = f"scatter_bin_all_minimax{suffix}.png"
+                charts[scat_bin_name_mm] = get_scatterplot(
+                    x_data=[a_bins] * len(y_data_lists_mm),
+                    y_data_lists=y_data_lists_mm,
+                    labels=legend_labels_mm,
+                    title=f"AI EditLens Bin vs Distance Minimax ({subset_name})",
+                    xlabel="AI EditLens Bin",
+                    ylabel="Distance Minimax",
+                    figsize=(10, 6)
+                )
+                md += f"![Scatterplot Bin]({scat_bin_name_mm})\n"
                 
         return md
 

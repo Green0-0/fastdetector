@@ -119,7 +119,7 @@ def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str 
     model = CrossEncoder(model_name, trust_remote_code=True, **kwargs)
     pairs = list(zip(texts_a, texts_b))
     scores = model.predict(pairs, batch_size=batch_size)
-    return scores.tolist()
+    return (-1.0 * scores).tolist()
 
 def batch_soft_ngram_scores(
     source_texts: list[str],

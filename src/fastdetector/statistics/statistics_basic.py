@@ -89,11 +89,11 @@ def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) 
         t2 = set([" ".join(t2_tokens[i:i+n]) for i in range(len(t2_tokens) - n + 1)])
         
         if not t1 and not t2:
-            results.append(1.0 if text1.strip() == text2.strip() else 0.0)
+            results.append(0.0 if text1.strip() == text2.strip() else 1.0)
         elif not t1 or not t2:
-            results.append(0.0)
+            results.append(1.0)
         else:
-            results.append(len(t1.intersection(t2)) / len(t1.union(t2)))
+            results.append(1.0 - (len(t1.intersection(t2)) / len(t1.union(t2))))
     return results
 
 def pairwise_levenshteins(texts_list_a: list[str], texts_list_b: list[str]) -> list[float]:

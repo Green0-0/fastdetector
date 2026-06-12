@@ -112,7 +112,7 @@ python scripts/auxilary/metrics/calc_quantiles.py \
 python scripts/auxilary/metrics/calc_minimax_norms.py \
     --source-dataset G-reen/cc-2021-rewritten-stat \
     --target-dataset G-reen/cc-2021-rewritten-stat \
-    --columns levenshtein_original_final_response pairwise_cross_encoder_original_final_response
+    --columns pairwise_cossim_original_final_response levenshtein_original_final_response jaccard_1_original_final_response jaccard_2_original_final_response pairwise_cross_encoder_original_final_response pairwise_softngram_original_final_response pairwise_bertscore_f1_original_final_response pairwise_moverscore_original_final_response
 
 python scripts/auxilary/metrics/build_readme.py \
     --source-dataset G-reen/cc-2021-rewritten-stat \

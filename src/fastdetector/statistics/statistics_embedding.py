@@ -17,7 +17,7 @@ def pairwise_cossim(embeddings_list_a: list[np.ndarray] | np.ndarray, embeddings
     """
     embs_a = np.array(embeddings_list_a, dtype=np.float32)
     embs_b = np.array(embeddings_list_b, dtype=np.float32)
-    cossims = np.sum(embs_a * embs_b, axis=1)
+    cossims = 1.0 - np.sum(embs_a * embs_b, axis=1)
     return cossims.tolist()
 
 def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: int = 100) -> list[float]:
@@ -125,9 +125,9 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
             
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
         
-        precisions.append(precision)
-        recalls.append(recall)
-        f1s.append(f1)
+        precisions.append(1.0 - precision)
+        recalls.append(1.0 - recall)
+        f1s.append(1.0 - f1)
         
     return precisions, recalls, f1s
 
