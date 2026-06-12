@@ -25,6 +25,6 @@ DATASETS=(
 echo "Deleting datasets..."
 for dataset in "${DATASETS[@]}"; do
     echo "Attempting to delete $dataset..."
-    huggingface-cli repo delete "$dataset" --repo-type dataset --yes || echo "Failed to delete $dataset or it does not exist."
+    hf repos delete "$dataset" --type dataset --yes --missing-ok || echo "Failed to delete $dataset."
 done
 echo "Cleanup complete!"
