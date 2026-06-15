@@ -2,19 +2,18 @@ import math
 import numpy as np
 from typing import Optional
 
-def entropies_approx(texts: list[str], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
+def entropies_approx(top_logprobs: list[list[dict[str, float]]]) -> list[float]:
     """Approximate mean next-token entropy for each text using top-N logprobs and a tail-mass heuristic.
     
     Args:
-        texts: List of strings.
         top_logprobs: For each text, a list of dictionaries mapping top tokens to their logprobs.
         
     Returns:
         List of approximated entropy values.
     """
     results = []
-    for text, text_top_lps in zip(texts, top_logprobs):
-        if not text.strip() or not text_top_lps:
+    for text_top_lps in top_logprobs:
+        if not text_top_lps:
             results.append(0.0)
             continue
             
@@ -38,12 +37,11 @@ def entropies_approx(texts: list[str], top_logprobs: list[list[dict[str, float]]
         results.append(float(np.mean(entropies)) if entropies else 0.0)
     return results
 
-def fastdetectgpt_scores_approx(texts: list[str], token_logprobs: list[list[Optional[float]]], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
+def fastdetectgpt_scores_approx(token_logprobs: list[list[Optional[float]]], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
     """Approximate FastDetectGPT score for each text using top-N logprobs.
     Score = mean((log_prob(x_i) - E[log_prob(x_i)]) / Std[log_prob(x_i)])
     
     Args:
-        texts: List of strings.
         token_logprobs: Logprobs of the actual tokens.
         top_logprobs: For each text, a list of dictionaries mapping top tokens to their logprobs.
         
@@ -51,8 +49,8 @@ def fastdetectgpt_scores_approx(texts: list[str], token_logprobs: list[list[Opti
         List of approximated FastDetectGPT scores.
     """
     results = []
-    for text, text_token_lps, text_top_lps in zip(texts, token_logprobs, top_logprobs):
-        if not text.strip() or not text_token_lps or not text_top_lps:
+    for text_token_lps, text_top_lps in zip(token_logprobs, top_logprobs):
+        if not text_token_lps or not text_top_lps:
             results.append(0.0)
             continue
             
@@ -102,8 +100,7 @@ def fastdetectgpt_scores_approx(texts: list[str], token_logprobs: list[list[Opti
             
     return results
 
-def binoculars_scores_approx(texts: list[str],
-                             token_logprobs_m1: list[list[Optional[float]]], 
+def binoculars_scores_approx(token_logprobs_m1: list[list[Optional[float]]], 
                              top_logprobs_m1: list[list[dict[str, float]]],
                              top_logprobs_m2: list[list[dict[str, float]]]) -> list[float]:
     """Approximate Binoculars score using top-N logprobs.
@@ -113,7 +110,6 @@ def binoculars_scores_approx(texts: list[str],
     H(M2_i, M1_i) = - sum_v p_M2(v) log p_M1(v)
     
     Args:
-        texts: List of strings.
         token_logprobs_m1: Actual token logprobs from M1 (Observer).
         top_logprobs_m1: Top logprobs dicts from M1 (Observer).
         top_logprobs_m2: Top logprobs dicts from M2 (Performer).
@@ -122,8 +118,8 @@ def binoculars_scores_approx(texts: list[str],
         List of approximated Binoculars scores.
     """
     results = []
-    for text, token_lps_m1, top_lps_m1, top_lps_m2 in zip(texts, token_logprobs_m1, top_logprobs_m1, top_logprobs_m2):
-        if not text.strip() or not token_lps_m1 or not top_lps_m1 or not top_lps_m2:
+    for token_lps_m1, top_lps_m1, top_lps_m2 in zip(token_logprobs_m1, top_logprobs_m1, top_logprobs_m2):
+        if not token_lps_m1 or not top_lps_m1 or not top_lps_m2:
             results.append(0.0)
             continue
             
@@ -168,19 +164,18 @@ def binoculars_scores_approx(texts: list[str],
             
     return results
 
-def perplexities(texts: list[str], token_logprobs: list[list[Optional[float]]]) -> list[float]:
+def perplexities(token_logprobs: list[list[Optional[float]]]) -> list[float]:
     """Compute perplexity for each text.
     
     Args:
-        texts: List of strings.
         token_logprobs: For each text, a list of logprobs for the actual tokens.
         
     Returns:
         List of perplexity values.
     """
     results = []
-    for text, text_token_lps in zip(texts, token_logprobs):
-        if not text.strip() or not text_token_lps:
+    for text_token_lps in token_logprobs:
+        if not text_token_lps:
             results.append(0.0)
             continue
             
@@ -196,11 +191,10 @@ def perplexities(texts: list[str], token_logprobs: list[list[Optional[float]]]) 
             results.append(float('inf'))
     return results
 
-def top_p_outlier_percentages(texts: list[str], top_logprobs: list[list[dict[str, float]]], token_logprobs: list[list[Optional[float]]], p: float) -> list[float]:
+def top_p_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_logprobs: list[list[Optional[float]]], p: float) -> list[float]:
     """Compute the percentage of tokens outside the top-p probability mass for each text.
     
     Args:
-        texts: List of strings.
         top_logprobs: For each text, a list of dictionaries mapping top tokens to logprobs.
         token_logprobs: For each text, a list of logprobs for the actual tokens.
         p: Probability mass threshold (e.g., 0.9).
@@ -209,8 +203,8 @@ def top_p_outlier_percentages(texts: list[str], top_logprobs: list[list[dict[str
         List of outlier percentages.
     """
     results = []
-    for text, text_top_lps, text_token_lps in zip(texts, top_logprobs, token_logprobs):
-        if not text.strip() or not text_top_lps or not text_token_lps:
+    for text_top_lps, text_token_lps in zip(top_logprobs, token_logprobs):
+        if not text_top_lps or not text_token_lps:
             results.append(0.0)
             continue
             
@@ -238,11 +232,10 @@ def top_p_outlier_percentages(texts: list[str], top_logprobs: list[list[dict[str
         results.append(outlier_count / total_count if total_count > 0 else 0.0)
     return results
 
-def top_k_outlier_percentages(texts: list[str], top_logprobs: list[list[dict[str, float]]], token_logprobs: list[list[Optional[float]]], k: int) -> list[float]:
+def top_k_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_logprobs: list[list[Optional[float]]], k: int) -> list[float]:
     """Compute the percentage of tokens outside the top-k probability mass for each text.
     
     Args:
-        texts: List of strings.
         top_logprobs: For each text, a list of dictionaries mapping top tokens to logprobs.
         token_logprobs: For each text, a list of logprobs for the actual tokens.
         k: Top-k threshold.
@@ -251,8 +244,8 @@ def top_k_outlier_percentages(texts: list[str], top_logprobs: list[list[dict[str
         List of outlier percentages.
     """
     results = []
-    for text, text_top_lps, text_token_lps in zip(texts, top_logprobs, token_logprobs):
-        if not text.strip() or not text_top_lps or not text_token_lps:
+    for text_top_lps, text_token_lps in zip(top_logprobs, token_logprobs):
+        if not text_top_lps or not text_token_lps:
             results.append(0.0)
             continue
             

@@ -11,7 +11,6 @@ def main():
     parser = argparse.ArgumentParser(description="Calculate LLM metrics for a single column using precomputed logprobs.")
     parser.add_argument("--source-dataset", type=str, required=True)
     parser.add_argument("--target-dataset", type=str, required=True)
-    parser.add_argument("--column", type=str, required=True, help="A single text column to compute stats for.")
     parser.add_argument("--token-columns", nargs='+', required=True, help="List of token columns.")
     parser.add_argument("--logprob-columns", nargs='+', required=True, help="List of logprob columns (aligned with token-columns).")
     
@@ -30,8 +29,6 @@ def main():
     print(f"Loading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train")
 
-    texts = ds[args.column]
-
     parsed_logprobs = []
     for lp_col in args.logprob_columns:
         parsed_logprobs.append([[json.loads(d) for d in seq] if seq is not None else [] for seq in ds[lp_col]])
@@ -45,27 +42,27 @@ def main():
         
         if args.perplexity:
             print(f"Computing perplexity for {tok_col}...")
-            res = perplexities(texts, tokens)
+            res = perplexities(tokens)
             ds = ds.add_column(f"{tok_col}_perplexity", res)
             
         if args.entropy:
             print(f"Computing entropy for {lp_col}...")
-            res = entropies_approx(texts, top_lp)
+            res = entropies_approx(top_lp)
             ds = ds.add_column(f"{tok_col}_entropy", res)
             
         if args.topp_outlier:
             print(f"Computing top-p outlier for {lp_col}...")
-            res = top_p_outlier_percentages(texts, top_lp, tokens, 0.9)
+            res = top_p_outlier_percentages(top_lp, tokens, 0.95)
             ds = ds.add_column(f"{tok_col}_topp_outlier", res)
             
         if args.topk_outlier:
             print(f"Computing top-k outlier for {lp_col}...")
-            res = top_k_outlier_percentages(texts, top_lp, tokens, 50)
+            res = top_k_outlier_percentages(top_lp, tokens, 50)
             ds = ds.add_column(f"{tok_col}_topk_outlier", res)
             
         if args.fastdetectgpt_score:
             print(f"Computing FastDetectGPT score for {lp_col}...")
-            res = fastdetectgpt_scores_approx(texts, tokens, top_lp)
+            res = fastdetectgpt_scores_approx(tokens, top_lp)
             ds = ds.add_column(f"{tok_col}_fastdetectgpt", res)
 
     if args.binoculars_score:
@@ -76,7 +73,7 @@ def main():
             tokens = ds[args.token_columns[0]]
             lp1 = parsed_logprobs[0]
             lp2 = parsed_logprobs[1]
-            res = binoculars_scores_approx(texts, tokens, lp1, lp2)
+            res = binoculars_scores_approx(tokens, lp1, lp2)
             ds = ds.add_column(f"{args.token_columns[0]}_binoculars", res)
 
     print(f"Uploading dataset to {args.target_dataset}...")

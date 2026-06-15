@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--scatterplot-columns", nargs='*', default=[], help="Scatterplot setups, e.g., 'X/Y1/Y2'")
     parser.add_argument("--classifier-columns", nargs='*', default=[], help="Classifier setups, e.g., 'A:true/B:false'")
     parser.add_argument("--text-columns-analyze", nargs='*', default=[], help="Columns to compute global n-gram and jaccard.")
-    parser.add_argument("--pairwise-average-differences", nargs='*', default=[], help="Columns to compute pairwise absolute mean differences.")
+    parser.add_argument("--pairwise-correlations", nargs='*', default=[], help="Columns to compute pairwise pearson correlations.")
     args = parser.parse_args()
 
     print(f"Downloading dataset {args.source_dataset}...")
@@ -84,16 +84,16 @@ def main():
             readme_content += f"- **{col}**: Mean = {mean_val:.4f}, Std = {std_val:.4f}, Max = {max_val:.4f}, Min = {min_val:.4f}\n"
         readme_content += "\n"
 
-    if args.pairwise_average_differences:
-        readme_content += "## Average Absolute Percentile Differences\n"
-        for col_a, col_b in itertools.combinations(args.pairwise_average_differences, 2):
+    if args.pairwise_correlations:
+        readme_content += "## Pearson Correlation Coefficients\n"
+        for col_a, col_b in itertools.combinations(args.pairwise_correlations, 2):
             if col_a not in ds.column_names or col_b not in ds.column_names:
                 print(f"Warning: {col_a} or {col_b} not in dataset. Skipping diff.")
                 continue
             arr1 = np.array(ds[col_a], dtype=float)
             arr2 = np.array(ds[col_b], dtype=float)
-            diff = np.mean(np.abs(arr1 - arr2))
-            readme_content += f"- **{col_a} vs {col_b}**: {diff:.4f}\n"
+            corr = np.corrcoef(arr1, arr2)[0, 1]
+            readme_content += f"- **{col_a} vs {col_b}**: {corr:.4f}\n"
         readme_content += "\n"
 
     charts = {}

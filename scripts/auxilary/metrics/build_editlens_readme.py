@@ -103,7 +103,10 @@ def main():
                     dist_vals = dist_vals[mask]
                     
                 y_data_lists.append(dist_vals)
-                legend_labels.append(q_metric.replace('_original_final_response_quantile', '').replace('pairwise_', ''))
+                label = q_metric.replace('_original_final_response_quantile', '').replace('pairwise_', '')
+                legend_labels.append(label)
+                corr = np.corrcoef(a_scores, dist_vals)[0, 1]
+                md += f"- **Pearson Correlation ({label})**: {corr:.4f}\n"
             
             if y_data_lists:
                 # Scatterplot: AI EditLens Score vs All Distance Quantiles
@@ -147,7 +150,10 @@ def main():
                     dist_vals = dist_vals[mask]
                     
                 y_data_lists_mm.append(dist_vals)
-                legend_labels_mm.append(m_metric.replace('_original_final_response_minimax', '').replace('pairwise_', ''))
+                label_mm = m_metric.replace('_original_final_response_minimax', '').replace('pairwise_', '')
+                legend_labels_mm.append(label_mm)
+                corr_mm = np.corrcoef(a_scores, dist_vals)[0, 1]
+                md += f"- **Pearson Correlation ({label_mm})**: {corr_mm:.4f}\n"
             
             if y_data_lists_mm:
                 # Scatterplot: AI EditLens Score vs All Distance Minimax

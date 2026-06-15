@@ -15,7 +15,7 @@ from fastdetector.statistics.statistics_llm import (
     fastdetectgpt_scores_approx, binoculars_scores_approx
 )
 from fastdetector.statistics.statistics_embedding import (
-    pairwise_cossim, bertscore, moverscore
+    pairwise_cosdist, bertscore, moverscore
 )
 
 def main():
@@ -82,7 +82,7 @@ def main():
     human_embs = np.array(result_ds[f"{args.col_human}_embedding"])
     ai_embs = np.array(result_ds[f"{args.col_ai}_embedding"])
     
-    result_ds = result_ds.add_column("pairwise_cossim", pairwise_cossim(human_embs, ai_embs))
+    result_ds = result_ds.add_column("pairwise_cosdist", pairwise_cosdist(human_embs, ai_embs))
 
     print("Computing BERTScore and MoverScore...")
     human_embs_list = [np.array(e) for e in result_ds[f"{args.col_human}_token_embeddings"]]
@@ -107,7 +107,7 @@ def main():
     result_ds = result_ds.add_column("pairwise_softngram", result_ds[sn_col])
 
     print("Computing minmax norms and percentiles...")
-    result_ds = result_ds.add_column("pairwise_cossim_quantile", quantile(result_ds["pairwise_cossim"]))
+    result_ds = result_ds.add_column("pairwise_cosdist_quantile", quantile(result_ds["pairwise_cosdist"]))
     result_ds = result_ds.add_column("pairwise_levenshtein_norm", min_max_norm(result_ds["pairwise_levenshtein"]))
     result_ds = result_ds.add_column("pairwise_levenshtein_quantile", quantile(result_ds["pairwise_levenshtein"]))
     result_ds = result_ds.add_column("pairwise_jaccard_1_quantile", quantile(result_ds["pairwise_jaccard_1"]))
@@ -129,31 +129,31 @@ def main():
     a_tokens_llama_base = result_ds[f"{args.col_ai}_tokens_llama_base"]
     a_top_llama_base = [[json.loads(d) for d in seq] if seq is not None else [] for seq in result_ds[f"{args.col_ai}_top_logprobs_llama_base"]]
 
-    result_ds = result_ds.add_column("human_perplexity_llama", perplexities(human_texts, h_tokens_llama))
-    result_ds = result_ds.add_column("ai_perplexity_llama", perplexities(ai_texts, a_tokens_llama))
-    result_ds = result_ds.add_column("human_entropy_llama", entropies_approx(human_texts, h_top_llama))
-    result_ds = result_ds.add_column("ai_entropy_llama", entropies_approx(ai_texts, a_top_llama))
-    result_ds = result_ds.add_column("human_fastdetectgpt_llama", fastdetectgpt_scores_approx(human_texts, h_tokens_llama, h_top_llama))
-    result_ds = result_ds.add_column("ai_fastdetectgpt_llama", fastdetectgpt_scores_approx(ai_texts, a_tokens_llama, a_top_llama))
-    result_ds = result_ds.add_column("human_top_p_outlier_llama", top_p_outlier_percentages(human_texts, h_top_llama, h_tokens_llama, 0.9))
-    result_ds = result_ds.add_column("ai_top_p_outlier_llama", top_p_outlier_percentages(ai_texts, a_top_llama, a_tokens_llama, 0.9))
-    result_ds = result_ds.add_column("human_top_k_outlier_llama", top_k_outlier_percentages(human_texts, h_top_llama, h_tokens_llama, 50))
-    result_ds = result_ds.add_column("ai_top_k_outlier_llama", top_k_outlier_percentages(ai_texts, a_top_llama, a_tokens_llama, 50))
+    result_ds = result_ds.add_column("human_perplexity_llama", perplexities(h_tokens_llama))
+    result_ds = result_ds.add_column("ai_perplexity_llama", perplexities(a_tokens_llama))
+    result_ds = result_ds.add_column("human_entropy_llama", entropies_approx(h_top_llama))
+    result_ds = result_ds.add_column("ai_entropy_llama", entropies_approx(a_top_llama))
+    result_ds = result_ds.add_column("human_fastdetectgpt_llama", fastdetectgpt_scores_approx(h_tokens_llama, h_top_llama))
+    result_ds = result_ds.add_column("ai_fastdetectgpt_llama", fastdetectgpt_scores_approx(a_tokens_llama, a_top_llama))
+    result_ds = result_ds.add_column("human_top_p_outlier_llama", top_p_outlier_percentages(h_top_llama, h_tokens_llama, 0.95))
+    result_ds = result_ds.add_column("ai_top_p_outlier_llama", top_p_outlier_percentages(a_top_llama, a_tokens_llama, 0.95))
+    result_ds = result_ds.add_column("human_top_k_outlier_llama", top_k_outlier_percentages(h_top_llama, h_tokens_llama, 50))
+    result_ds = result_ds.add_column("ai_top_k_outlier_llama", top_k_outlier_percentages(a_top_llama, a_tokens_llama, 50))
 
-    result_ds = result_ds.add_column("human_perplexity_llama_base", perplexities(human_texts, h_tokens_llama_base))
-    result_ds = result_ds.add_column("ai_perplexity_llama_base", perplexities(ai_texts, a_tokens_llama_base))
-    result_ds = result_ds.add_column("human_entropy_llama_base", entropies_approx(human_texts, h_top_llama_base))
-    result_ds = result_ds.add_column("ai_entropy_llama_base", entropies_approx(ai_texts, a_top_llama_base))
-    result_ds = result_ds.add_column("human_fastdetectgpt_llama_base", fastdetectgpt_scores_approx(human_texts, h_tokens_llama_base, h_top_llama_base))
-    result_ds = result_ds.add_column("ai_fastdetectgpt_llama_base", fastdetectgpt_scores_approx(ai_texts, a_tokens_llama_base, a_top_llama_base))
-    result_ds = result_ds.add_column("human_top_p_outlier_llama_base", top_p_outlier_percentages(human_texts, h_top_llama_base, h_tokens_llama_base, 0.9))
-    result_ds = result_ds.add_column("ai_top_p_outlier_llama_base", top_p_outlier_percentages(ai_texts, a_top_llama_base, a_tokens_llama_base, 0.9))
-    result_ds = result_ds.add_column("human_top_k_outlier_llama_base", top_k_outlier_percentages(human_texts, h_top_llama_base, h_tokens_llama_base, 50))
-    result_ds = result_ds.add_column("ai_top_k_outlier_llama_base", top_k_outlier_percentages(ai_texts, a_top_llama_base, a_tokens_llama_base, 50))
+    result_ds = result_ds.add_column("human_perplexity_llama_base", perplexities(h_tokens_llama_base))
+    result_ds = result_ds.add_column("ai_perplexity_llama_base", perplexities(a_tokens_llama_base))
+    result_ds = result_ds.add_column("human_entropy_llama_base", entropies_approx(h_top_llama_base))
+    result_ds = result_ds.add_column("ai_entropy_llama_base", entropies_approx(a_top_llama_base))
+    result_ds = result_ds.add_column("human_fastdetectgpt_llama_base", fastdetectgpt_scores_approx(h_tokens_llama_base, h_top_llama_base))
+    result_ds = result_ds.add_column("ai_fastdetectgpt_llama_base", fastdetectgpt_scores_approx(a_tokens_llama_base, a_top_llama_base))
+    result_ds = result_ds.add_column("human_top_p_outlier_llama_base", top_p_outlier_percentages(h_top_llama_base, h_tokens_llama_base, 0.95))
+    result_ds = result_ds.add_column("ai_top_p_outlier_llama_base", top_p_outlier_percentages(a_top_llama_base, a_tokens_llama_base, 0.95))
+    result_ds = result_ds.add_column("human_top_k_outlier_llama_base", top_k_outlier_percentages(h_top_llama_base, h_tokens_llama_base, 50))
+    result_ds = result_ds.add_column("ai_top_k_outlier_llama_base", top_k_outlier_percentages(a_top_llama_base, a_tokens_llama_base, 50))
 
     print("Computing True Binoculars scores...")
-    result_ds = result_ds.add_column("human_binoculars", binoculars_scores_approx(human_texts, h_tokens_llama, h_top_llama, h_top_llama_base))
-    result_ds = result_ds.add_column("ai_binoculars", binoculars_scores_approx(ai_texts, a_tokens_llama, a_top_llama, a_top_llama_base))
+    result_ds = result_ds.add_column("human_binoculars", binoculars_scores_approx(h_tokens_llama, h_top_llama, h_top_llama_base))
+    result_ds = result_ds.add_column("ai_binoculars", binoculars_scores_approx(a_tokens_llama, a_top_llama, a_top_llama_base))
 
     global_stats.append("\n## LLM Statistics (Average)")
     for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier"]:
@@ -170,7 +170,7 @@ def main():
         global_stats.append(f"- **{b_stat}**: Human {h_mean_bino:.4f} | AI {a_mean_bino:.4f}")
         
     global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
-    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cossim']):.4f}")
+    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cosdist']):.4f}")
     
     global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
     global_stats.append(f"- **Pairwise Soft N-Gram**: {np.mean(result_ds['pairwise_softngram']):.4f}")
@@ -181,19 +181,19 @@ def main():
         ("Levenshtein", np.array(result_ds["pairwise_levenshtein_quantile"])),
         ("Cross-Encoder", np.array(result_ds["pairwise_cross_encoder_quantile"])),
         ("Jaccard", np.array(result_ds["pairwise_jaccard_1_quantile"])),
-        ("Cosine", np.array(result_ds["pairwise_cossim_quantile"])),
+        ("Cosine", np.array(result_ds["pairwise_cosdist_quantile"])),
         ("Soft N-Gram", np.array(result_ds["pairwise_softngram_quantile"])),
         ("BERTScore F1", np.array(result_ds["pairwise_bertscore_f1_quantile"])),
         ("MoverScore", np.array(result_ds["pairwise_moverscore_quantile"]))
     ]
     
-    global_stats.append("\n## Average Absolute Percentile Differences")
+    global_stats.append("\n## Pearson Correlation Coefficients")
     for i in range(len(metrics_data)):
         for j in range(i + 1, len(metrics_data)):
             name1, arr1 = metrics_data[i]
             name2, arr2 = metrics_data[j]
-            diff = np.mean(np.abs(arr1 - arr2))
-            global_stats.append(f"- **{name1} vs {name2}**: {diff:.4f}")
+            corr = np.corrcoef(arr1, arr2)[0, 1]
+            global_stats.append(f"- **{name1} vs {name2}**: {corr:.4f}")
 
     print("Generating charts...")
     charts = {}
@@ -221,7 +221,7 @@ def main():
         optimal_thresholds[f"Binoculars ({b_stat})"] = (opt_t_bino, opt_acc_bino)
         conf_matrices[f"Binoculars ({b_stat})"] = get_confusion_matrix([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, opt_t_bino, f"Confusion Matrix: {b_stat}")
 
-    charts["hist_pairwise_cossim.png"] = get_histogram([result_ds["pairwise_cossim"]], ["Pairwise Cosine Similarity"], "Histogram: Pairwise Cosine Similarity")
+    charts["hist_pairwise_cosdist.png"] = get_histogram([result_ds["pairwise_cosdist"]], ["Pairwise Cosine Distance"], "Histogram: Pairwise Cosine Distance")
     charts["hist_pairwise_crossencoder.png"] = get_histogram([result_ds["pairwise_cross_encoder"]], ["Pairwise Cross-Encoder"], "Histogram: Pairwise Cross-Encoder")
     charts["hist_pairwise_levenshtein.png"] = get_histogram([result_ds["pairwise_levenshtein"]], ["Pairwise Levenshtein"], "Histogram: Pairwise Levenshtein")
     charts["hist_pairwise_jaccard.png"] = get_histogram([result_ds["pairwise_jaccard_1"], result_ds["pairwise_jaccard_2"]], ["Pairwise Jaccard (n=1)", "Pairwise Jaccard (n=2)"], "Histogram: Pairwise Jaccard")
@@ -252,7 +252,7 @@ def main():
     readme_content += "\n## Histograms\n"
     for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier", "binoculars"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
-    for stat in ["pairwise_cossim", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard", "pairwise_softngram", "pairwise_bertscore_f1", "pairwise_moverscore"]:
+    for stat in ["pairwise_cosdist", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard", "pairwise_softngram", "pairwise_bertscore_f1", "pairwise_moverscore"]:
         if f"hist_{stat}.png" in charts:
             readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
 

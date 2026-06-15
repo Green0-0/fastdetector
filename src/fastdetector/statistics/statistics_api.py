@@ -99,14 +99,15 @@ def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embeddi
     embeddings = model.encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
     return embeddings
 
-def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str = "Qwen/Qwen3-Reranker-4B", batch_size: int = 2) -> list[float]:
-    """Compute cross-encoder scores for aligned pairs of texts.
+def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str = "Qwen/Qwen3-Reranker-4B", batch_size: int = 2, as_distance: bool = True) -> list[float]:
+    """Compute cross-encoder scores for aligned pairs of texts. Negates the scores for compatibility with distance metrics.
     
     Args:
         texts_a: First list of texts.
         texts_b: Second list of texts.
         model_name: HuggingFace model identifier.
         batch_size: Batch size for inference.
+        as_distance: Whether to negate the scores to treat them as distances.
         
     Returns:
         List of cross-encoder scores.
@@ -119,7 +120,9 @@ def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str 
     model = CrossEncoder(model_name, trust_remote_code=True, **kwargs)
     pairs = list(zip(texts_a, texts_b))
     scores = model.predict(pairs, batch_size=batch_size)
-    return (-1.0 * scores).tolist()
+    if as_distance:
+        return (-1.0 * scores).tolist()
+    return scores.tolist()
 
 def batch_soft_ngram_scores(
     source_texts: list[str],

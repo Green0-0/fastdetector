@@ -5,7 +5,7 @@ import ot
 from collections import Counter
 from typing import Optional
 
-def pairwise_cossim(embeddings_list_a: list[np.ndarray] | np.ndarray, embeddings_list_b: list[np.ndarray] | np.ndarray) -> list[float]:
+def pairwise_cosdist(embeddings_list_a: list[np.ndarray] | np.ndarray, embeddings_list_b: list[np.ndarray] | np.ndarray) -> list[float]:
     """Compute pairwise cosine similarity between two aligned lists of embeddings.
     
     Args:
