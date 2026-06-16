@@ -60,7 +60,6 @@ def is_qlora_checkpoint(checkpoint: str) -> bool:
     except Exception:
         return False
 
-
 def infer_n_buckets(checkpoint: str) -> int:
     """Infer the number of classification buckets from a checkpoint."""
     if not is_qlora_checkpoint(checkpoint):

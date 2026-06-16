@@ -68,6 +68,23 @@ def main():
             opt_threshold,
             f"Confusion Matrix: EditLens Scores ({subset_name})"
         )
+
+        clf_bin_name = f"classifier_editlens_bin{suffix}.png"
+        charts[clf_bin_name], opt_bin_threshold, opt_bin_accuracy = get_sweeping_classifier_plot(
+            [h_bins, a_bins],
+            [False, True], 
+            False, True,
+            ["Human Accuracy", "AI Accuracy"],
+            f"Naive Classifier: EditLens Bins ({subset_name})"
+        )
+        
+        conf_matrix_bin = get_confusion_matrix(
+            [h_bins, a_bins],
+            [False, True],
+            False,
+            opt_bin_threshold,
+            f"Confusion Matrix: EditLens Bins ({subset_name})"
+        )
         
         md = f"""
 ### Score Distributions ({subset_name})
@@ -80,8 +97,19 @@ def main():
 
 {conf_matrix}
 
+### Bin Distributions ({subset_name})
+- **Human Bins**: Mean = {np.mean(h_bins):.4f}, Std = {np.std(h_bins):.4f}
+- **AI Bins**: Mean = {np.mean(a_bins):.4f}, Std = {np.std(a_bins):.4f}
+
+### Optimal Bin Classifier ({subset_name})
+- **Optimal Bin Threshold**: {opt_bin_threshold:.4f}
+- **Optimal Bin Accuracy**: {opt_bin_accuracy * 100:.2f}%
+
+{conf_matrix_bin}
+
 ## Classifiers ({subset_name})
 ![Classifier EditLens Scores]({clf_name})
+![Classifier EditLens Bins]({clf_bin_name})
 
 ## Histograms ({subset_name})
 ![Histogram EditLens Scores]({hist_name})
