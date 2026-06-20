@@ -40,7 +40,7 @@ python scripts/computational/gen_pipeline.py \
     --prompt-file prompts/filter_contiguous_subset.json \
     --source-dataset G-reen/cc-2021-raw \
     --source-column trafilatura_text \
-    --num-samples 1000 \
+    --num-samples 400000 \
     --target-dataset G-reen/cc-2021-processed
 
 python scripts/auxilary/metrics/calc_basic_pair_metrics.py \

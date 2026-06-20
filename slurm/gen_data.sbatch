@@ -37,10 +37,10 @@ python scripts/computational/gen_pipeline.py \
     --presence-penalty 1.5 \
     --max-model-len 32000 \
     --max-dataset-len 15000 \
-    --prompt-file prompts/combined_dataset.json \
+    --prompt-file prompts/combined_dataset_test.json \
     --source-dataset G-reen/cc-2021-filtered \
     --source-column collected_subset_original_final_response \
-    --num-samples 1000 \
+    --num-samples 250000 \
     --target-dataset G-reen/cc-2021-rewritten
 
 echo "Dataset generation complete."

@@ -7,11 +7,41 @@ from fastdetector.prompting.prompts import Prompt
 def shuffle(items: list[list[str]], seed: int = 42) -> list[list[str]]:
     """
     Copies the input list, shuffles it, and returns a new list.
+
+    Args:
+        items (list[list[str]]): List of elements to shuffle.
+        seed (int, optional): Seed for the random number generator. Defaults to 42.
+    
+    Returns:
+        list[list[str]]: Shuffled list of elements.
     """
     rng = random.Random(seed)
     items_copy = list(items)
     rng.shuffle(items_copy)
     return items_copy
+
+def split(items: list[list[str]], proportion: float, min_size: int) -> tuple[list[list[str]], list[list[str]]]:
+    """
+    Splits the list into two lists based on the given proportion.
+
+    Returns a new list, without modifying the original list.
+
+    Args:
+        items (list[list[str]]): List of elements to split.
+        proportion (float, optional): Proportion of elements to put in the first list. Defaults to 0.5.
+        min_size (int, optional): Minimum number of elements in each list. Defaults to 1.
+    
+    Returns:
+        tuple[list[list[str]], list[list[str]]]: Two lists of elements.
+    """
+    n = len(items)
+    assert n != 0, "Cannot split an empty list."
+    assert n >= 2 * min_size, f"Cannot satisfy min_size={min_size} for both lists with total length {n}."
+
+    idx = int(round(n * proportion))
+    idx = min(idx, n - min_size)
+    idx = max(idx, min_size)
+    return list(items[:idx]), list(items[idx:])
 
 def resize(items: list[list[str]], target_length: int, also_shuffle: bool = True, seed: int = 42) -> list[list[str]]:
     """
@@ -167,6 +197,31 @@ def load_raw_samples(paths: list[str]) -> list[list[str]]:
                 assert isinstance(item, str), f"Item at index {i} in {path} is of unsupported type: {type(item).__name__}"
                 raw_samples.append([item])
     return raw_samples
+
+def load_raw_samples_balanced_autosplit(paths: list[str], split_proportion: float = 0.5, min_size: int = 1, shuffle_before_split: bool = False, seed: int = 42) -> tuple[list[list[str]], list[list[str]]]:
+    """
+    Loads the samples from the specified path(s), where the samples at each specific path are split by the splitting ratio, and joined together at the end.
+
+    Args:
+        paths (list[str]): List of paths to load the samples from.
+        split_proportion (float, optional): Proportion of the samples to use for the first dataset. Defaults to 0.5.
+        min_size (int, optional): Minimum number of samples to use for the second dataset. Defaults to 1.
+        shuffle_before_split (bool, optional): Whether to shuffle the samples before splitting them. Defaults to False.
+        seed (int, optional): The random seed to use if shuffling is enabled. Defaults to 42.
+    
+    Returns:
+        tuple[list[list[str]], list[list[str]]]: Tuple containing the two datasets.
+    """
+    dataset1 = []
+    dataset2 = []
+    for i, path in enumerate(paths):
+        samples = load_raw_samples([path])
+        if shuffle_before_split:
+            samples = shuffle(samples, seed=seed + i)
+        ds1, ds2 = split(samples, proportion=split_proportion, min_size=min_size)
+        dataset1.extend(ds1)
+        dataset2.extend(ds2)
+    return dataset1, dataset2
 
 def generate_dataset(prompts: list[list[str]], use_multiturn: bool = True) -> List[Prompt]:
     """
