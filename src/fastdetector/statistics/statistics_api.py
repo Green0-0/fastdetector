@@ -133,20 +133,7 @@ def batch_soft_ngram_scores(
     max_length: int = 12,
     phrase_batch_size: int = 2048,
 ) -> list[float]:
-    """Compute soft n-gram distance between pairs of source and edited texts.
-    
-    Args:
-        source_texts: List of original texts.
-        edited_texts: List of edited/generated texts.
-        model_name: HuggingFace sentence-transformers model ID.
-        threshold: Cosine similarity threshold for counting a phrase as matched.
-        min_length: Minimum n-gram length in words.
-        max_length: Maximum n-gram length in words.
-        phrase_batch_size: Encoding batch size for soft n-gram phrases.
-        
-    Returns:
-        List of distance scores (1 - precision).
-    """
+    """Compute soft n-gram distance between pairs of source and edited texts."""
     kwargs = {}
     if "qwen3" in model_name.lower():
         kwargs["model_kwargs"] = {"attn_implementation": "flash_attention_2", "torch_dtype": torch.bfloat16}
@@ -154,7 +141,6 @@ def batch_soft_ngram_scores(
 
     model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
     
-    results = []
     src_phrases_list = extract_ngrams(source_texts, min_length=min_length, max_length=max_length)
     edit_phrases_list = extract_ngrams(edited_texts, min_length=min_length, max_length=max_length)
     
@@ -175,27 +161,59 @@ def batch_soft_ngram_scores(
     )
     
     phrase_to_idx = {phrase: i for i, phrase in enumerate(unique_phrases)}
+
+    valid_mask = []
+    edit_lengths = []
+    all_src_indices = []
+    all_edit_indices = []
     
     for src_phrases, edit_phrases in zip(src_phrases_list, edit_phrases_list):
         if not src_phrases or not edit_phrases:
-            results.append(1.0)
+            valid_mask.append(False)
             continue
             
-        src_indices = [phrase_to_idx[p] for p in src_phrases]
-        edit_indices = [phrase_to_idx[p] for p in edit_phrases]
+        valid_mask.append(True)
+        edit_lengths.append(len(edit_phrases))
+        all_src_indices.append([phrase_to_idx[p] for p in src_phrases])
+        all_edit_indices.append([phrase_to_idx[p] for p in edit_phrases])
+
+    if all_src_indices:
+        flat_src = torch.tensor([idx for sub in all_src_indices for idx in sub], device=all_embeddings.device)
+        flat_edit = torch.tensor([idx for sub in all_edit_indices for idx in sub], device=all_embeddings.device)
         
-        src_embeddings = all_embeddings[src_indices]
-        edit_embeddings = all_embeddings[edit_indices]
+        src_lens = [len(s) for s in all_src_indices]
+        edit_lens = [len(e) for e in all_edit_indices]
         
-        # Compute similarity matrix
-        similarity_matrix = torch.mm(src_embeddings, edit_embeddings.t())
+        src_offsets = [0] + np.cumsum(src_lens).tolist()[:-1]
+        edit_offsets = [0] + np.cumsum(edit_lens).tolist()[:-1]
+
+        match_sums = []
+        for i in range(len(all_src_indices)):
+            s_start, s_len = src_offsets[i], src_lens[i]
+            e_start, e_len = edit_offsets[i], edit_lens[i]
+            
+            src_embs = all_embeddings[flat_src[s_start:s_start+s_len]]
+            edit_embs = all_embeddings[flat_edit[e_start:e_start+e_len]]
+            
+            sim_matrix = torch.mm(src_embs, edit_embs.t())
+            matches = (sim_matrix >= threshold).any(dim=0)
+            
+            match_sums.append(matches.sum())
+            
+        match_counts = torch.stack(match_sums).cpu().tolist()
+    else:
+        match_counts = []
         
-        # Fraction of edited phrases that match any source phrase
-        matches = (similarity_matrix >= threshold).any(dim=0)
-        precision = matches.sum().item() / len(edit_phrases)
-        
-        results.append(1.0 - precision)
-        
+    results = []
+    valid_idx = 0
+    for is_valid in valid_mask:
+        if is_valid:
+            precision = match_counts[valid_idx] / edit_lengths[valid_idx]
+            results.append(1.0 - precision)
+            valid_idx += 1
+        else:
+            results.append(1.0)
+            
     return results
 
 def batch_extract_token_embeddings(
