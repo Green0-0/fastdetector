@@ -176,11 +176,12 @@ def main():
     parser.add_argument("--batch-size", type=int, default=24, help="Eval batch size")
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     
     args = parser.parse_args()
 
     print(f"Downloading dataset {args.source_dataset}...")
-    result_ds = load_dataset(args.source_dataset, split="train")
+    result_ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
     if "original" not in result_ds.column_names or "final_response" not in result_ds.column_names:
         raise ValueError("Dataset does not appear to have 'original' and 'final_response' columns. Are you sure it was produced by calculate_statistics?")
@@ -213,7 +214,8 @@ def main():
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
-        save_locally_instead=args.save_locally_instead
+        save_locally_instead=args.save_locally_instead,
+        cache_dir=args.cache_dir
     )
     print("Done!")
 

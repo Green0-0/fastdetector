@@ -12,6 +12,7 @@ def main():
     parser.add_argument('--num_rows', type=int, default=-1, help='Number of rows to take (-1 for all)')
     parser.add_argument('--conditions', type=str, default="", help='Comma-separated conditions')
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     
     args = parser.parse_args()
     
@@ -33,7 +34,8 @@ def main():
         dataset_name=args.target_dataset,
         append_files_source=args.source_dataset,
         append_files_exclude_type=['.parquet', '.arrow', '.gitattributes', '.git/'],
-        save_locally_instead=args.save_locally_instead
+        save_locally_instead=args.save_locally_instead,
+        cache_dir=args.cache_dir
     )
     print("Done!")
 

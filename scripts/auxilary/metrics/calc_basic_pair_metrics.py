@@ -28,11 +28,12 @@ def main():
     parser.add_argument("--loose-subset-collect", action="store_true", help="Compute loose subsets.")
     parser.add_argument("--strict-subset", action="store_true", help="Compute strict subsets.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
 
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
-    ds = load_dataset(args.source_dataset, split="train")
+    ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
     if any(col not in ds.column_names for col in args.columns):
         raise ValueError(f"All columns in {args.columns} must exist in the dataset.")
@@ -87,7 +88,8 @@ def main():
     upload_dataset(
         dataset=ds,
         dataset_name=args.target_dataset,
-        save_locally_instead=args.save_locally_instead
+        save_locally_instead=args.save_locally_instead,
+        cache_dir=args.cache_dir
     )
     print("Done!")
 

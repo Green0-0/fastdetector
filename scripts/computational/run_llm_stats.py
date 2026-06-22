@@ -16,10 +16,11 @@ def main():
     parser.add_argument("--col-suffix", type=str, default="", help="Suffix to append to new columns.")
     parser.add_argument("--top-logprobs-k", type=int, default=100, help="Top logprobs K to fetch.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
-    ds = load_dataset(args.source_dataset, split="train")
+    ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
     print(f"Launching {args.model_name} to fetch logprobs...")
     with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_logprobs=args.top_logprobs_k, gpu_memory_utilization=0.75) as stat_api_url:
@@ -54,7 +55,7 @@ def main():
 - Total Runtime: {total_runtime:.2f} seconds
 - Engine: vllm
 """
-    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead)
+    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
     print("Done!")
 
 if __name__ == "__main__":

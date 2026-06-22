@@ -11,11 +11,12 @@ def main():
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
     parser.add_argument("--distance-metrics", nargs='*', default=[], help="Distance metric columns to plot against EditLens scores/bins")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
-    result_ds = load_dataset(args.source_dataset, split="train")
+    result_ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
     human_scores = result_ds["human_editlens_score"]
     ai_scores = result_ds["ai_editlens_score"]
@@ -239,7 +240,8 @@ def main():
         dataset_name=args.target_dataset,
         files=charts,
         readme_content=stats_md,
-        save_locally_instead=args.save_locally_instead
+        save_locally_instead=args.save_locally_instead,
+        cache_dir=args.cache_dir
     )
     print("Done!")
 

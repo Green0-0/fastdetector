@@ -11,6 +11,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True)
     parser.add_argument("--num-samples", type=int, default=1000)
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
 
     print(f"Loading {args.filtered_dataset}...")
@@ -46,9 +47,9 @@ def main():
     print(f"Created new dataset with {len(new_ds)} rows.")
     
     if args.save_locally_instead:
-        os.makedirs("cached_ds", exist_ok=True)
+        os.makedirs(args.cache_dir, exist_ok=True)
         safe_name = args.target_dataset.replace('/', '_')
-        local_path = os.path.join("cached_ds", safe_name)
+        local_path = os.path.join(args.cache_dir, safe_name)
         print(f"Saving to disk: {local_path} instead of pushing to hub...")
         new_ds.save_to_disk(local_path)
     elif "/" in args.target_dataset:

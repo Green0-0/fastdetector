@@ -43,14 +43,16 @@ python scripts/computational/run_softngram_stats.py \
     --source-dataset "$BASE" \
     --target-dataset "$SN" \
     --columns original final_response \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Computing token embeddings..."
 python scripts/computational/run_embedding_tokenwise_stat.py \
     --source-dataset "$SN" \
     --target-dataset "$TOK" \
     --columns original final_response \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Computing embeddings..."
 python scripts/computational/run_embedding_stats.py \
@@ -58,7 +60,8 @@ python scripts/computational/run_embedding_stats.py \
     --target-dataset "$EMB" \
     --model-name Qwen/Qwen3-Embedding-4B \
     --columns original final_response \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Computing reranker scores..."
 python scripts/computational/run_reranker_stats.py \
@@ -66,7 +69,8 @@ python scripts/computational/run_reranker_stats.py \
     --target-dataset "$RERANK" \
     --model-name Qwen/Qwen3-Reranker-4B \
     --columns original final_response \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Computing LLM logprobs (Llama)..."
 python scripts/computational/run_llm_stats.py \
@@ -76,7 +80,8 @@ python scripts/computational/run_llm_stats.py \
     --columns original final_response \
     --col-suffix _llama \
     --top-logprobs-k 100 \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Computing LLM logprobs (Llama Base)..."
 python scripts/computational/run_llm_stats.py \
@@ -86,7 +91,8 @@ python scripts/computational/run_llm_stats.py \
     --columns original final_response \
     --col-suffix _llama_base \
     --top-logprobs-k 100 \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Calculating final metrics..."
 python scripts/auxilary/metrics/calc_basic_pair_metrics.py \
@@ -94,14 +100,16 @@ python scripts/auxilary/metrics/calc_basic_pair_metrics.py \
     --columns original final_response \
     --target-dataset "$STAT" \
     --jaccards-1 --jaccards-2 --levenshteins \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 python scripts/auxilary/metrics/calc_embedding_metrics.py \
     --source-dataset "$STAT" \
     --columns-prefix original final_response \
     --target-dataset "$STAT" \
     --pairwise-cosim --bertscore --moverscore \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 python scripts/auxilary/metrics/calc_llm_metrics.py \
     --source-dataset "$STAT" \
@@ -109,7 +117,8 @@ python scripts/auxilary/metrics/calc_llm_metrics.py \
     --token-columns original_tokens_llama original_tokens_llama_base \
     --logprob-columns original_top_logprobs_llama original_top_logprobs_llama_base \
     --perplexity --entropy --topp-outlier --topk-outlier --binoculars-score --fastdetectgpt-score \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 python scripts/auxilary/metrics/calc_llm_metrics.py \
     --source-dataset "$STAT" \
@@ -117,6 +126,7 @@ python scripts/auxilary/metrics/calc_llm_metrics.py \
     --token-columns final_response_tokens_llama final_response_tokens_llama_base \
     --logprob-columns final_response_top_logprobs_llama final_response_top_logprobs_llama_base \
     --perplexity --entropy --topp-outlier --topk-outlier --binoculars-score --fastdetectgpt-score \
-    --save-locally-instead
+    --save-locally-instead \
+    --cache-dir /usr/project/xtmp/ccprocessing_cache/
 
 echo "Array task $I complete."

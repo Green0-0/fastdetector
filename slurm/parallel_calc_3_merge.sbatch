@@ -17,9 +17,10 @@ import os
 from datasets import load_from_disk, concatenate_datasets
 shards = []
 num_shards = 25
+CACHE_DIR = '/usr/project/xtmp/ccprocessing_cache/'
 for i in range(num_shards):
     safe_name = f'G-reen_cc-2021-rewritten-split-{i}-stat'
-    local_path = os.path.join('cached_ds', safe_name)
+    local_path = os.path.join(CACHE_DIR, safe_name)
     print(f'Loading shard from {local_path}...')
     shards.append(load_from_disk(local_path))
 

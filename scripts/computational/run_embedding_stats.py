@@ -13,10 +13,11 @@ def main():
     parser.add_argument("--columns", nargs='+', required=True, help="List of column names.")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
-    ds = load_dataset(args.source_dataset, split="train")
+    ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
     for col in args.columns:
         if col not in ds.column_names:
@@ -38,7 +39,7 @@ def main():
 - Batch Size: {args.batch_size}
 - Total Runtime: {total_runtime:.2f} seconds
 """
-    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead)
+    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
     print("Done!")
 
 if __name__ == "__main__":

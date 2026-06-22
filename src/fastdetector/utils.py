@@ -4,9 +4,9 @@ from typing import Dict
 from datasets import Dataset, load_from_disk, load_dataset, concatenate_datasets
 from huggingface_hub import HfApi, hf_hub_download
 
-def load_dataset_local_fallback(dataset_name: str, split="train"):
+def load_dataset_local_fallback(dataset_name: str, split="train", cache_dir="cached_ds"):
     safe_name = dataset_name.replace('/', '_')
-    local_path = os.path.join("cached_ds", safe_name)
+    local_path = os.path.join(cache_dir, safe_name)
     if os.path.exists(local_path):
         print(f"Loading dataset locally from {local_path}...")
         return load_from_disk(local_path)
@@ -23,7 +23,8 @@ def upload_dataset(
     append_rows_source: str = None,
     append_files_source: str = None,
     append_files_exclude_type: list = None,
-    save_locally_instead: bool = False
+    save_locally_instead: bool = False,
+    cache_dir: str = "cached_ds"
 ):
     """Upload a dataset and associated files to the Hugging Face Hub.
     
@@ -52,9 +53,9 @@ def upload_dataset(
 
     # 2. Push or save the dataset
     if save_locally_instead:
-        os.makedirs("cached_ds", exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
         safe_name = dataset_name.replace('/', '_')
-        local_path = os.path.join("cached_ds", safe_name)
+        local_path = os.path.join(cache_dir, safe_name)
         print(f"Saving dataset locally to '{local_path}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
         dataset.save_to_disk(local_path)
     else:

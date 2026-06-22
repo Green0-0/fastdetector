@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--text-columns-analyze", nargs='*', default=[], help="Columns to compute global n-gram and jaccard.")
     parser.add_argument("--pairwise-correlations", nargs='*', default=[], help="Columns to compute pairwise pearson correlations.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
 
     print(f"Downloading dataset {args.source_dataset}...")
@@ -228,7 +229,8 @@ def main():
         dataset_name=args.target_dataset,
         files=charts,
         readme_content=readme_content,
-        save_locally_instead=args.save_locally_instead
+        save_locally_instead=args.save_locally_instead,
+        cache_dir=args.cache_dir
     )
     print("Done!")
 

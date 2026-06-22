@@ -28,6 +28,7 @@ def main():
     
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
+    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
 
     generation_params = {
@@ -42,7 +43,7 @@ def main():
 
     print(f"Loading tokenizer and streaming {args.num_samples} samples from {args.source_dataset}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    ds = load_dataset(args.source_dataset, split="train", streaming=True)
+    ds = load_dataset(args.source_dataset, split="train", streaming=True, cache_dir=args.cache_dir)
     samples = []
     tokens_processed = 0
     for row in ds:
@@ -90,7 +91,7 @@ def main():
 
 - Engine: vllm
 """
-    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead)
+    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
     print("Done!")
 
 if __name__ == "__main__":
