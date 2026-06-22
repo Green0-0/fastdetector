@@ -4,6 +4,7 @@ import torch
 from openai import AsyncOpenAI
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from typing import Optional
+from transformers import AutoModel, AutoTokenizer
 
 from fastdetector.statistics.statistics_basic import extract_ngrams
 
@@ -214,6 +215,8 @@ def batch_soft_ngram_scores(
         
     return results
 
+_cached_token_models = {}
+
 def batch_extract_token_embeddings(
     texts: list[str],
     model_name: str = "answerdotai/ModernBERT-base",
@@ -231,14 +234,18 @@ def batch_extract_token_embeddings(
             - embs is a list of NxD tensors.
             - tokens is a list of lists of subword strings.
     """
-    from transformers import AutoModel, AutoTokenizer
+    global _cached_token_models
     
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
-    model.eval()
-    
-    if torch.cuda.is_available():
-        model = model.cuda()
+    if model_name not in _cached_token_models:
+        print(f"Loading {model_name}...")
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(model_name)
+        model.eval()
+        if torch.cuda.is_available():
+            model = model.cuda()
+        _cached_token_models[model_name] = (model, tokenizer)
+            
+    model, tokenizer = _cached_token_models[model_name]
         
     all_embs = []
     all_tokens = []

@@ -24,12 +24,17 @@ def main():
             continue
             
         print(f"Computing token embeddings for {col}...")
-        embs, tokens = batch_extract_token_embeddings(
-            ds[col], model_name=args.model_name, batch_size=args.batch_size
-        )
         
-        ds = ds.add_column(f"{col}_token_embeddings", [emb.tolist() for emb in embs])
-        ds = ds.add_column(f"{col}_tokens", tokens)
+        def process_batch(examples):
+            embs, tokens = batch_extract_token_embeddings(
+                examples[col], model_name=args.model_name, batch_size=args.batch_size
+            )
+            return {
+                f"{col}_token_embeddings": [emb.tolist() for emb in embs],
+                f"{col}_tokens": tokens
+            }
+            
+        ds = ds.map(process_batch, batched=True, batch_size=max(args.batch_size * 25, 100))
 
     print(f"Uploading to {args.target_dataset}...")
     total_runtime = time.time() - start_time

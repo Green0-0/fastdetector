@@ -30,52 +30,46 @@ def main():
     print(f"Loading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train")
 
-    parsed_logprobs = []
-    for lp_col in args.logprob_columns:
-        parsed_logprobs.append([[json.loads(d) for d in seq] if seq is not None else [] for seq in ds[lp_col]])
-
-    for i in range(len(args.token_columns)):
-        tok_col = args.token_columns[i]
-        lp_col = args.logprob_columns[i]
+    print("Computing LLM metrics (batched)...")
+    def process_batch(examples):
+        result = {}
         
-        tokens = ds[tok_col]
-        top_lp = parsed_logprobs[i]
+        parsed_logprobs = []
+        for lp_col in args.logprob_columns:
+            parsed_logprobs.append([[json.loads(d) for d in seq] if seq is not None else [] for seq in examples[lp_col]])
+            
+        for i in range(len(args.token_columns)):
+            tok_col = args.token_columns[i]
+            lp_col = args.logprob_columns[i]
+            
+            tokens = examples[tok_col]
+            top_lp = parsed_logprobs[i]
+            
+            if args.perplexity:
+                result[f"{tok_col}_perplexity"] = perplexities(tokens)
+                
+            if args.entropy:
+                result[f"{tok_col}_entropy"] = entropies_approx(top_lp)
+                
+            if args.topp_outlier:
+                result[f"{tok_col}_topp_outlier"] = top_p_outlier_percentages(top_lp, tokens, 0.95)
+                
+            if args.topk_outlier:
+                result[f"{tok_col}_topk_outlier"] = top_k_outlier_percentages(top_lp, tokens, 50)
+                
+            if args.fastdetectgpt_score:
+                result[f"{tok_col}_fastdetectgpt"] = fastdetectgpt_scores_approx(tokens, top_lp)
+                
+        if args.binoculars_score:
+            if len(args.token_columns) >= 2:
+                tokens = examples[args.token_columns[0]]
+                lp1 = parsed_logprobs[0]
+                lp2 = parsed_logprobs[1]
+                result[f"{args.token_columns[0]}_binoculars"] = binoculars_scores_approx(tokens, lp1, lp2)
+                
+        return result
         
-        if args.perplexity:
-            print(f"Computing perplexity for {tok_col}...")
-            res = perplexities(tokens)
-            ds = ds.add_column(f"{tok_col}_perplexity", res)
-            
-        if args.entropy:
-            print(f"Computing entropy for {lp_col}...")
-            res = entropies_approx(top_lp)
-            ds = ds.add_column(f"{tok_col}_entropy", res)
-            
-        if args.topp_outlier:
-            print(f"Computing top-p outlier for {lp_col}...")
-            res = top_p_outlier_percentages(top_lp, tokens, 0.95)
-            ds = ds.add_column(f"{tok_col}_topp_outlier", res)
-            
-        if args.topk_outlier:
-            print(f"Computing top-k outlier for {lp_col}...")
-            res = top_k_outlier_percentages(top_lp, tokens, 50)
-            ds = ds.add_column(f"{tok_col}_topk_outlier", res)
-            
-        if args.fastdetectgpt_score:
-            print(f"Computing FastDetectGPT score for {lp_col}...")
-            res = fastdetectgpt_scores_approx(tokens, top_lp)
-            ds = ds.add_column(f"{tok_col}_fastdetectgpt", res)
-
-    if args.binoculars_score:
-        if len(args.token_columns) < 2:
-            print("Warning: Binoculars score requires at least 2 LLMs (primary and base). Skipping.")
-        else:
-            print("Computing Binoculars score using first two LLMs...")
-            tokens = ds[args.token_columns[0]]
-            lp1 = parsed_logprobs[0]
-            lp2 = parsed_logprobs[1]
-            res = binoculars_scores_approx(tokens, lp1, lp2)
-            ds = ds.add_column(f"{args.token_columns[0]}_binoculars", res)
+    ds = ds.map(process_batch, batched=True, batch_size=100)
 
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(

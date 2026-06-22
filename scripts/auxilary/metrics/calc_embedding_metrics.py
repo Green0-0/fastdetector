@@ -25,28 +25,32 @@ def main():
 
     for col_a, col_b in itertools.combinations(args.columns_prefix, 2):
         print(f"Processing pair: {col_a} vs {col_b}...")
-        
-        if args.pairwise_cosim:
-            emb_a = np.array(ds[f"{col_a}_embedding"])
-            emb_b = np.array(ds[f"{col_b}_embedding"])
-            res = pairwise_cosdist(emb_a, emb_b)
-            ds = ds.add_column(f"pairwise_cosdist_{col_a}_{col_b}", res)
-            
-        if args.bertscore or args.moverscore:
-            emb_a_list = [np.array(e) for e in ds[f"{col_a}_token_embeddings"]]
-            emb_b_list = [np.array(e) for e in ds[f"{col_b}_token_embeddings"]]
-            tok_a_list = ds[f"{col_a}_tokens"]
-            tok_b_list = ds[f"{col_b}_tokens"]
-
-            if args.bertscore:
-                b_prec, b_rec, b_f1 = bertscore(emb_a_list, emb_b_list, tok_a_list, tok_b_list)
-                ds = ds.add_column(f"pairwise_bertscore_precision_{col_a}_{col_b}", b_prec)
-                ds = ds.add_column(f"pairwise_bertscore_recall_{col_a}_{col_b}", b_rec)
-                ds = ds.add_column(f"pairwise_bertscore_f1_{col_a}_{col_b}", b_f1)
+        def process_batch(examples):
+            result = {}
+            if args.pairwise_cosim:
+                emb_a = np.array(examples[f"{col_a}_embedding"])
+                emb_b = np.array(examples[f"{col_b}_embedding"])
+                result[f"pairwise_cosdist_{col_a}_{col_b}"] = pairwise_cosdist(emb_a, emb_b)
                 
-            if args.moverscore:
-                m_scores = moverscore(emb_a_list, emb_b_list, tok_a_list, tok_b_list)
-                ds = ds.add_column(f"pairwise_moverscore_{col_a}_{col_b}", m_scores)
+            if args.bertscore or args.moverscore:
+                emb_a_list = [np.array(e) for e in examples[f"{col_a}_token_embeddings"]]
+                emb_b_list = [np.array(e) for e in examples[f"{col_b}_token_embeddings"]]
+                tok_a_list = examples[f"{col_a}_tokens"]
+                tok_b_list = examples[f"{col_b}_tokens"]
+
+                if args.bertscore:
+                    b_prec, b_rec, b_f1 = bertscore(emb_a_list, emb_b_list, tok_a_list, tok_b_list)
+                    result[f"pairwise_bertscore_precision_{col_a}_{col_b}"] = b_prec
+                    result[f"pairwise_bertscore_recall_{col_a}_{col_b}"] = b_rec
+                    result[f"pairwise_bertscore_f1_{col_a}_{col_b}"] = b_f1
+                    
+                if args.moverscore:
+                    m_scores = moverscore(emb_a_list, emb_b_list, tok_a_list, tok_b_list)
+                    result[f"pairwise_moverscore_{col_a}_{col_b}"] = m_scores
+                    
+            return result
+            
+        ds = ds.map(process_batch, batched=True, batch_size=100)
 
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(
