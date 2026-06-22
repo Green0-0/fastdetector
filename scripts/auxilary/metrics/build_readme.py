@@ -1,7 +1,7 @@
 import argparse
 import itertools
 import numpy as np
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
 from fastdetector.statistics.statistics_basic import global_ngram_analysis, pairwise_jaccards
@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--classifier-columns", nargs='*', default=[], help="Classifier setups, e.g., 'A:true/B:false'")
     parser.add_argument("--text-columns-analyze", nargs='*', default=[], help="Columns to compute global n-gram and jaccard.")
     parser.add_argument("--pairwise-correlations", nargs='*', default=[], help="Columns to compute pairwise pearson correlations.")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     args = parser.parse_args()
 
     print(f"Downloading dataset {args.source_dataset}...")
@@ -226,7 +227,8 @@ def main():
         dataset=ds,
         dataset_name=args.target_dataset,
         files=charts,
-        readme_content=readme_content
+        readme_content=readme_content,
+        save_locally_instead=args.save_locally_instead
     )
     print("Done!")
 

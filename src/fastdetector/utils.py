@@ -1,7 +1,18 @@
+import os
 import re
 from typing import Dict
-from datasets import Dataset, load_dataset, concatenate_datasets
+from datasets import Dataset, load_from_disk, load_dataset, concatenate_datasets
 from huggingface_hub import HfApi, hf_hub_download
+
+def load_dataset_local_fallback(dataset_name: str, split="train"):
+    safe_name = dataset_name.replace('/', '_')
+    local_path = os.path.join("cached_ds", safe_name)
+    if os.path.exists(local_path):
+        print(f"Loading dataset locally from {local_path}...")
+        return load_from_disk(local_path)
+    else:
+        print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
+        return load_dataset(dataset_name, split=split)
 
 def upload_dataset(
     dataset: Dataset, 
@@ -11,7 +22,8 @@ def upload_dataset(
     append_readme_source: str = None, 
     append_rows_source: str = None,
     append_files_source: str = None,
-    append_files_exclude_type: list = None
+    append_files_exclude_type: list = None,
+    save_locally_instead: bool = False
 ):
     """Upload a dataset and associated files to the Hugging Face Hub.
     
@@ -38,9 +50,16 @@ def upload_dataset(
         except Exception as e:
             print(f"Warning: Could not load previous dataset from '{append_rows_source}': {e}. Uploading new dataset only.")
 
-    # 2. Push the dataset to Hugging Face Hub
-    print(f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
-    dataset.push_to_hub(dataset_name)
+    # 2. Push or save the dataset
+    if save_locally_instead:
+        os.makedirs("cached_ds", exist_ok=True)
+        safe_name = dataset_name.replace('/', '_')
+        local_path = os.path.join("cached_ds", safe_name)
+        print(f"Saving dataset locally to '{local_path}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
+        dataset.save_to_disk(local_path)
+    else:
+        print(f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
+        dataset.push_to_hub(dataset_name)
 
     # 3. Handle README download and concatenation
     if append_files_source and not append_readme_source:
@@ -96,28 +115,44 @@ def upload_dataset(
             print(f"Warning: failed to list/fetch repo files from '{append_files_source}': {e}")
 
     # 5. Upload README.md and other files
-    api = HfApi()
-    try:
-        print(f"Uploading README.md to '{dataset_name}'...")
-        api.upload_file(
-            path_or_fileobj=combined_readme.encode("utf-8"),
-            path_in_repo="README.md",
-            repo_id=dataset_name,
-            repo_type="dataset"
-        )
+    if save_locally_instead:
+        safe_name = dataset_name.replace('/', '_')
+        local_path = os.path.join("cached_ds", safe_name)
+        print(f"Saving README.md locally to '{local_path}'...")
+        with open(os.path.join(local_path, "README.md"), "w", encoding="utf-8") as f:
+            f.write(combined_readme)
         
         if files:
             for filename, data in files.items():
-                print(f"Uploading file '{filename}' to '{dataset_name}'...")
-                api.upload_file(
-                    path_or_fileobj=data,
-                    path_in_repo=filename,
-                    repo_id=dataset_name,
-                    repo_type="dataset"
-                )
-        print("Dataset, README, and files uploaded successfully.")
-    except Exception as e:
-        print(f"Error uploading files to HuggingFace Hub: {e}")
+                print(f"Saving file '{filename}' locally to '{local_path}'...")
+                file_path = os.path.join(local_path, filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                with open(file_path, "wb") as f:
+                    f.write(data)
+        print("Dataset, README, and files saved locally successfully.")
+    else:
+        api = HfApi()
+        try:
+            print(f"Uploading README.md to '{dataset_name}'...")
+            api.upload_file(
+                path_or_fileobj=combined_readme.encode("utf-8"),
+                path_in_repo="README.md",
+                repo_id=dataset_name,
+                repo_type="dataset"
+            )
+            
+            if files:
+                for filename, data in files.items():
+                    print(f"Uploading file '{filename}' to '{dataset_name}'...")
+                    api.upload_file(
+                        path_or_fileobj=data,
+                        path_in_repo=filename,
+                        repo_id=dataset_name,
+                        repo_type="dataset"
+                    )
+            print("Dataset, README, and files uploaded successfully.")
+        except Exception as e:
+            print(f"Error uploading files to HuggingFace Hub: {e}")
 
 def apply_string_filter_conditions(dataset: Dataset, conditions: str) -> Dataset:
     """

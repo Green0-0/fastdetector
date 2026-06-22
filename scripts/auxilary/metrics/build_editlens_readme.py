@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
 
@@ -10,6 +10,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True, help="HuggingFace dataset name to push to")
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
     parser.add_argument("--distance-metrics", nargs='*', default=[], help="Distance metric columns to plot against EditLens scores/bins")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     
     args = parser.parse_args()
 
@@ -237,7 +238,8 @@ def main():
         dataset=result_ds,
         dataset_name=args.target_dataset,
         files=charts,
-        readme_content=stats_md
+        readme_content=stats_md,
+        save_locally_instead=args.save_locally_instead
     )
     print("Done!")
 

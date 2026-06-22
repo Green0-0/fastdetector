@@ -1,5 +1,5 @@
 import argparse
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from huggingface_hub import HfApi, hf_hub_download
 
 from fastdetector.utils import upload_dataset, apply_string_filter_conditions
@@ -11,6 +11,7 @@ def main():
     parser.add_argument('--target_dataset', type=str, required=True, help='Target HuggingFace dataset')
     parser.add_argument('--num_rows', type=int, default=-1, help='Number of rows to take (-1 for all)')
     parser.add_argument('--conditions', type=str, default="", help='Comma-separated conditions')
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     
     args = parser.parse_args()
     
@@ -31,7 +32,8 @@ def main():
         dataset=dataset,
         dataset_name=args.target_dataset,
         append_files_source=args.source_dataset,
-        append_files_exclude_type=['.parquet', '.arrow', '.gitattributes', '.git/']
+        append_files_exclude_type=['.parquet', '.arrow', '.gitattributes', '.git/'],
+        save_locally_instead=args.save_locally_instead
     )
     print("Done!")
 

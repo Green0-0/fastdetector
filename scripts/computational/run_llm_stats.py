@@ -1,7 +1,7 @@
 import argparse
 import json
 import time
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
 from fastdetector.statistics.statistics_api import fetch_logprobs_all
@@ -15,6 +15,7 @@ def main():
     parser.add_argument("--columns", nargs='+', required=True, help="List of column names.")
     parser.add_argument("--col-suffix", type=str, default="", help="Suffix to append to new columns.")
     parser.add_argument("--top-logprobs-k", type=int, default=100, help="Top logprobs K to fetch.")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
@@ -47,7 +48,7 @@ def main():
 - Total Runtime: {total_runtime:.2f} seconds
 - Engine: vllm
 """
-    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content)
+    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead)
     print("Done!")
 
 if __name__ == "__main__":

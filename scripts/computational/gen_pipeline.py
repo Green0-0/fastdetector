@@ -2,7 +2,8 @@ import argparse
 import os
 import time
 from transformers import AutoTokenizer
-from datasets import load_dataset, Dataset
+from datasets import Dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.utils import upload_dataset
@@ -26,6 +27,7 @@ def main():
     parser.add_argument("--num-samples", type=int, required=True, help="Number of samples to stream.")
     
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     args = parser.parse_args()
 
     generation_params = {
@@ -88,7 +90,7 @@ def main():
 
 - Engine: vllm
 """
-    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content)
+    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead)
     print("Done!")
 
 if __name__ == "__main__":

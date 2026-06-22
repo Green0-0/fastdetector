@@ -1,6 +1,6 @@
 import argparse
 import itertools
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics.statistics_basic import (
     pairwise_jaccards,
@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--deviated-characters", action="store_true", help="Compute deviated characters.")
     parser.add_argument("--loose-subset-collect", action="store_true", help="Compute loose subsets.")
     parser.add_argument("--strict-subset", action="store_true", help="Compute strict subsets.")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
 
     args = parser.parse_args()
 
@@ -85,7 +86,8 @@ def main():
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(
         dataset=ds,
-        dataset_name=args.target_dataset
+        dataset_name=args.target_dataset,
+        save_locally_instead=args.save_locally_instead
     )
     print("Done!")
 

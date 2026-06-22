@@ -8,7 +8,8 @@ import re
 import emoji
 import numpy as np
 import torch
-from datasets import load_dataset, Dataset
+from datasets import Dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from huggingface_hub import hf_hub_download
 from safetensors import safe_open
 from scipy.special import softmax
@@ -174,6 +175,7 @@ def main():
     parser.add_argument("--max-length", type=int, default=512, help="Max length for tokenizer")
     parser.add_argument("--batch-size", type=int, default=24, help="Eval batch size")
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     
     args = parser.parse_args()
 
@@ -211,6 +213,7 @@ def main():
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
+        save_locally_instead=args.save_locally_instead
     )
     print("Done!")
 

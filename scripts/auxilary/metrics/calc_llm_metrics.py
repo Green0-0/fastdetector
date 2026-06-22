@@ -1,6 +1,6 @@
 import argparse
 import json
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics.statistics_llm import (
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--topk-outlier", action="store_true")
     parser.add_argument("--binoculars-score", action="store_true")
     parser.add_argument("--fastdetectgpt-score", action="store_true")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
 
     args = parser.parse_args()
 
@@ -79,7 +80,8 @@ def main():
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(
         dataset=ds,
-        dataset_name=args.target_dataset
+        dataset_name=args.target_dataset,
+        save_locally_instead=args.save_locally_instead
     )
     print("Done!")
 

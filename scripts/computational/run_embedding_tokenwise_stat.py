@@ -1,6 +1,6 @@
 import argparse
 import time
-from datasets import load_dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.statistics.statistics_api import batch_extract_token_embeddings
 
@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--columns", nargs='+', required=True, help="List of column names.")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size.")
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
@@ -40,7 +41,7 @@ def main():
 - Batch Size: {args.batch_size}
 - Total Runtime: {total_runtime:.2f} seconds
 """
-    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content)
+    upload_dataset(dataset=ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead)
     print("Done!")
 
 if __name__ == "__main__":

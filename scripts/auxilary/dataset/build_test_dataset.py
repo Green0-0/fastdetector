@@ -1,6 +1,8 @@
 import argparse
+import os
 import time
-from datasets import load_dataset, Dataset
+from datasets import Dataset
+from fastdetector.utils import load_dataset_local_fallback as load_dataset
 
 def main():
     parser = argparse.ArgumentParser(description="Build a test dataset pairing Argilla text with filtered responses.")
@@ -8,6 +10,7 @@ def main():
     parser.add_argument("--filtered-dataset", type=str, default="G-reen/cc-2021-filtered")
     parser.add_argument("--target-dataset", type=str, required=True)
     parser.add_argument("--num-samples", type=int, default=1000)
+    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     args = parser.parse_args()
 
     print(f"Loading {args.filtered_dataset}...")
@@ -42,7 +45,13 @@ def main():
 
     print(f"Created new dataset with {len(new_ds)} rows.")
     
-    if "/" in args.target_dataset:
+    if args.save_locally_instead:
+        os.makedirs("cached_ds", exist_ok=True)
+        safe_name = args.target_dataset.replace('/', '_')
+        local_path = os.path.join("cached_ds", safe_name)
+        print(f"Saving to disk: {local_path} instead of pushing to hub...")
+        new_ds.save_to_disk(local_path)
+    elif "/" in args.target_dataset:
         print(f"Pushing to hub: {args.target_dataset}...")
         new_ds.push_to_hub(args.target_dataset)
     else:
