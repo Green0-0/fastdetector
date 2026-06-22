@@ -155,46 +155,62 @@ def batch_soft_ngram_scores(
     model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
     
     results = []
-    src_phrases_list = extract_ngrams(source_texts, min_length=min_length, max_length=max_length)
-    edit_phrases_list = extract_ngrams(edited_texts, min_length=min_length, max_length=max_length)
     
-    unique_phrases = list(set(
-        phrase 
-        for phrases in src_phrases_list + edit_phrases_list 
-        for phrase in phrases
-    ))
-    
-    print(f"Encoding {len(unique_phrases)} unique soft n-grams with batch size {phrase_batch_size}...")
-    
-    all_embeddings = model.encode(
-        unique_phrases, 
-        convert_to_tensor=True, 
-        batch_size=phrase_batch_size, 
-        normalize_embeddings=True,
-        show_progress_bar=True
-    )
-    
-    phrase_to_idx = {phrase: i for i, phrase in enumerate(unique_phrases)}
-    
-    for src_phrases, edit_phrases in zip(src_phrases_list, edit_phrases_list):
-        if not src_phrases or not edit_phrases:
-            results.append(1.0)
+    # Process in chunks to prevent CUDA OOM on massive datasets
+    doc_batch_size = 100
+    for i in range(0, len(source_texts), doc_batch_size):
+        chunk_src = source_texts[i:i + doc_batch_size]
+        chunk_edit = edited_texts[i:i + doc_batch_size]
+        
+        src_phrases_list = extract_ngrams(chunk_src, min_length=min_length, max_length=max_length)
+        edit_phrases_list = extract_ngrams(chunk_edit, min_length=min_length, max_length=max_length)
+        
+        unique_phrases = list(set(
+            phrase 
+            for phrases in src_phrases_list + edit_phrases_list 
+            for phrase in phrases
+        ))
+        
+        if not unique_phrases:
+            results.extend([1.0] * len(chunk_src))
             continue
             
-        src_indices = [phrase_to_idx[p] for p in src_phrases]
-        edit_indices = [phrase_to_idx[p] for p in edit_phrases]
+        print(f"Batch {i//doc_batch_size + 1}/{(len(source_texts) + doc_batch_size - 1)//doc_batch_size}: Encoding {len(unique_phrases)} unique phrases...", flush=True)
         
-        src_embeddings = all_embeddings[src_indices]
-        edit_embeddings = all_embeddings[edit_indices]
+        all_embeddings = model.encode(
+            unique_phrases, 
+            convert_to_tensor=True, 
+            batch_size=phrase_batch_size, 
+            normalize_embeddings=True,
+            show_progress_bar=False
+        )
         
-        # Compute similarity matrix
-        similarity_matrix = torch.mm(src_embeddings, edit_embeddings.t())
+        phrase_to_idx = {phrase: idx for idx, phrase in enumerate(unique_phrases)}
         
-        # Fraction of edited phrases that match any source phrase
-        matches = (similarity_matrix >= threshold).any(dim=0)
-        precision = matches.sum().item() / len(edit_phrases)
-        
-        results.append(1.0 - precision)
+        for src_phrases, edit_phrases in zip(src_phrases_list, edit_phrases_list):
+            if not src_phrases or not edit_phrases:
+                results.append(1.0)
+                continue
+                
+            src_indices = [phrase_to_idx[p] for p in src_phrases]
+            edit_indices = [phrase_to_idx[p] for p in edit_phrases]
+            
+            src_embeddings = all_embeddings[src_indices]
+            edit_embeddings = all_embeddings[edit_indices]
+            
+            similarity_matrix = torch.mm(src_embeddings, edit_embeddings.t())
+            
+            matches = (similarity_matrix >= threshold).any(dim=0)
+            precision = matches.sum().item() / len(edit_phrases)
+            
+            results.append(1.0 - precision)
+            
+        del all_embeddings
+        try:
+            del similarity_matrix
+        except NameError:
+            pass
+        torch.cuda.empty_cache()
         
     return results
 

@@ -16,7 +16,7 @@ python -c "
 import os
 from datasets import load_from_disk, concatenate_datasets
 shards = []
-num_shards = 10
+num_shards = 25
 for i in range(num_shards):
     safe_name = f'G-reen_cc-2021-rewritten-split-{i}-stat'
     local_path = os.path.join('cached_ds', safe_name)

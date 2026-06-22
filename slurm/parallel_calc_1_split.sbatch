@@ -18,7 +18,7 @@ ds_name = 'G-reen/cc-2021-rewritten'
 print(f'Loading {ds_name}...')
 ds = load_dataset(ds_name, split='train')
 os.makedirs('cached_ds', exist_ok=True)
-num_shards = 10
+num_shards = 25
 for i in range(num_shards):
     shard = ds.shard(num_shards=num_shards, index=i)
     safe_name = f'G-reen_cc-2021-rewritten-split-{i}'
