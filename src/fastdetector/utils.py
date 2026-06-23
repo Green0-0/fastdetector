@@ -118,7 +118,7 @@ def upload_dataset(
     # 5. Upload README.md and other files
     if save_locally_instead:
         safe_name = dataset_name.replace('/', '_')
-        local_path = os.path.join("cached_ds", safe_name)
+        local_path = os.path.join(cache_dir, safe_name)
         print(f"Saving README.md locally to '{local_path}'...")
         with open(os.path.join(local_path, "README.md"), "w", encoding="utf-8") as f:
             f.write(combined_readme)
