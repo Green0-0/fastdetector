@@ -2,7 +2,7 @@
 #SBATCH --job-name=calc_stats_array
 #SBATCH --output=calc_stats_array_%A_%a.out
 #SBATCH --error=calc_stats_array_%A_%a.err
-#SBATCH --time=12:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16

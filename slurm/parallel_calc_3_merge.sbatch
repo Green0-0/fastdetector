@@ -2,7 +2,7 @@
 #SBATCH --job-name=calc_stats_merge
 #SBATCH --output=calc_stats_merge_%j.out
 #SBATCH --error=calc_stats_merge_%j.err
-#SBATCH --time=12:00:00
+#SBATCH --time=6-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
