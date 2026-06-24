@@ -1,3 +1,4 @@
+import uuid
 import os
 import re
 from typing import Dict
@@ -9,6 +10,22 @@ def load_dataset_local_fallback(dataset_name: str, split="train", cache_dir="cac
     safe_name = dataset_name.replace('/', '_')
     local_path = os.path.join(cache_dir, safe_name)
     if os.path.exists(local_path):
+        # Check if directory was gutted by a previous failed shutil.rmtree
+        if not os.path.exists(os.path.join(local_path, "state.json")) and not os.path.exists(os.path.join(local_path, "dataset_info.json")):
+            tmp_path = local_path + "_tmp"
+            if os.path.exists(tmp_path) and os.path.exists(os.path.join(tmp_path, "state.json")):
+                print(f"Found gutted local path, but a complete _tmp directory exists. Recovering from {tmp_path}...")
+                
+                old_path = local_path + "_old_" + uuid.uuid4().hex[:8]
+                os.rename(local_path, old_path)
+                os.rename(tmp_path, local_path)
+                
+                print(f"Loading dataset locally from {local_path}...")
+                return load_from_disk(local_path)
+            else:
+                print(f"Local path {local_path} exists but is corrupted/empty. Falling back to Hugging Face Hub: {dataset_name}...")
+                return load_dataset(dataset_name, split=split)
+                
         print(f"Loading dataset locally from {local_path}...")
         return load_from_disk(local_path)
     else:
