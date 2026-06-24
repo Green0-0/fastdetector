@@ -10,6 +10,7 @@
 #SBATCH --array=0-24
 
 source .venv/bin/activate
+set -e
 
 export CUDA_HOME=/usr/local/cuda-13.0/
 export PATH=$CUDA_HOME/bin:$PATH

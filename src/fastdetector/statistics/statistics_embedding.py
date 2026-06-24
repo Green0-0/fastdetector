@@ -108,6 +108,12 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
         if isinstance(edit, np.ndarray):
             edit = torch.from_numpy(edit)
             
+        if src.ndim != 2 or edit.ndim != 2 or src.shape[0] == 0 or edit.shape[0] == 0:
+            precisions.append(1.0)
+            recalls.append(1.0)
+            f1s.append(1.0)
+            continue
+            
         sim_matrix = torch.mm(edit, src.t())  # M x N
         
         if src_tokens_list is not None and edit_tokens_list is not None:
@@ -154,12 +160,12 @@ def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embedd
         if isinstance(edit, torch.Tensor):
             edit = edit.detach().cpu().numpy()
             
-        N, D = src.shape
-        M, _ = edit.shape
-        
-        if N == 0 or M == 0:
+        if src.ndim != 2 or edit.ndim != 2 or src.shape[0] == 0 or edit.shape[0] == 0:
             results.append(1.0)
             continue
+            
+        N, D = src.shape
+        M, _ = edit.shape
             
         sim_matrix = src @ edit.T
         
