@@ -3,6 +3,7 @@ import re
 from typing import Dict
 from datasets import Dataset, load_from_disk, load_dataset, concatenate_datasets
 from huggingface_hub import HfApi, hf_hub_download
+import shutil
 
 def load_dataset_local_fallback(dataset_name: str, split="train", cache_dir="cached_ds"):
     safe_name = dataset_name.replace('/', '_')
@@ -57,7 +58,11 @@ def upload_dataset(
         safe_name = dataset_name.replace('/', '_')
         local_path = os.path.join(cache_dir, safe_name)
         print(f"Saving dataset locally to '{local_path}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
-        dataset.save_to_disk(local_path)
+        tmp_path = local_path + "_tmp"
+        dataset.save_to_disk(tmp_path)
+        if os.path.exists(local_path):
+            shutil.rmtree(local_path)
+        os.rename(tmp_path, local_path)
     else:
         print(f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
         dataset.push_to_hub(dataset_name)
