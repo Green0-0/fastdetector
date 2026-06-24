@@ -62,9 +62,20 @@ def upload_dataset(
         if os.path.exists(tmp_path):
             shutil.rmtree(tmp_path)
         dataset.save_to_disk(tmp_path)
+        
+        old_path = None
         if os.path.exists(local_path):
-            shutil.rmtree(local_path)
+            import uuid
+            old_path = local_path + "_old_" + uuid.uuid4().hex[:8]
+            os.rename(local_path, old_path)
+            
         os.rename(tmp_path, local_path)
+        
+        if old_path and os.path.exists(old_path):
+            try:
+                shutil.rmtree(old_path)
+            except OSError:
+                pass # Ignore "Directory not empty" on NFS due to open mmap files
     else:
         print(f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
         dataset.push_to_hub(dataset_name)
