@@ -59,6 +59,8 @@ def upload_dataset(
         local_path = os.path.join(cache_dir, safe_name)
         print(f"Saving dataset locally to '{local_path}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
         tmp_path = local_path + "_tmp"
+        if os.path.exists(tmp_path):
+            shutil.rmtree(tmp_path)
         dataset.save_to_disk(tmp_path)
         if os.path.exists(local_path):
             shutil.rmtree(local_path)
