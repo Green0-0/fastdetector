@@ -1,12 +1,13 @@
 import argparse
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics.statistics_basic import quantile
+from fastdetector.statistics.statistics_basic import min_max_norm, quantile
 
 def main():
-    parser = argparse.ArgumentParser(description="Calculate quantiles for specified columns.")
+    parser = argparse.ArgumentParser(description="Calculate normalizations and quantiles for specified columns.")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset.")
-    parser.add_argument("--columns", nargs='+', required=True, help="List of columns.")
+    parser.add_argument("--minimax", nargs='*', default=[], help="Columns to minimax norm")
+    parser.add_argument("--quantile", nargs='*', default=[], help="Columns to quantile norm")
     parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
@@ -15,10 +16,16 @@ def main():
     print(f"Loading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
-    if any(col not in ds.column_names for col in args.columns):
-        raise ValueError(f"All columns in {args.columns} must exist in the dataset.")
+    for col in args.minimax:
+        if col not in ds.column_names:
+            raise ValueError(f"Column {col} must exist in the dataset.")
+        print(f"Computing min-max normalization for {col}...")
+        norm = min_max_norm(ds[col])
+        ds = ds.add_column(f"{col}_minimax", norm)
 
-    for col in args.columns:
+    for col in args.quantile:
+        if col not in ds.column_names:
+            raise ValueError(f"Column {col} must exist in the dataset.")
         print(f"Computing quantile for {col}...")
         q = quantile(ds[col])
         ds = ds.add_column(f"{col}_quantile", q)

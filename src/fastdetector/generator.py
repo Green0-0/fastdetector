@@ -15,9 +15,11 @@ async def _send_request(
     """Send a single chat completion request. Retries are handled by the OpenAI client."""
     async with semaphore:
         try:
-            extra_body = {
-                "chat_template_kwargs": {"enable_thinking": False},
-            }
+            extra_body = {}
+            if generation_params.get("disable_thinking", False):
+                extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+            if "top_k" in generation_params and generation_params["top_k"] > 0:
+                extra_body["top_k"] = generation_params["top_k"]
 
             response = await client.chat.completions.create(
                 model="",
@@ -25,7 +27,7 @@ async def _send_request(
                 temperature=generation_params.get("temperature", 1),
                 top_p=generation_params.get("top_p", 1),
                 presence_penalty=generation_params.get("presence_penalty", 0),
-                extra_body=extra_body,
+                extra_body=extra_body if extra_body else None,
             )
             return response.choices[0].message.content or ""
         except Exception as e:

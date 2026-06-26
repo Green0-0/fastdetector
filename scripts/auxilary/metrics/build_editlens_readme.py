@@ -10,6 +10,7 @@ def main():
     parser.add_argument("--target-dataset", type=str, required=True, help="HuggingFace dataset name to push to")
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
     parser.add_argument("--distance-metrics", nargs='*', default=[], help="Distance metric columns to plot against EditLens scores/bins")
+    parser.add_argument("--distance-metrics-lower-bounds", nargs='*', type=float, default=[], help="Lower bounds for distance metrics")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     
@@ -17,6 +18,24 @@ def main():
 
     print(f"Loading dataset {args.source_dataset}...")
     result_ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
+
+    if args.distance_metrics_lower_bounds:
+        if len(args.distance_metrics_lower_bounds) != len(args.distance_metrics):
+            raise ValueError("--distance-metrics-lower-bounds must have the same length as --distance-metrics")
+            
+        print("Filtering dataset based on distance metric lower bounds...")
+        def filter_lower_bounds(example):
+            for i, metric in enumerate(args.distance_metrics):
+                bound = args.distance_metrics_lower_bounds[i]
+                if metric in example and example[metric] is not None:
+                    if example[metric] < bound:
+                        return False
+            return True
+            
+        original_len = len(result_ds)
+        result_ds = result_ds.filter(filter_lower_bounds, num_proc=4)
+        new_len = len(result_ds)
+        print(f"Filtered out {original_len - new_len} rows below lower bounds. Remaining rows: {new_len}")
 
     human_scores = result_ds["human_editlens_score"]
     ai_scores = result_ds["ai_editlens_score"]

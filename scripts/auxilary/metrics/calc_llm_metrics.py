@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--topk-outlier", action="store_true")
     parser.add_argument("--binoculars-score", action="store_true")
     parser.add_argument("--fastdetectgpt-score", action="store_true")
+    parser.add_argument("--remove-columns-afterwards", action="store_true", help="Delete the source statistics columns that were used to calculate the new statistics.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
 
@@ -71,6 +72,17 @@ def main():
         return result
         
     ds = ds.map(process_batch, batched=True, batch_size=100)
+
+    if args.remove_columns_afterwards:
+        cols_to_remove = []
+        if args.token_columns:
+            cols_to_remove.extend(args.token_columns)
+        if args.logprob_columns:
+            cols_to_remove.extend(args.logprob_columns)
+        cols_to_remove = [c for c in set(cols_to_remove) if c in ds.column_names]
+        if cols_to_remove:
+            print(f"Removing source columns: {cols_to_remove}")
+            ds = ds.remove_columns(cols_to_remove)
 
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(

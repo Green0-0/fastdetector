@@ -33,4 +33,9 @@ export PYTHONUNBUFFERED=1
 # ---- Run the dataset analysis ----
 python scripts/computational/run_editlens_stat.py --source-dataset G-reen/cc-2021-rewritten-stat --fastdetector-prompt-metadata-column prompt
 
-python scripts/auxilary/metrics/build_editlens_readme.py --source-dataset G-reen/cc-2021-rewritten-stat-editlens --target-dataset G-reen/cc-2021-rewritten-stat-editlens --fastdetector-prompt-metadata-column prompt --distance-metrics pairwise_cosdist_original_final_response pairwise_softngram_original_final_response pairwise_cross_encoder_original_final_response levenshtein_original_final_response jaccard_1_original_final_response jaccard_2_original_final_response pairwise_bertscore_f1_original_final_response pairwise_moverscore_original_final_response
+python scripts/auxilary/metrics/build_editlens_readme.py \
+    --source-dataset G-reen/cc-2021-rewritten-stat-editlens \
+    --target-dataset G-reen/cc-2021-rewritten-stat-editlens \
+    --fastdetector-prompt-metadata-column prompt \
+    --distance-metrics pairwise_cosdist_original_final_response pairwise_softngram_original_final_response levenshtein_original_final_response jaccard_1_original_final_response pairwise_bertscore_f1_original_final_response pairwise_moverscore_original_final_response \
+    --distance-metrics-lower-bounds 0.03 0.06 -1 -1 -1 -1

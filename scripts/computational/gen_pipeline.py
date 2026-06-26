@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+import json
 from transformers import AutoTokenizer
 from datasets import Dataset
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
@@ -15,7 +16,9 @@ def main():
     parser.add_argument("--model-name", type=str, required=True, help="Model name to launch.")
     parser.add_argument("--temperature", type=float, required=True, help="Generation temperature.")
     parser.add_argument("--top-p", type=float, required=True, help="Generation top-p.")
+    parser.add_argument("--top-k", type=int, default=-1, help="Generation top-k.")
     parser.add_argument("--presence-penalty", type=float, required=True, help="Generation presence penalty.")
+    parser.add_argument("--disable-thinking", action="store_true", help="Pass enable_thinking=False to the chat template.")
 
     parser.add_argument("--max-model-len", type=int, required=True, help="Max model length.")
     parser.add_argument("--max-dataset-len", type=int, required=True, help="Max acceptable input length from the dataset.")
@@ -34,7 +37,9 @@ def main():
     generation_params = {
         "temperature": args.temperature,
         "top_p": args.top_p,
+        "top_k": args.top_k,
         "presence_penalty": args.presence_penalty,
+        "disable_thinking": args.disable_thinking,
     }
 
     print(f"Loading filtering prompt from file: {os.path.basename(args.prompt_file)}")
@@ -43,7 +48,7 @@ def main():
 
     print(f"Loading tokenizer and streaming {args.num_samples} samples from {args.source_dataset}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    ds = load_dataset(args.source_dataset, split="train", streaming=True, cache_dir=args.cache_dir)
+    ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
     samples = []
     tokens_processed = 0
     for row in ds:
@@ -65,6 +70,11 @@ def main():
             prompts=prompts,
             generation_params=generation_params,
         )
+        
+        num_rows = len(next(iter(result_dict.values()))) if result_dict else 0
+        result_dict["generator_model"] = [args.model_name] * num_rows
+        result_dict["generation_params"] = [json.dumps(generation_params)] * num_rows
+        
         result_ds = Dataset.from_dict(result_dict)
 
     total_runtime = time.time() - start_time
@@ -72,7 +82,9 @@ def main():
 - Model Name: {args.model_name}
 - Temperature: {args.temperature}
 - Top P: {args.top_p}
+- Top K: {args.top_k}
 - Presence Penalty: {args.presence_penalty}
+- Disable Thinking: {args.disable_thinking}
 
 - Max Model Length: {args.max_model_len}
 - Max Dataset Length: {args.max_dataset_len}
