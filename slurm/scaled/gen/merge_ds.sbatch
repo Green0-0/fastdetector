@@ -19,7 +19,7 @@ python scripts/auxilary/dataset/merge_datasets.py \
     --source_dataset G-reen/cc-2021-filtered \
     --target_dataset $DATASET_NAME \
     --num_shards 8 \
-    --shard_suffix -gen \
+    --shard_suffix="-gen" \
     --cache-dir $CACHE_DIR
 
 echo "Dataset merge and upload complete!"

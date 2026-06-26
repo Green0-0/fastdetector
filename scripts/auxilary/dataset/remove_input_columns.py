@@ -14,7 +14,6 @@ def main():
     args = parser.parse_args()
     
     print(f"Loading dataset: {args.source_dataset}")
-    # load_dataset takes cache_dir as an argument in utils.py
     dataset = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
     
     print(f"Removing input columns: {args.input_columns}")
