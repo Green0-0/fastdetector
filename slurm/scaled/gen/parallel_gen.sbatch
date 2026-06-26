@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:a5000:4
-#SBATCH --array=0-4
+#SBATCH --array=0-7
 
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
@@ -27,6 +27,7 @@ if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
   echo "vLLM venv not found: ${VLLM_VENV_PATH}" >&2
   exit 1
 fi
+export APHRODITE_VENV_PATH="${APHRODITE_VENV_PATH:-${PWD}/.aphrodite}"
 
 CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
 I=$SLURM_ARRAY_TASK_ID
@@ -34,6 +35,7 @@ I=$SLURM_ARRAY_TASK_ID
 case $I in
     0)
         MODEL_NAME="cyankiwi/granite-4.1-8b-AWQ-INT4"
+        SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.6
         TOP_P=0.9
         TOP_K=40
@@ -41,6 +43,7 @@ case $I in
         ;;
     1)
         MODEL_NAME="casperhansen/llama-3-8b-instruct-awq"
+        SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.6
         TOP_P=0.9
         TOP_K=40
@@ -48,6 +51,7 @@ case $I in
         ;;
     2)
         MODEL_NAME="Qwen/Qwen3-8B-AWQ"
+        SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.7
         TOP_P=0.8
         TOP_K=20
@@ -55,6 +59,7 @@ case $I in
         ;;
     3)
         MODEL_NAME="google/gemma-4-E4B-it"
+        SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.7
         TOP_P=0.8
         TOP_K=-1
@@ -62,10 +67,38 @@ case $I in
         ;;
     4)
         MODEL_NAME="TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
+        SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.6
         TOP_P=0.9
         TOP_K=40
         DISABLE_THINKING=""
+        ;;
+    5)
+        MODEL_NAME="casperhansen/llama-3-8b-instruct-awq"
+        SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
+        TEMP=1.25
+        TOP_A=0.1
+        XTC=0.3
+        NSIGMA=1.5
+        DISABLE_THINKING=""
+        ;;
+    6)
+        MODEL_NAME="cyankiwi/granite-4.1-8b-AWQ-INT4"
+        SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
+        TEMP=1.25
+        TOP_A=0.1
+        XTC=0.3
+        NSIGMA=1.5
+        DISABLE_THINKING=""
+        ;;
+    7)
+        MODEL_NAME="Qwen/Qwen3-8B-AWQ"
+        SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
+        TEMP=1.25
+        TOP_A=0.1
+        XTC=0.3
+        NSIGMA=1.5
+        DISABLE_THINKING="--disable-thinking"
         ;;
 esac
 
@@ -73,21 +106,43 @@ SHARD_BASE="G-reen_cc-2021-filtered-split-$I"
 TARGET_DS="${SHARD_BASE}-gen"
 
 echo "Starting dataset generation for shard $I using model $MODEL_NAME..."
-python scripts/computational/gen_pipeline.py \
-    --model-name "$MODEL_NAME" \
-    --temperature $TEMP \
-    --top-p $TOP_P \
-    --top-k $TOP_K \
-    --presence-penalty 1.5 \
-    $DISABLE_THINKING \
-    --max-model-len 32000 \
-    --max-dataset-len 15000 \
-    --prompt-file prompts/combined_dataset_test.json \
-    --source-dataset "$SHARD_BASE" \
-    --source-column collected_subset_original_final_response \
-    --num-samples 50000 \
-    --target-dataset "$TARGET_DS" \
-    --save-locally-instead \
-    --cache-dir $CACHE_DIR
+if [[ "$SCRIPT" == *"aphrodite"* ]]; then
+    python $SCRIPT \
+        --model-name "$MODEL_NAME" \
+        --temperature $TEMP \
+        --top-p 1.0 \
+        --top-k -1 \
+        --presence-penalty 1.5 \
+        --top-a $TOP_A \
+        --xtc $XTC \
+        --nsigma $NSIGMA \
+        $DISABLE_THINKING \
+        --max-model-len 32000 \
+        --max-dataset-len 15000 \
+        --prompt-file prompts/combined_dataset_test.json \
+        --source-dataset "$SHARD_BASE" \
+        --source-column collected_subset_original_final_response \
+        --num-samples 50000 \
+        --target-dataset "$TARGET_DS" \
+        --save-locally-instead \
+        --cache-dir $CACHE_DIR
+else
+    python $SCRIPT \
+        --model-name "$MODEL_NAME" \
+        --temperature $TEMP \
+        --top-p $TOP_P \
+        --top-k $TOP_K \
+        --presence-penalty 1.5 \
+        $DISABLE_THINKING \
+        --max-model-len 32000 \
+        --max-dataset-len 15000 \
+        --prompt-file prompts/combined_dataset_test.json \
+        --source-dataset "$SHARD_BASE" \
+        --source-column collected_subset_original_final_response \
+        --num-samples 50000 \
+        --target-dataset "$TARGET_DS" \
+        --save-locally-instead \
+        --cache-dir $CACHE_DIR
+fi
 
 echo "Dataset generation complete for shard $I."

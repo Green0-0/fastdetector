@@ -14,11 +14,11 @@ export PYTHONUNBUFFERED=1
 CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
 DATASET_NAME="G-reen/cc-2021-rewritten"
 
-echo "Merging 5 generated shards..."
+echo "Merging 8 generated shards..."
 python scripts/auxilary/dataset/merge_datasets.py \
     --source_dataset G-reen/cc-2021-filtered \
     --target_dataset $DATASET_NAME \
-    --num_shards 5 \
+    --num_shards 8 \
     --shard_suffix -gen \
     --cache-dir $CACHE_DIR
 

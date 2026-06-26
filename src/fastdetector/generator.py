@@ -18,8 +18,10 @@ async def _send_request(
             extra_body = {}
             if generation_params.get("disable_thinking", False):
                 extra_body["chat_template_kwargs"] = {"enable_thinking": False}
-            if "top_k" in generation_params and generation_params["top_k"] > 0:
-                extra_body["top_k"] = generation_params["top_k"]
+            
+            for key in ["top_k", "top_a", "xtc_probability", "nsigma"]:
+                if key in generation_params and generation_params[key] > 0:
+                    extra_body[key] = generation_params[key]
 
             response = await client.chat.completions.create(
                 model="",

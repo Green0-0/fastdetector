@@ -21,20 +21,27 @@ def get_gpu_count() -> int:
         return len(devices)
     raise RuntimeError("No GPUs found! CUDA_VISIBLE_DEVICES not set.")
 
-def launch_vllm_server(model_name: str, port: int, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000, ) -> subprocess.Popen:
-    """Launch the vLLM server with pipeline parallel size equal to the number of GPUs."""
+def launch_engine_server(engine: str, model_name: str, port: int, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000, ) -> subprocess.Popen:
+    """Launch the LLM server with pipeline parallel size equal to the number of GPUs."""
     gpu_count = get_gpu_count()
-    vllm_venv = os.environ.get("VLLM_VENV_PATH")
-    if not vllm_venv:
-        raise RuntimeError("VLLM_VENV_PATH environment variable is not set. Please set VLLM_VENV_PATH to the path of the virtual environment containing the vLLM installation.")
+    
+    if engine.lower() == "vllm":
+        venv_path = os.environ.get("VLLM_VENV_PATH")
+        if not venv_path:
+            raise RuntimeError("VLLM_VENV_PATH environment variable is not set. Please set VLLM_VENV_PATH to the path of the virtual environment containing the vLLM installation.")
+        bin_path = os.path.join(venv_path, "bin", "vllm")
+        cmd_prefix = [bin_path, "serve", model_name]
+    elif engine.lower() == "aphrodite":
+        venv_path = os.environ.get("APHRODITE_VENV_PATH", ".aphrodite")
+        bin_path = os.path.join(venv_path, "bin", "aphrodite")
+        cmd_prefix = [bin_path, "run", model_name]
+    else:
+        raise ValueError(f"Unsupported LLM engine: {engine}")
 
-    vllm_bin = os.path.join(vllm_venv, "bin", "vllm")
-    if not os.path.isfile(vllm_bin) or not os.access(vllm_bin, os.X_OK):
-        raise RuntimeError(f"vLLM executable not found or not executable at: {vllm_bin}")
+    if not os.path.isfile(bin_path) or not os.access(bin_path, os.X_OK):
+        raise RuntimeError(f"{engine} executable not found or not executable at: {bin_path}")
 
-    # TODO: DISABLE MAX LOGP AND GPU UTIL ON GEMMA
-    cmd = [
-        vllm_bin, "serve", model_name,
+    cmd = cmd_prefix + [
         "--port", str(port),
         "--data-parallel-size", str(gpu_count),
         "--max-model-len", str(max_model_len),
@@ -45,38 +52,37 @@ def launch_vllm_server(model_name: str, port: int, max_logprobs: int = 10, gpu_m
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
 
-    # Find a free port for PyTorch Distributed master process to avoid collisions
     while (dist_port := get_free_port()) == port: pass
     env = os.environ.copy()
     env["MASTER_PORT"] = str(dist_port)
 
-    print("\nLaunching vLLM server...")
+    print(f"\nLaunching {engine} server...")
     print(" ".join(cmd))
 
     proc = subprocess.Popen(cmd, env=env)
 
-    print("Waiting for vLLM server to start (this may take a few minutes)...")
+    print(f"Waiting for {engine} server to start (this may take a few minutes)...")
     health_url = f"http://localhost:{port}/v1/models"
 
     for _ in range(600):
         try:
             r = requests.get(health_url, timeout=2)
             if r.status_code == 200:
-                print("vLLM server is ready.\n")
+                print(f"{engine} server is ready.\n")
                 return proc
         except Exception:
             pass
         time.sleep(2)
 
-    print("vLLM server failed to start within the timeout. Attempting to shut it down...")
+    print(f"{engine} server failed to start within the timeout. Attempting to shut it down...")
     proc.terminate()
     try:
         proc.wait(timeout=60)
     except subprocess.TimeoutExpired:
-        print(f"vLLM server did not terminate, killing it...")
+        print(f"{engine} server did not terminate, killing it...")
         proc.kill()
         proc.wait()
-    raise RuntimeError("vLLM server failed to start within the timeout.")
+    raise RuntimeError(f"{engine} server failed to start within the timeout.")
 
 @contextmanager
 def llm_server_context(engine: str, model_name: str, port: int | None = None, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000):
@@ -86,8 +92,8 @@ def llm_server_context(engine: str, model_name: str, port: int | None = None, ma
 
     proc = None
     try:
-        if engine.lower() == "vllm":
-            proc = launch_vllm_server(model_name, port, max_logprobs, gpu_memory_utilization, max_model_len)
+        if engine.lower() in ["vllm", "aphrodite"]:
+            proc = launch_engine_server(engine, model_name, port, max_logprobs, gpu_memory_utilization, max_model_len)
         else:
             raise ValueError(f"Unsupported LLM engine: {engine}")
         yield f"http://localhost:{port}/v1"
