@@ -19,7 +19,7 @@ python scripts/auxilary/dataset/merge_datasets.py \
     --source_dataset G-reen/cc-2021-rewritten \
     --target_dataset $DATASET_NAME \
     --num_shards 25 \
-    --shard_suffix -stat \
+    --shard_suffix "-stat" \
     --save-locally-instead \
     --cache-dir $CACHE_DIR
 
