@@ -42,7 +42,7 @@ case $I in
         DISABLE_THINKING=""
         ;;
     1)
-        MODEL_NAME="casperhansen/llama-3-8b-instruct-awq"
+        MODEL_NAME="hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
         SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.6
         TOP_P=0.9
@@ -66,7 +66,7 @@ case $I in
         DISABLE_THINKING="--disable-thinking"
         ;;
     4)
-        MODEL_NAME="TheBloke/Mistral-7B-Instruct-v0.2-AWQ"
+        MODEL_NAME="cyankiwi/Ministral-3-8B-Instruct-2512-AWQ-4bit"
         SCRIPT="scripts/computational/gen_pipeline.py"
         TEMP=0.6
         TOP_P=0.9
@@ -74,7 +74,7 @@ case $I in
         DISABLE_THINKING=""
         ;;
     5)
-        MODEL_NAME="casperhansen/llama-3-8b-instruct-awq"
+        MODEL_NAME="hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
         SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
         TEMP=1.25
         TOP_A=0.1
