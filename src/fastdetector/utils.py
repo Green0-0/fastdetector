@@ -23,13 +23,13 @@ def load_dataset_local_fallback(dataset_name: str, split="train", cache_dir="cac
                 return load_from_disk(local_path)
             else:
                 print(f"Local path {local_path} exists but is corrupted/empty. Falling back to Hugging Face Hub: {dataset_name}...")
-                return load_dataset(dataset_name, split=split)
+                return load_dataset(dataset_name, split=split, cache_dir=cache_dir)
                 
         print(f"Loading dataset locally from {local_path}...")
         return load_from_disk(local_path)
     else:
         print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
-        return load_dataset(dataset_name, split=split)
+        return load_dataset(dataset_name, split=split, cache_dir=cache_dir)
 
 def upload_dataset(
     dataset: Dataset, 

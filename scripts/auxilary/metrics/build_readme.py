@@ -21,7 +21,7 @@ def main():
     args = parser.parse_args()
 
     print(f"Downloading dataset {args.source_dataset}...")
-    ds = load_dataset(args.source_dataset, split="train")
+    ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
     readme_content = f"# Dataset Metrics\n\n"
     

@@ -19,7 +19,7 @@ python scripts/auxilary/dataset/merge_datasets.py \
     --source_dataset G-reen/cc-2021-rewritten \
     --target_dataset $DATASET_NAME \
     --num_shards 25 \
-    --shard_suffix "-stat" \
+    --shard_suffix="-stat" \
     --save-locally-instead \
     --cache-dir $CACHE_DIR
 
@@ -40,6 +40,8 @@ python scripts/auxilary/metrics/build_readme.py \
     --summary-stat-columns pairwise_cosdist_original_final_response pairwise_softngram_original_final_response pairwise_bertscore_f1_original_final_response pairwise_moverscore_original_final_response \
     --pairwise-correlations levenshtein_original_final_response_quantile jaccard_1_original_final_response_quantile pairwise_cosdist_original_final_response_quantile pairwise_softngram_original_final_response_quantile pairwise_bertscore_f1_original_final_response_quantile pairwise_moverscore_original_final_response_quantile \
     --histogram-columns pairwise_cosdist_original_final_response levenshtein_original_final_response jaccard_1_original_final_response/jaccard_2_original_final_response pairwise_softngram_original_final_response pairwise_bertscore_f1_original_final_response pairwise_moverscore_original_final_response \
-    --scatterplot-columns pairwise_cosdist_original_final_response/pairwise_softngram_original_final_response
+    --scatterplot-columns pairwise_cosdist_original_final_response/pairwise_softngram_original_final_response \
+    --save-locally-instead \
+    --cache-dir $CACHE_DIR
     
 echo "All complete!"

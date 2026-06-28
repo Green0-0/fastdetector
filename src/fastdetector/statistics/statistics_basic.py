@@ -255,3 +255,159 @@ def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool],
             collected_subsets.append(a_str[orig_start:orig_end+1])
             
     return is_subsets, collected_subsets
+
+def sliding_window_word_chunk(texts: list[str], window_size: int, step_size: int) -> list[list[str]]:
+    """Chunks each string into a list of strings using a sliding window.
+    
+    Args:
+        texts: List of strings.
+        window_size: Number of words in each chunk.
+        step_size: Number of words to slide the window.
+        
+    Returns:
+        List of lists of strings, where each inner list contains chunks for the corresponding text.
+    """
+    results = []
+    for text in texts:
+        if text is None:
+            results.append([])
+            continue
+        words = text.split()
+        if not words:
+            results.append([])
+            continue
+            
+        chunks = []
+        for i in range(0, len(words), step_size):
+            chunk_words = words[i : i + window_size]
+            if chunk_words:
+                chunks.append(" ".join(chunk_words))
+        results.append(chunks)
+    return results
+
+def pairwise_chunked_jaccards(a: list[list[str]], b: list[list[str]], n: int, operation: str = 'max') -> list[list[float]]:
+    """Compute pairwise chunked Jaccard distance between two aligned lists of chunk lists.
+    
+    Args:
+        a: First list of chunk lists.
+        b: Second list of chunk lists.
+        n: The n-gram size.
+        operation: 'mean', 'max', or 'min'.
+        
+    Returns:
+        List of lists of floats.
+    """
+    results = []
+    for chunks_a, chunks_b in zip(a, b):
+        if not chunks_a or not chunks_b:
+            if not chunks_b:
+                results.append([])
+            else:
+                results.append([1.0] * len(chunks_b))
+            continue
+            
+        a_sets = []
+        for chunk in chunks_a:
+            tokens = chunk.split()
+            a_sets.append(set([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]))
+            
+        b_res = []
+        for chunk_b in chunks_b:
+            tokens_b = chunk_b.split()
+            b_set = set([" ".join(tokens_b[i:i+n]) for i in range(len(tokens_b) - n + 1)])
+            
+            chunk_scores = []
+            for chunk_a, a_set in zip(chunks_a, a_sets):
+                if not a_set and not b_set:
+                    chunk_scores.append(0.0 if chunk_a.strip() == chunk_b.strip() else 1.0)
+                elif not a_set or not b_set:
+                    chunk_scores.append(1.0)
+                else:
+                    chunk_scores.append(1.0 - (len(a_set.intersection(b_set)) / len(a_set.union(b_set))))
+            
+            if operation == 'max':
+                b_res.append(max(chunk_scores))
+            elif operation == 'min':
+                b_res.append(min(chunk_scores))
+            elif operation == 'mean':
+                b_res.append(sum(chunk_scores) / len(chunk_scores))
+            else:
+                raise ValueError(f"Unrecognized operation: {operation}")
+        results.append(b_res)
+    return results
+
+def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operation: str = 'max') -> list[list[float]]:
+    """Compute pairwise chunked Levenshtein distance between two aligned lists of chunk lists."""
+    results = []
+    for chunks_a, chunks_b in zip(a, b):
+        if not chunks_a or not chunks_b:
+            if not chunks_b:
+                results.append([])
+            else:
+                results.append([float(len(cb)) for cb in chunks_b])
+            continue
+            
+        b_res = []
+        for chunk_b in chunks_b:
+            chunk_scores = [float(Levenshtein.distance(chunk_a, chunk_b)) for chunk_a in chunks_a]
+            
+            if operation == 'max':
+                b_res.append(max(chunk_scores))
+            elif operation == 'min':
+                b_res.append(min(chunk_scores))
+            elif operation == 'mean':
+                b_res.append(sum(chunk_scores) / len(chunk_scores))
+            else:
+                raise ValueError(f"Unrecognized operation: {operation}")
+        results.append(b_res)
+    return results
+
+def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
+    """Compute quantile for a list of lists of values."""
+    flat_values = [v for values in values_list for v in values]
+    if not flat_values:
+        return [[] for _ in values_list]
+        
+    n = len(flat_values)
+    if n == 1:
+        return [[1.0 for _ in values] for values in values_list]
+        
+    arr = np.array(flat_values, dtype=float)
+    sorted_arr = np.sort(arr)
+    
+    results = []
+    for values in values_list:
+        if not values:
+            results.append([])
+            continue
+        v_arr = np.array(values, dtype=float)
+        left_ranks = np.searchsorted(sorted_arr, v_arr, side='left')
+        right_ranks = np.searchsorted(sorted_arr, v_arr, side='right')
+        avg_ranks = (left_ranks + 1 + right_ranks) / 2.0
+        results.append((avg_ranks / n).tolist())
+        
+    return results
+
+def chunkwise_min_max_norm(values_list: list[list[float]]) -> list[list[float]]:
+    """Compute min-max normalization for a list of lists of values."""
+    flat_values = [v for values in values_list for v in values]
+    if not flat_values:
+        return [[] for _ in values_list]
+        
+    arr = np.array(flat_values, dtype=float)
+    min_val = np.min(arr)
+    max_val = np.max(arr)
+    
+    if min_val == max_val:
+        return [[0.0 for _ in values] for values in values_list]
+        
+    results = []
+    for values in values_list:
+        if not values:
+            results.append([])
+            continue
+        v_arr = np.array(values, dtype=float)
+        norm_v = (v_arr - min_val) / (max_val - min_val)
+        results.append(norm_v.tolist())
+        
+    return results

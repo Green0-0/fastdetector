@@ -114,7 +114,7 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
             f1s.append(1.0)
             continue
             
-        sim_matrix = torch.mm(edit, src.t())  # M x N
+        sim_matrix = torch.mm(edit, src.t())  # M x NN
         
         if src_tokens_list is not None and edit_tokens_list is not None:
             w_src = _get_idf_weights(src_tokens_list[i], src_idf)
@@ -169,7 +169,6 @@ def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embedd
             
         sim_matrix = src @ edit.T
         
-        # Euclidean distance for normalized embeddings is sqrt(max(0, 2 - 2 * cos_sim))
         cost_matrix = np.sqrt(np.maximum(2.0 - 2.0 * sim_matrix, 0.0))
         
         if src_tokens_list is not None and edit_tokens_list is not None:
@@ -182,4 +181,39 @@ def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embedd
         distance = ot.emd2(weights_a, weights_b, cost_matrix)
         results.append(float(distance))
         
+    return results
+
+def pairwise_cosdist_chunked(a: list[np.ndarray], b: list[np.ndarray], operation: str = 'max') -> list[list[float]]:
+    """Compute pairwise chunked cosine distance between two aligned lists of chunk embeddings.
+    
+    Args:
+        a: First list of 2D arrays (num_chunks_a, D).
+        b: Second list of 2D arrays (num_chunks_b, D).
+        operation: 'mean', 'max', or 'min'.
+        
+    Returns:
+        List of lists of floats.
+    """
+    results = []
+    for embs_a, embs_b in zip(a, b):
+        if embs_a is None or embs_b is None or embs_a.shape[0] == 0 or embs_b.shape[0] == 0:
+            if embs_b is None or embs_b.shape[0] == 0:
+                results.append([])
+            else:
+                results.append([1.0] * embs_b.shape[0])
+            continue
+
+        sims = embs_b @ embs_a.T
+        dists = 1.0 - sims
+        
+        if operation == 'max':
+            b_res = np.max(dists, axis=1)
+        elif operation == 'min':
+            b_res = np.min(dists, axis=1)
+        elif operation == 'mean':
+            b_res = np.mean(dists, axis=1)
+        else:
+            raise ValueError(f"Unrecognized operation: {operation}")
+            
+        results.append(b_res.tolist())
     return results

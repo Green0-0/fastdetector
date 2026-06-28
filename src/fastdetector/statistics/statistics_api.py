@@ -283,3 +283,41 @@ def batch_extract_token_embeddings(
         all_tokens.extend(batch_tokens)
             
     return all_embs, all_tokens
+
+def batch_gen_chunked_embeddings(texts_list: list[list[str]], model_name: str = "Qwen/Qwen3-Embedding-4B", batch_size: int = 4) -> list[np.ndarray]:
+    """Generate normalized embeddings for a list of lists of chunks.
+    
+    Args:
+        texts_list: List of lists of string chunks.
+        model_name: HuggingFace model identifier.
+        batch_size: Batch size for inference.
+        
+    Returns:
+        List of 2D numpy arrays, where each array corresponds to the embeddings for the chunks in a text.
+    """
+    flat_texts = []
+    lengths = []
+    for chunks in texts_list:
+        flat_texts.extend(chunks)
+        lengths.append(len(chunks))
+        
+    if not flat_texts:
+        return [np.empty((0, 0)) for _ in texts_list]
+        
+    kwargs = {}
+    if "qwen3" in model_name.lower():
+        kwargs["model_kwargs"] = {"attn_implementation": "flash_attention_2", "torch_dtype": torch.bfloat16}
+        kwargs["processor_kwargs"] = {"padding_side": "left"}
+
+    model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
+    flat_embeddings = model.encode(flat_texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
+    
+    results = []
+    idx = 0
+    for length in lengths:
+        if length > 0:
+            results.append(flat_embeddings[idx:idx+length])
+            idx += length
+        else:
+            results.append(np.empty((0, flat_embeddings.shape[1])))
+    return results
