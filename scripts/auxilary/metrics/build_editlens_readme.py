@@ -57,6 +57,17 @@ def main():
     
     unique_prompts = list(set(prompt_types)) if has_prompts else [None]
     
+    has_model_genconfig = "generator_model" in result_ds.column_names or "generation_params" in result_ds.column_names
+    if has_model_genconfig:
+        m_list = result_ds["generator_model"] if "generator_model" in result_ds.column_names else ["Unknown"] * len(result_ds)
+        g_list = result_ds["generation_params"] if "generation_params" in result_ds.column_names else ["Unknown"] * len(result_ds)
+        model_genconfig_tuples = [(str(m), str(g)) for m, g in zip(m_list, g_list)]
+        mg_str_list = [f"{m} | {g}" for m, g in model_genconfig_tuples]
+        unique_mg_strs = list(set(mg_str_list))
+    else:
+        mg_str_list = None
+        unique_mg_strs = []
+    
     charts = {}
     stats_md = f"""
 ## EditLens Inference Statistics
@@ -252,7 +263,38 @@ def main():
             p_a_bins = a_bins_np[mask]
             # Replace spaces and special characters for filename suffix
             safe_p = "".join([c if c.isalnum() else "_" for c in str(p)])
-            stats_md += generate_stats_and_charts(p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, str(p), f"_{safe_p}")
+            stats_md += generate_stats_and_charts(p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, f"Prompt: {p}", f"_prompt_{safe_p}")
+
+    if has_model_genconfig:
+        mg_str_np = np.array(mg_str_list)
+        for mg_str in unique_mg_strs:
+            mask = mg_str_np == mg_str
+            if not np.any(mask):
+                continue
+            p_h_scores = h_scores_np[mask]
+            p_a_scores = a_scores_np[mask]
+            p_h_bins = h_bins_np[mask]
+            p_a_bins = a_bins_np[mask]
+            safe_mg = "".join([c if c.isalnum() else "_" for c in mg_str])
+            stats_md += generate_stats_and_charts(p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, f"Model/Config: {mg_str}", f"_mg_{safe_mg}")
+
+    if has_prompts and has_model_genconfig:
+        for p in unique_prompts:
+            for mg_str in unique_mg_strs:
+                mask = (prompt_types_np == p) & (mg_str_np == mg_str)
+                if not np.any(mask):
+                    continue
+                p_h_scores = h_scores_np[mask]
+                p_a_scores = a_scores_np[mask]
+                p_h_bins = h_bins_np[mask]
+                p_a_bins = a_bins_np[mask]
+                safe_p = "".join([c if c.isalnum() else "_" for c in str(p)])
+                safe_mg = "".join([c if c.isalnum() else "_" for c in mg_str])
+                stats_md += generate_stats_and_charts(
+                    p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, 
+                    f"Prompt: {p}, Model/Config: {mg_str}", 
+                    f"_comb_{safe_p}_{safe_mg}"
+                )
 
     upload_dataset(
         dataset=result_ds,
