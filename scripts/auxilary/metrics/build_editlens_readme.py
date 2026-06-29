@@ -105,7 +105,23 @@ def main():
     if has_model_genconfig:
         m_list = result_ds["generator_model"] if "generator_model" in result_ds.column_names else ["Unknown"] * len(result_ds)
         g_list = result_ds["generation_params"] if "generation_params" in result_ds.column_names else ["Unknown"] * len(result_ds)
-        mg_str_np = np.array([f"{m} | {g}" for m, g in zip(m_list, g_list)])
+        
+        parsed_mg_strs = []
+        import json
+        for m, g in zip(m_list, g_list):
+            m_str = str(m).split('/')[-1] if m else "Unknown"
+            temp = "Unknown"
+            if isinstance(g, dict):
+                temp = g.get("temperature", "Unknown")
+            elif isinstance(g, str):
+                try:
+                    d = json.loads(g.replace("'", '"'))
+                    if isinstance(d, dict):
+                        temp = d.get("temperature", "Unknown")
+                except:
+                    pass
+            parsed_mg_strs.append(f"{m_str} (temperature: {temp})")
+        mg_str_np = np.array(parsed_mg_strs)
     unique_mg_strs = list(set(mg_str_np)) if has_model_genconfig else []
 
     # distance metrics
@@ -157,8 +173,8 @@ def main():
         worst_idx = np.argmin(accs)
         res = []
         for i, (name, m) in enumerate(stats_list):
-            emoji = " ✔️" if i == best_idx else (" ❗" if i == worst_idx else "")
-            res.append((name + emoji, m))
+            emoji = "✔️ " if i == best_idx else ("❗ " if i == worst_idx else "")
+            res.append((emoji, name, m))
         return res
         
     def add_top_bottom_emojis(stats_list, m_key="acc", p=0.1):
@@ -170,8 +186,8 @@ def main():
         best_indices = sorted_indices[-n_top:]
         res = []
         for i, (name, m) in enumerate(stats_list):
-            emoji = " ✔️" if i in best_indices else (" ❗" if i in worst_indices else "")
-            res.append((name + emoji, m))
+            emoji = "✔️ " if i in best_indices else ("❗ " if i in worst_indices else "")
+            res.append((emoji, name, m))
         return res
 
     overall_m = get_stats_for_mask(np.ones(len(test_idx), dtype=bool))
@@ -199,17 +215,17 @@ def main():
     all_stats = add_top_bottom_emojis(all_stats)
     
     # Building Markdown
+    def md_entry(emoji, header, sm, bm):
+        return f"{emoji}- **{header}**\n    - (bin): {format_metrics(bm, True)}\n    - (score): {format_metrics(sm, False)}\n"
+
     md = "# Fastdetector Editlens Metrics\n\n## Summary Stats\n"
-    md += f"- Overall (bin): {format_metrics(overall_m[1], True)}\n"
-    md += f"- Overall (score): {format_metrics(overall_m[0], False)}\n"
+    md += md_entry("", "Overall", overall_m[0], overall_m[1])
     
-    for name, (sm, bm) in prompt_stats:
-        md += f"- {name} (bin): {format_metrics(bm, True)}\n"
-        md += f"- {name} (score): {format_metrics(sm, False)}\n"
+    for emoji, name, (sm, bm) in prompt_stats:
+        md += md_entry(emoji, name, sm, bm)
         
-    for name, (sm, bm) in mg_stats:
-        md += f"- {name} (bin): {format_metrics(bm, True)}\n"
-        md += f"- {name} (score): {format_metrics(sm, False)}\n"
+    for emoji, name, (sm, bm) in mg_stats:
+        md += md_entry(emoji, name, sm, bm)
         
     md += "\n*Note: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data.*\n\n"
     
@@ -262,9 +278,8 @@ def main():
             md += generate_plots(mg_str_np == mg, str(mg))
             
     md += "\n## All Statistics\n"
-    for name, (sm, bm) in all_stats:
-        md += f"- {name} (bin): {format_metrics(bm, True)}\n"
-        md += f"- {name} (score): {format_metrics(sm, False)}\n"
+    for emoji, name, (sm, bm) in all_stats:
+        md += md_entry(emoji, name, sm, bm)
 
     print("Uploading dataset...")
     upload_dataset(
