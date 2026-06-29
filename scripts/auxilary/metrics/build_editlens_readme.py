@@ -216,7 +216,7 @@ def main():
     
     # Building Markdown
     def md_entry(emoji, header, sm, bm):
-        return f"{emoji}- **{header}**\n    - (bin): {format_metrics(bm, True)}\n    - (score): {format_metrics(sm, False)}\n"
+        return f"- {emoji}**{header}**\n    - (bin): {format_metrics(bm, True)}\n    - (score): {format_metrics(sm, False)}\n"
 
     md = "# Fastdetector Editlens Metrics\n\n## Summary Stats\n"
     md += md_entry("", "Overall", overall_m[0], overall_m[1])
