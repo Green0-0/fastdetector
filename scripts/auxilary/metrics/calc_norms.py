@@ -30,10 +30,17 @@ def main():
         q = quantile(ds[col])
         ds = ds.add_column(f"{col}_quantile", q)
 
+    readme_content = f"""# FastDetector Normalization
+- Source Dataset: {args.source_dataset}
+- Target Dataset: {args.target_dataset}
+- Minimax: {args.minimax}
+- Quantile: {args.quantile}
+"""
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(
         dataset=ds,
         dataset_name=args.target_dataset,
+        readme_content=readme_content,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )

@@ -1,6 +1,7 @@
 import io
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.metrics import roc_auc_score
 
 def get_histogram(data_lists: list[list[float]], labels: list[str], title: str, bins: int = 50, figsize: tuple[int, int] = (8, 5)) -> bytes:
     """Generates a single histogram with multiple datasets overlayed with their corresponding label.
@@ -20,7 +21,7 @@ def get_histogram(data_lists: list[list[float]], labels: list[str], title: str, 
     plt.figure(figsize=figsize)
     for data, label in zip(data_lists, labels):
         if data is not None:
-            plt.hist(data, bins=bins, alpha=0.5, density=True, label=label)
+            plt.hist(data, bins=bins, alpha=0.5, label=label)
     plt.title(title)
     if labels and any(labels):
         plt.legend()
@@ -163,20 +164,22 @@ def get_confusion_matrix(data_lists: list[list[float]], correct_labels: list[boo
     recall = TP / actual_pos if actual_pos > 0 else 0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
     
-    tp_prop = TP / total if total > 0 else 0
-    fp_prop = FP / total if total > 0 else 0
-    fn_prop = FN / total if total > 0 else 0
-    tn_prop = TN / total if total > 0 else 0
+    actual_neg = TN + FP
+    
+    tpr = TP / actual_pos if actual_pos > 0 else 0
+    fnr = FN / actual_pos if actual_pos > 0 else 0
+    fpr = FP / actual_neg if actual_neg > 0 else 0
+    tnr = TN / actual_neg if actual_neg > 0 else 0
     
     md = f"### {title} (F1 Score: {f1:.4f})\n"
     md += "| | Predicted Positive | Predicted Negative |\n"
     md += "|---|---|---|\n"
-    md += f"| **Actual Positive** | {TP} ({tp_prop:.2%}) | {FN} ({fn_prop:.2%}) |\n"
-    md += f"| **Actual Negative** | {FP} ({fp_prop:.2%}) | {TN} ({tn_prop:.2%}) |\n"
+    md += f"| **Actual Positive** | {TP} (TPR: {tpr:.2%}) | {FN} (FNR: {fnr:.2%}) |\n"
+    md += f"| **Actual Negative** | {FP} (FPR: {fpr:.2%}) | {TN} (TNR: {tnr:.2%}) |\n"
     
     return md
 
-def get_scatterplot(x_data: list[float] | list[list[float]], y_data_lists: list[list[float]], labels: list[str], title: str, xlabel: str = "X", ylabel: str = "Y", figsize: tuple[int, int] = (8, 5)) -> bytes:
+def get_scatterplot(x_data: list[float] | list[list[float]], y_data_lists: list[list[float]], labels: list[str], title: str, xlabel: str = "X", ylabel: str = "Y", figsize: tuple[int, int] = (8, 5), point_alpha: float = 0.5, rolling_mean_window: int = 0) -> bytes:
     """Generates a scatterplot of multiple y datasets against a single x dataset.
 
     Args:
@@ -187,6 +190,8 @@ def get_scatterplot(x_data: list[float] | list[list[float]], y_data_lists: list[
         xlabel (str, optional): Label for the x-axis. Defaults to "X".
         ylabel (str, optional): Label for the y-axis. Defaults to "Y".
         figsize (tuple[int, int], optional): Size of the figure. Defaults to (8, 5).
+        point_alpha (float, optional): Transparency of the scatter points. Defaults to 0.5.
+        rolling_mean_window (int, optional): Window size for the rolling mean line. Defaults to 0.
 
     Returns:
         bytes: The generated scatterplot image as bytes.
@@ -199,8 +204,15 @@ def get_scatterplot(x_data: list[float] | list[list[float]], y_data_lists: list[
         x_lists = [x_data] * len(y_data_lists)
         
     for x_vals, y_vals, label in zip(x_lists, y_data_lists, labels):
-        if x_vals is not None and y_vals is not None and len(x_vals) == len(y_vals):
-            plt.scatter(x_vals, y_vals, alpha=0.5, label=label, marker='o', s=15)
+        if x_vals is not None and y_vals is not None and len(x_vals) == len(y_vals) and len(x_vals) > 0:
+            plt.scatter(x_vals, y_vals, alpha=point_alpha, label=label, marker='o', s=15)
+            
+            if rolling_mean_window > 0 and len(x_vals) >= rolling_mean_window:
+                sort_idx = np.argsort(x_vals)
+                x_sorted = np.array(x_vals)[sort_idx]
+                y_sorted = np.array(y_vals)[sort_idx]
+                rolling_mean = np.convolve(y_sorted, np.ones(rolling_mean_window)/rolling_mean_window, mode='valid')
+                plt.plot(x_sorted[rolling_mean_window-1:], rolling_mean, label=f"{label} (Rolling Mean)", linewidth=2)
             
     plt.title(title)
     plt.xlabel(xlabel)
@@ -214,3 +226,15 @@ def get_scatterplot(x_data: list[float] | list[list[float]], y_data_lists: list[
     buf.seek(0)
     plt.close()
     return buf.read()
+
+def compute_auroc(y_true: list[bool] | list[int] | np.ndarray, y_scores: list[float] | np.ndarray) -> float:
+    """Compute Area Under the Receiver Operating Characteristic Curve (ROC AUC).
+    
+    Args:
+        y_true: True binary labels.
+        y_scores: Target scores, can either be probability estimates of the positive class or confidence values.
+        
+    Returns:
+        The AUROC score.
+    """
+    return float(roc_auc_score(y_true, y_scores))

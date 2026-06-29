@@ -23,7 +23,7 @@ def main():
     print(f"Downloading dataset {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
 
-    readme_content = f"# Dataset Metrics\n\n"
+    readme_content = f"# FastDetector Dataset Metrics\n\n"
     
     if args.text_columns_analyze:
         for col_a, col_b in itertools.combinations(args.text_columns_analyze, 2):
@@ -219,7 +219,7 @@ def main():
             img_name = f"scatter_{file_suffix}.png"
             title = f"Scatterplot: {title_suffix}"
             
-            charts[img_name] = get_scatterplot(x_data, y_data_lists, legend_labels, title, xlabel=x_col, ylabel="Values")
+            charts[img_name] = get_scatterplot(x_data, y_data_lists, legend_labels, title, xlabel=x_col, ylabel="Values", point_alpha=0.01, rolling_mean_window=1000)
             readme_content += f"![Scatterplot]({img_name})\n"
         readme_content += "\n"
 

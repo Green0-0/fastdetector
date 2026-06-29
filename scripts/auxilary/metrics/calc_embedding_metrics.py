@@ -63,10 +63,16 @@ def main():
             print(f"Removing source columns: {cols_to_remove}")
             ds = ds.remove_columns(cols_to_remove)
 
+    readme_content = f"""# FastDetector Embedding Metrics
+- Source Dataset: {args.source_dataset}
+- Target Dataset: {args.target_dataset}
+- Columns Prefix: {args.columns_prefix}
+"""
     print(f"Uploading dataset to {args.target_dataset}...")
     upload_dataset(
         dataset=ds,
         dataset_name=args.target_dataset,
+        readme_content=readme_content,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )

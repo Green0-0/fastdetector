@@ -20,7 +20,6 @@ def main():
     parser.add_argument("--presence-penalty", type=float, required=True, help="Generation presence penalty.")
     parser.add_argument("--disable-thinking", action="store_true", help="Pass enable_thinking=False to the chat template.")
 
-    # New hyperparams for aphrodite
     parser.add_argument("--top-a", type=float, default=0.0, help="Generation top-a.")
     parser.add_argument("--xtc", type=float, default=0.0, help="Generation xtc-probability (uses default threshold of 0.1).")
     parser.add_argument("--nsigma", type=float, default=0.0, help="Generation nsigma.")

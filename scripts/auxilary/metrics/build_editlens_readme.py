@@ -1,8 +1,54 @@
 import argparse
 import numpy as np
+import io
+import random
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
+from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot, compute_auroc
+
+def compute_metrics(h_vals, a_vals, threshold, dist_metrics_dict, flip_inequality=False):
+    h_preds = (h_vals > threshold) if not flip_inequality else (h_vals <= threshold)
+    a_preds = (a_vals > threshold) if not flip_inequality else (a_vals <= threshold)
+    
+    TP = np.sum(a_preds == True)
+    FN = np.sum(a_preds == False)
+    FP = np.sum(h_preds == True)
+    TN = np.sum(h_preds == False)
+    
+    total = len(h_vals) + len(a_vals)
+    acc = (TP + TN) / total if total > 0 else 0
+    actual_pos = TP + FN
+    actual_neg = FP + TN
+    pred_pos = TP + FP
+    
+    precision = TP / pred_pos if pred_pos > 0 else 0
+    recall = TP / actual_pos if actual_pos > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    tpr = recall
+    fnr = FN / actual_pos if actual_pos > 0 else 0
+    
+    y_true = np.concatenate([np.zeros(len(h_vals)), np.ones(len(a_vals))])
+    y_scores = np.concatenate([h_vals, a_vals])
+    try:
+        auroc = compute_auroc(y_true, y_scores)
+    except Exception:
+        auroc = float('nan')
+        
+    corrs = {}
+    for name, dist_vals in dist_metrics_dict.items():
+        if len(a_vals) > 1 and len(dist_vals) == len(a_vals):
+            c = np.corrcoef(a_vals, dist_vals)[0, 1]
+            corrs[name] = c
+        else:
+            corrs[name] = float('nan')
+            
+    return {"acc": acc, "f1": f1, "auroc": auroc, "tpr": tpr, "fnr": fnr, "corrs": corrs}
+
+def format_metrics(m, is_bin):
+    corrs_str = " / ".join([f"{k}: {v:.4f}" for k, v in m["corrs"].items()])
+    if not corrs_str:
+        corrs_str = "N/A"
+    return f"Accuracy: {m['acc']:.4f} / F1: {m['f1']:.4f} / AUROC: {m['auroc']:.4f} / TPR: {m['tpr']:.4f} / FNR: {m['fnr']:.4f} / Correlations: {corrs_str}"
 
 def main():
     parser = argparse.ArgumentParser(description="Build README with EditLens analysis")
@@ -13,7 +59,6 @@ def main():
     parser.add_argument("--distance-metrics-lower-bounds", nargs='*', type=float, default=[], help="Lower bounds for distance metrics")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
-    
     args = parser.parse_args()
 
     print(f"Loading dataset {args.source_dataset}...")
@@ -37,270 +82,196 @@ def main():
         new_len = len(result_ds)
         print(f"Filtered out {original_len - new_len} rows below lower bounds. Remaining rows: {new_len}")
 
-    human_scores = result_ds["human_editlens_score"]
-    ai_scores = result_ds["ai_editlens_score"]
-    human_bins = result_ds["human_editlens_bucket"]
-    ai_bins = result_ds["ai_editlens_bucket"]
+    h_scores = np.array(result_ds["human_editlens_score"])
+    a_scores = np.array(result_ds["ai_editlens_score"])
+    h_bins = np.array(result_ds["human_editlens_bucket"])
+    a_bins = np.array(result_ds["ai_editlens_bucket"])
 
     prompt_col = args.fastdetector_prompt_metadata_column
     has_prompts = prompt_col and prompt_col in result_ds.column_names
-    
+    prompt_types = np.array(["Unknown"] * len(result_ds))
     if has_prompts:
-        prompt_types = []
+        pts = []
         for p in result_ds[prompt_col]:
-            ptype = "Unknown"
+            pt = "Unknown"
             if p and isinstance(p, dict) and isinstance(p.get("metadata"), dict):
-                ptype = str(p["metadata"].get("PROMPT_TYPE", "Unknown"))
-            prompt_types.append(ptype)
-    else:
-        prompt_types = None
-    
-    unique_prompts = list(set(prompt_types)) if has_prompts else [None]
-    
+                pt = str(p["metadata"].get("PROMPT_TYPE", "Unknown"))
+            pts.append(pt)
+        prompt_types = np.array(pts)
+    unique_prompts = list(set(prompt_types)) if has_prompts else []
+
     has_model_genconfig = "generator_model" in result_ds.column_names or "generation_params" in result_ds.column_names
+    mg_str_np = np.array(["Unknown"] * len(result_ds))
     if has_model_genconfig:
         m_list = result_ds["generator_model"] if "generator_model" in result_ds.column_names else ["Unknown"] * len(result_ds)
         g_list = result_ds["generation_params"] if "generation_params" in result_ds.column_names else ["Unknown"] * len(result_ds)
-        model_genconfig_tuples = [(str(m), str(g)) for m, g in zip(m_list, g_list)]
-        mg_str_list = [f"{m} | {g}" for m, g in model_genconfig_tuples]
-        unique_mg_strs = list(set(mg_str_list))
-    else:
-        mg_str_list = None
-        unique_mg_strs = []
+        mg_str_np = np.array([f"{m} | {g}" for m, g in zip(m_list, g_list)])
+    unique_mg_strs = list(set(mg_str_np)) if has_model_genconfig else []
+
+    # distance metrics
+    dist_dict = {}
+    for m in args.distance_metrics:
+        if m in result_ds.column_names:
+            dist_dict[m] = np.array(result_ds[m])
+
+    # Validation split
+    np.random.seed(42)
+    indices = np.arange(len(result_ds))
+    np.random.shuffle(indices)
+    val_size = max(1, len(result_ds) // 10)
+    val_idx = indices[:val_size]
+    test_idx = indices[val_size:]
+    
+    val_h_scores, val_a_scores = h_scores[val_idx], a_scores[val_idx]
+    val_h_bins, val_a_bins = h_bins[val_idx], a_bins[val_idx]
+    
+    test_h_scores, test_a_scores = h_scores[test_idx], a_scores[test_idx]
+    test_h_bins, test_a_bins = h_bins[test_idx], a_bins[test_idx]
     
     charts = {}
-    stats_md = f"""
-## EditLens Inference Statistics
-"""
-
-    def generate_stats_and_charts(h_scores, a_scores, h_bins, a_bins, mask, subset_name, suffix):
-        print(f"[{subset_name}] Human score stats: mean={np.mean(h_scores):.4f}, std={np.std(h_scores):.4f}")
-        print(f"[{subset_name}] AI score stats: mean={np.mean(a_scores):.4f}, std={np.std(a_scores):.4f}")
-
-        hist_name = f"hist_editlens_score{suffix}.png"
-        charts[hist_name] = get_histogram(
-            [h_scores, a_scores], 
-            ["Human", "AI"], 
-            f"Histogram: EditLens Scores ({subset_name})"
-        )
+    
+    # Get sweeping plots on VAL
+    charts["val_sweep_scores.png"], opt_t_score, _ = get_sweeping_classifier_plot(
+        [val_h_scores, val_a_scores], [False, True], False, True, ["Human", "AI"], "Val Sweep: Scores"
+    )
+    charts["val_sweep_bins.png"], opt_t_bin, _ = get_sweeping_classifier_plot(
+        [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
+    )
+    
+    # Helper for stats
+    def get_stats_for_mask(mask_test):
+        sub_h_scores = test_h_scores[mask_test]
+        sub_a_scores = test_a_scores[mask_test]
+        sub_h_bins = test_h_bins[mask_test]
+        sub_a_bins = test_a_bins[mask_test]
+        sub_dist = {k: v[test_idx][mask_test] for k,v in dist_dict.items()}
         
-        clf_name = f"classifier_editlens_score{suffix}.png"
-        charts[clf_name], opt_threshold, opt_accuracy = get_sweeping_classifier_plot(
-            [h_scores, a_scores],
-            [False, True], 
-            False, True,
-            ["Human Accuracy", "AI Accuracy"],
-            f"Naive Classifier: EditLens Scores ({subset_name})"
-        )
+        score_m = compute_metrics(sub_h_scores, sub_a_scores, opt_t_score, sub_dist)
+        bin_m = compute_metrics(sub_h_bins, sub_a_bins, opt_t_bin, sub_dist)
+        return score_m, bin_m
         
-        conf_matrix = get_confusion_matrix(
-            [h_scores, a_scores],
-            [False, True],
-            False,
-            opt_threshold,
-            f"Confusion Matrix: EditLens Scores ({subset_name})"
-        )
-
-        clf_bin_name = f"classifier_editlens_bin{suffix}.png"
-        charts[clf_bin_name], opt_bin_threshold, opt_bin_accuracy = get_sweeping_classifier_plot(
-            [h_bins, a_bins],
-            [False, True], 
-            False, True,
-            ["Human Accuracy", "AI Accuracy"],
-            f"Naive Classifier: EditLens Bins ({subset_name})"
-        )
+    def add_emojis(stats_list, m_key="acc"):
+        if not stats_list: return []
+        accs = [m[0][m_key] for _, m in stats_list] # use score acc
+        best_idx = np.argmax(accs)
+        worst_idx = np.argmin(accs)
+        res = []
+        for i, (name, m) in enumerate(stats_list):
+            emoji = " ✔️" if i == best_idx else (" ❗" if i == worst_idx else "")
+            res.append((name + emoji, m))
+        return res
         
-        conf_matrix_bin = get_confusion_matrix(
-            [h_bins, a_bins],
-            [False, True],
-            False,
-            opt_bin_threshold,
-            f"Confusion Matrix: EditLens Bins ({subset_name})"
-        )
+    def add_top_bottom_emojis(stats_list, m_key="acc", p=0.1):
+        if not stats_list: return []
+        accs = [m[0][m_key] for _, m in stats_list]
+        n_top = max(1, int(len(stats_list) * p))
+        sorted_indices = np.argsort(accs)
+        worst_indices = sorted_indices[:n_top]
+        best_indices = sorted_indices[-n_top:]
+        res = []
+        for i, (name, m) in enumerate(stats_list):
+            emoji = " ✔️" if i in best_indices else (" ❗" if i in worst_indices else "")
+            res.append((name + emoji, m))
+        return res
+
+    overall_m = get_stats_for_mask(np.ones(len(test_idx), dtype=bool))
+    
+    prompt_stats = []
+    for p in unique_prompts:
+        mask = prompt_types[test_idx] == p
+        if np.any(mask):
+            prompt_stats.append((p, get_stats_for_mask(mask)))
+    prompt_stats = add_emojis(prompt_stats)
+    
+    mg_stats = []
+    for mg in unique_mg_strs:
+        mask = mg_str_np[test_idx] == mg
+        if np.any(mask):
+            mg_stats.append((mg, get_stats_for_mask(mask)))
+    mg_stats = add_emojis(mg_stats)
+    
+    all_stats = []
+    for p in unique_prompts:
+        for mg in unique_mg_strs:
+            mask = (prompt_types[test_idx] == p) & (mg_str_np[test_idx] == mg)
+            if np.any(mask):
+                all_stats.append((f"{p} / {mg}", get_stats_for_mask(mask)))
+    all_stats = add_top_bottom_emojis(all_stats)
+    
+    # Building Markdown
+    md = "# Fastdetector Editlens Metrics\n\n## Summary Stats\n"
+    md += f"- Overall (bin): {format_metrics(overall_m[1], True)}\n"
+    md += f"- Overall (score): {format_metrics(overall_m[0], False)}\n"
+    
+    for name, (sm, bm) in prompt_stats:
+        md += f"- {name} (bin): {format_metrics(bm, True)}\n"
+        md += f"- {name} (score): {format_metrics(sm, False)}\n"
         
-        md = f"""
-### Score Distributions ({subset_name})
-- **Human Scores**: Mean = {np.mean(h_scores):.4f}, Std = {np.std(h_scores):.4f}
-- **AI Scores**: Mean = {np.mean(a_scores):.4f}, Std = {np.std(a_scores):.4f}
-
-### Optimal Classifier ({subset_name})
-- **Optimal Threshold**: {opt_threshold:.4f}
-- **Optimal Accuracy**: {opt_accuracy * 100:.2f}%
-
-{conf_matrix}
-
-### Bin Distributions ({subset_name})
-- **Human Bins**: Mean = {np.mean(h_bins):.4f}, Std = {np.std(h_bins):.4f}
-- **AI Bins**: Mean = {np.mean(a_bins):.4f}, Std = {np.std(a_bins):.4f}
-
-### Optimal Bin Classifier ({subset_name})
-- **Optimal Bin Threshold**: {opt_bin_threshold:.4f}
-- **Optimal Bin Accuracy**: {opt_bin_accuracy * 100:.2f}%
-
-{conf_matrix_bin}
-
-## Classifiers ({subset_name})
-![Classifier EditLens Scores]({clf_name})
-![Classifier EditLens Bins]({clf_bin_name})
-
-## Histograms ({subset_name})
-![Histogram EditLens Scores]({hist_name})
-"""
+    for name, (sm, bm) in mg_stats:
+        md += f"- {name} (bin): {format_metrics(bm, True)}\n"
+        md += f"- {name} (score): {format_metrics(sm, False)}\n"
         
-        if args.distance_metrics:
-            md += f"\n## Distance Metric Quantiles vs EditLens (AI Only) ({subset_name})\n"
-            y_data_lists = []
-            legend_labels = []
+    md += "\n*Note: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data.*\n\n"
+    
+    md += "## Validation Threshold\n"
+    md += f"Validation rows = {len(val_idx)} / Total rows = {len(result_ds)}\n\n"
+    md += "![Val Sweep Scores](val_sweep_scores.png)\n"
+    md += "![Val Sweep Bins](val_sweep_bins.png)\n\n"
+    
+    md += "## Summary plots\n"
+    
+    def generate_plots(mask_all, name_suffix):
+        h_s = h_scores[mask_all]
+        a_s = a_scores[mask_all]
+        h_b = h_bins[mask_all]
+        a_b = a_bins[mask_all]
+        sub_dist = {k: v[mask_all] for k,v in dist_dict.items()}
+        
+        p_md = f"### {name_suffix}\n"
+        
+        cm_score = get_confusion_matrix([h_s, a_s], [False, True], False, opt_t_score, f"CM Scores ({name_suffix})")
+        cm_bin = get_confusion_matrix([h_b, a_b], [False, True], False, opt_t_bin, f"CM Bins ({name_suffix})")
+        p_md += cm_score + "\n" + cm_bin + "\n"
+        
+        h_name = f"hist_scores_{name_suffix.replace(' ', '_').replace('/', '_')}.png"
+        charts[h_name] = get_histogram([h_s, a_s], ["Human", "AI"], f"Scores ({name_suffix})")
+        p_md += f"![{h_name}]({h_name})\n"
+        
+        hb_name = f"hist_bins_{name_suffix.replace(' ', '_').replace('/', '_')}.png"
+        charts[hb_name] = get_histogram([h_b, a_b], ["Human", "AI"], f"Bins ({name_suffix})")
+        p_md += f"![{hb_name}]({hb_name})\n"
+        
+        if sub_dist:
+            y_data = []
+            labels = []
+            for k, v in sub_dist.items():
+                y_data.append(v)
+                labels.append(k)
+            s_name = f"scatter_{name_suffix.replace(' ', '_').replace('/', '_')}.png"
+            charts[s_name] = get_scatterplot([a_s]*len(y_data), y_data, labels, f"AI Scores vs Dist ({name_suffix})", "AI Score", "Dist", point_alpha=0.01, rolling_mean_window=100)
+            p_md += f"![{s_name}]({s_name})\n"
             
-            for metric in args.distance_metrics:
-                q_metric = metric if metric.endswith("_quantile") else f"{metric}_quantile"
-                if q_metric not in result_ds.column_names:
-                    print(f"Warning: {q_metric} not found in dataset. Skipping.")
-                    continue
-                    
-                dist_vals = np.array(result_ds[q_metric])
-                if mask is not None:
-                    dist_vals = dist_vals[mask]
-                    
-                y_data_lists.append(dist_vals)
-                label = q_metric.replace('_original_final_response_quantile', '').replace('pairwise_', '')
-                legend_labels.append(label)
-                corr = np.corrcoef(a_scores, dist_vals)[0, 1]
-                md += f"- **Pearson Correlation ({label})**: {corr:.4f}\n"
+        return p_md
+
+    md += generate_plots(np.ones(len(result_ds), dtype=bool), "Overall")
+    for p in unique_prompts:
+        if np.any(prompt_types == p):
+            md += generate_plots(prompt_types == p, str(p))
+    for mg in unique_mg_strs:
+        if np.any(mg_str_np == mg):
+            md += generate_plots(mg_str_np == mg, str(mg))
             
-            if y_data_lists:
-                # Scatterplot: AI EditLens Score vs All Distance Quantiles
-                scat_score_name = f"scatter_score_all_quantiles{suffix}.png"
-                charts[scat_score_name] = get_scatterplot(
-                    x_data=[a_scores] * len(y_data_lists),
-                    y_data_lists=y_data_lists,
-                    labels=legend_labels,
-                    title=f"AI EditLens Score vs Distance Quantiles ({subset_name})",
-                    xlabel="AI EditLens Score",
-                    ylabel="Distance Quantile",
-                    figsize=(10, 6)
-                )
-                md += f"![Scatterplot Score]({scat_score_name})\n"
-                
-                # Scatterplot: AI EditLens Bin vs All Distance Quantiles
-                scat_bin_name = f"scatter_bin_all_quantiles{suffix}.png"
-                charts[scat_bin_name] = get_scatterplot(
-                    x_data=[a_bins] * len(y_data_lists),
-                    y_data_lists=y_data_lists,
-                    labels=legend_labels,
-                    title=f"AI EditLens Bin vs Distance Quantiles ({subset_name})",
-                    xlabel="AI EditLens Bin",
-                    ylabel="Distance Quantile",
-                    figsize=(10, 6)
-                )
-                md += f"![Scatterplot Bin]({scat_bin_name})\n"
-                
-            md += f"\n## Distance Metric Minimax Norms vs EditLens (AI Only) ({subset_name})\n"
-            y_data_lists_mm = []
-            legend_labels_mm = []
-            
-            for metric in args.distance_metrics:
-                m_metric = metric if metric.endswith("_minimax") else f"{metric}_minimax"
-                if m_metric not in result_ds.column_names:
-                    print(f"Warning: {m_metric} not found in dataset. Skipping.")
-                    continue
-                    
-                dist_vals = np.array(result_ds[m_metric])
-                if mask is not None:
-                    dist_vals = dist_vals[mask]
-                    
-                y_data_lists_mm.append(dist_vals)
-                label_mm = m_metric.replace('_original_final_response_minimax', '').replace('pairwise_', '')
-                legend_labels_mm.append(label_mm)
-                corr_mm = np.corrcoef(a_scores, dist_vals)[0, 1]
-                md += f"- **Pearson Correlation ({label_mm})**: {corr_mm:.4f}\n"
-            
-            if y_data_lists_mm:
-                # Scatterplot: AI EditLens Score vs All Distance Minimax
-                scat_score_name_mm = f"scatter_score_all_minimax{suffix}.png"
-                charts[scat_score_name_mm] = get_scatterplot(
-                    x_data=[a_scores] * len(y_data_lists_mm),
-                    y_data_lists=y_data_lists_mm,
-                    labels=legend_labels_mm,
-                    title=f"AI EditLens Score vs Distance Minimax ({subset_name})",
-                    xlabel="AI EditLens Score",
-                    ylabel="Distance Minimax",
-                    figsize=(10, 6)
-                )
-                md += f"![Scatterplot Score]({scat_score_name_mm})\n"
-                
-                # Scatterplot: AI EditLens Bin vs All Distance Minimax
-                scat_bin_name_mm = f"scatter_bin_all_minimax{suffix}.png"
-                charts[scat_bin_name_mm] = get_scatterplot(
-                    x_data=[a_bins] * len(y_data_lists_mm),
-                    y_data_lists=y_data_lists_mm,
-                    labels=legend_labels_mm,
-                    title=f"AI EditLens Bin vs Distance Minimax ({subset_name})",
-                    xlabel="AI EditLens Bin",
-                    ylabel="Distance Minimax",
-                    figsize=(10, 6)
-                )
-                md += f"![Scatterplot Bin]({scat_bin_name_mm})\n"
-                
-        return md
+    md += "\n## All Statistics\n"
+    for name, (sm, bm) in all_stats:
+        md += f"- {name} (bin): {format_metrics(bm, True)}\n"
+        md += f"- {name} (score): {format_metrics(sm, False)}\n"
 
-    # Overall stats
-    h_scores_np = np.array(human_scores)
-    a_scores_np = np.array(ai_scores)
-    h_bins_np = np.array(human_bins)
-    a_bins_np = np.array(ai_bins)
-    stats_md += generate_stats_and_charts(h_scores_np, a_scores_np, h_bins_np, a_bins_np, None, "Overall", "")
-
-    if has_prompts:
-        prompt_types_np = np.array(prompt_types)
-        for p in unique_prompts:
-            mask = prompt_types_np == p
-            if not np.any(mask):
-                continue
-            p_h_scores = h_scores_np[mask]
-            p_a_scores = a_scores_np[mask]
-            p_h_bins = h_bins_np[mask]
-            p_a_bins = a_bins_np[mask]
-            # Replace spaces and special characters for filename suffix
-            safe_p = "".join([c if c.isalnum() else "_" for c in str(p)])
-            stats_md += generate_stats_and_charts(p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, f"Prompt: {p}", f"_prompt_{safe_p}")
-
-    if has_model_genconfig:
-        mg_str_np = np.array(mg_str_list)
-        for mg_str in unique_mg_strs:
-            mask = mg_str_np == mg_str
-            if not np.any(mask):
-                continue
-            p_h_scores = h_scores_np[mask]
-            p_a_scores = a_scores_np[mask]
-            p_h_bins = h_bins_np[mask]
-            p_a_bins = a_bins_np[mask]
-            safe_mg = "".join([c if c.isalnum() else "_" for c in mg_str])
-            stats_md += generate_stats_and_charts(p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, f"Model/Config: {mg_str}", f"_mg_{safe_mg}")
-
-    if has_prompts and has_model_genconfig:
-        for p in unique_prompts:
-            for mg_str in unique_mg_strs:
-                mask = (prompt_types_np == p) & (mg_str_np == mg_str)
-                if not np.any(mask):
-                    continue
-                p_h_scores = h_scores_np[mask]
-                p_a_scores = a_scores_np[mask]
-                p_h_bins = h_bins_np[mask]
-                p_a_bins = a_bins_np[mask]
-                safe_p = "".join([c if c.isalnum() else "_" for c in str(p)])
-                safe_mg = "".join([c if c.isalnum() else "_" for c in mg_str])
-                stats_md += generate_stats_and_charts(
-                    p_h_scores, p_a_scores, p_h_bins, p_a_bins, mask, 
-                    f"Prompt: {p}, Model/Config: {mg_str}", 
-                    f"_comb_{safe_p}_{safe_mg}"
-                )
-
+    print("Uploading dataset...")
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
         files=charts,
-        readme_content=stats_md,
+        readme_content=md,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )

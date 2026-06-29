@@ -91,7 +91,7 @@ def upload_dataset(
             try:
                 shutil.rmtree(old_path)
             except OSError:
-                pass # Ignore "Directory not empty" on NFS due to open mmap files
+                pass
     else:
         print(f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
         dataset.push_to_hub(dataset_name)
@@ -262,7 +262,6 @@ def apply_string_filter_conditions(dataset: Dataset, conditions: str) -> Dataset
                     else:
                         raise ValueError(f"Unknown operator: {op}")
                 except (ValueError, TypeError):
-                    # If we cannot convert to float for numeric comparisons, fail the condition
                     if op in ['==', '!=', '=']:
                         if op in ['==', '='] and ex_val != val: return False
                         if op == '!=' and ex_val == val: return False

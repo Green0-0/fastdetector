@@ -4,6 +4,7 @@ import argparse
 import glob
 import os
 import re
+import time
 
 import emoji
 import numpy as np
@@ -167,6 +168,7 @@ def compute_editlens_scores(texts: list, model, tokenizer, is_qlora: bool, n_buc
     return bucket_preds.tolist(), score_preds.tolist()
 
 def main():
+    start_time = time.time()
     parser = argparse.ArgumentParser(description="Run EditLens inference on the dataset produced by calculate_statistics")
     parser.add_argument("--source-dataset", type=str, default="G-reen/cc-2021-rewritten-stat", help="HuggingFace dataset name to process")
     parser.add_argument("--target-dataset", type=str, default="G-reen/cc-2021-rewritten-stat-editlens", help="HuggingFace dataset name to push to")
@@ -211,9 +213,22 @@ def main():
     result_ds = result_ds.add_column("ai_editlens_score", ai_scores)
 
     print("\nInference complete.")
+    total_runtime = time.time() - start_time
+    readme_content = f"""# FastDetector EditLens Statistics
+- Source Dataset: {args.source_dataset}
+- Target Dataset: {args.target_dataset}
+- Checkpoint: {args.checkpoint}
+- Base Model: {args.base_model}
+- Max Length: {args.max_length}
+- Batch Size: {args.batch_size}
+- Inferred Buckets: {n_buckets}
+- Is QLoRA: {is_qlora}
+- Total Runtime: {total_runtime:.2f} seconds
+"""
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
+        readme_content=readme_content,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )
