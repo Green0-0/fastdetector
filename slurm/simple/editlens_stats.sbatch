@@ -38,4 +38,4 @@ python scripts/auxilary/metrics/build_editlens_readme.py \
     --target-dataset G-reen/cc-2021-rewritten-stat-editlens \
     --fastdetector-prompt-metadata-column prompt \
     --distance-metrics pairwise_cosdist_original_final_response pairwise_softngram_original_final_response \
-    --distance-metrics-lower-bounds 0.03 0.06 -1 -1 -1 -1
+    --distance-metrics-lower-bounds 0.03 0.06
