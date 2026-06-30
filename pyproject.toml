@@ -23,4 +23,5 @@ dependencies = [
     "unidecode>=1.4.0",
     "pot>=0.9.6.post1",
     "accelerate>=1.13.0",
+    "peft>=0.19.1",
 ]
