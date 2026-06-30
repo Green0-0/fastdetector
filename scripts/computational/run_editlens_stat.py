@@ -212,6 +212,10 @@ def main():
     result_ds = result_ds.add_column("ai_editlens_bucket", ai_buckets)
     result_ds = result_ds.add_column("ai_editlens_score", ai_scores)
 
+    if "editlens_model" in result_ds.column_names:
+        result_ds = result_ds.remove_columns("editlens_model")
+    result_ds = result_ds.add_column("editlens_model", [args.checkpoint] * len(result_ds))
+
     print("\nInference complete.")
     total_runtime = time.time() - start_time
     readme_content = f"""# FastDetector EditLens Statistics

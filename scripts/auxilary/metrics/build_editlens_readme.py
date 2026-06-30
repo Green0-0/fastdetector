@@ -120,7 +120,7 @@ def main():
                         temp = d.get("temperature", "Unknown")
                 except:
                     pass
-            parsed_mg_strs.append(f"{m_str} (temperature: {temp})")
+            parsed_mg_strs.append(f"{m_str} (Temp: {temp})")
         mg_str_np = np.array(parsed_mg_strs)
     unique_mg_strs = list(set(mg_str_np)) if has_model_genconfig else []
 
@@ -219,6 +219,14 @@ def main():
         return f"- {emoji}**{header}**\n    - (bin): {format_metrics(bm, True)}\n    - (score): {format_metrics(sm, False)}\n"
 
     md = "# Fastdetector Editlens Metrics\n\n## Summary Stats\n"
+    
+    models_list_str = ", ".join(unique_mg_strs) if unique_mg_strs else "Unknown"
+    unique_editlens_models = list(set(result_ds["editlens_model"])) if "editlens_model" in result_ds.column_names else ["Unknown"]
+    editlens_list_str = ", ".join(unique_editlens_models)
+    
+    md += f"**Models list:** {models_list_str}\n"
+    md += f"**Editlens Models list:** {editlens_list_str}\n\n"
+    
     md += md_entry("", "Overall", overall_m[0], overall_m[1])
     
     for emoji, name, (sm, bm) in prompt_stats:
