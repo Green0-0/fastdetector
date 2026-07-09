@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--classifier-columns", nargs='*', default=[], help="Classifier setups, e.g., 'A:true/B:false'")
     parser.add_argument("--text-columns-analyze", nargs='*', default=[], help="Columns to compute global n-gram and jaccard.")
     parser.add_argument("--pairwise-correlations", nargs='*', default=[], help="Columns to compute pairwise pearson correlations.")
+    parser.add_argument("--threshold-type", type=str, default="fpr0.5", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for classifiers.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
@@ -137,16 +138,17 @@ def main():
             img_name = f"classifier_{file_suffix}.png"
             title = f"Naive Classifier: {title_suffix}"
             
-            chart_img, opt_t, opt_acc = get_sweeping_classifier_plot(arrays, labels, False, True, legend_labels, title)
+            chart_img, opt_t_dict, opt_acc = get_sweeping_classifier_plot(arrays, labels, False, True, legend_labels, title)
             charts[img_name] = chart_img
             classifier_images.append(img_name)
             
-            optimal_thresholds[title_suffix] = (opt_t, opt_acc)
+            opt_t = opt_t_dict[args.threshold_type]
+            optimal_thresholds[title_suffix] = (opt_t, opt_acc, args.threshold_type)
             conf_matrices[title_suffix] = get_confusion_matrix(arrays, labels, False, opt_t, f"Confusion Matrix: {title_suffix}")
             
         for k, v in optimal_thresholds.items():
-            opt_t, opt_acc = v
-            readme_content += f"- **{k}**: Threshold {opt_t:.4f} (Accuracy {opt_acc * 100:.2f}%)\n"
+            opt_t, opt_acc, t_type = v
+            readme_content += f"- **{k}**: Threshold {opt_t:.4f} (Accuracy {opt_acc * 100:.2f}%) using {t_type}\n"
 
         for k, cm in conf_matrices.items():
             readme_content += f"\n{cm}\n"

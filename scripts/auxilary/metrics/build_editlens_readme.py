@@ -57,6 +57,7 @@ def main():
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
     parser.add_argument("--distance-metrics", nargs='*', default=[], help="Distance metric columns to plot against EditLens scores/bins")
     parser.add_argument("--distance-metrics-lower-bounds", nargs='*', type=float, default=[], help="Lower bounds for distance metrics")
+    parser.add_argument("--threshold-type", type=str, default="fpr0.5", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for classifiers.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
@@ -98,7 +99,7 @@ def main():
                 pt = str(p["metadata"].get("PROMPT_TYPE", "Unknown"))
             pts.append(pt)
         prompt_types = np.array(pts)
-    unique_prompts = list(set(prompt_types)) if has_prompts else []
+    unique_prompts = sorted(list(set(prompt_types))) if has_prompts else []
 
     has_model_genconfig = "generator_model" in result_ds.column_names or "generation_params" in result_ds.column_names
     mg_str_np = np.array(["Unknown"] * len(result_ds))
@@ -122,7 +123,7 @@ def main():
                     pass
             parsed_mg_strs.append(f"{m_str} (Temp: {temp})")
         mg_str_np = np.array(parsed_mg_strs)
-    unique_mg_strs = list(set(mg_str_np)) if has_model_genconfig else []
+    unique_mg_strs = sorted(list(set(mg_str_np))) if has_model_genconfig else []
 
     # distance metrics
     dist_dict = {}
@@ -147,12 +148,15 @@ def main():
     charts = {}
     
     # Get sweeping plots on VAL
-    charts["val_sweep_scores.png"], opt_t_score, _ = get_sweeping_classifier_plot(
+    charts["val_sweep_scores.png"], opt_t_score_dict, _ = get_sweeping_classifier_plot(
         [val_h_scores, val_a_scores], [False, True], False, True, ["Human", "AI"], "Val Sweep: Scores"
     )
-    charts["val_sweep_bins.png"], opt_t_bin, _ = get_sweeping_classifier_plot(
+    charts["val_sweep_bins.png"], opt_t_bin_dict, _ = get_sweeping_classifier_plot(
         [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
     )
+    
+    opt_t_score = opt_t_score_dict[args.threshold_type]
+    opt_t_bin = opt_t_bin_dict[args.threshold_type]
     
     # Helper for stats
     def get_stats_for_mask(mask_test):
@@ -221,7 +225,7 @@ def main():
     md = "# Fastdetector Editlens Metrics\n\n## Summary Stats\n"
     
     models_list_str = ", ".join(unique_mg_strs) if unique_mg_strs else "Unknown"
-    unique_editlens_models = list(set(result_ds["editlens_model"])) if "editlens_model" in result_ds.column_names else ["Unknown"]
+    unique_editlens_models = sorted(list(set(result_ds["editlens_model"]))) if "editlens_model" in result_ds.column_names else ["Unknown"]
     editlens_list_str = ", ".join(unique_editlens_models)
     
     md += f"**Models list:** {models_list_str}\n"
@@ -235,7 +239,7 @@ def main():
     for emoji, name, (sm, bm) in mg_stats:
         md += md_entry(emoji, name, sm, bm)
         
-    md += "\n*Note: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data.*\n\n"
+    md += f"\n*Note: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data. Used {args.threshold_type} threshold.*\n\n"
     
     md += "## Validation Threshold\n"
     md += f"Validation rows = {len(val_idx)} / Total rows = {len(result_ds)}\n\n"
