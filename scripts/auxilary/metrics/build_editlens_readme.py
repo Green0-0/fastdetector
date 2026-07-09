@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import io
+import json
 import random
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
@@ -292,6 +293,37 @@ def main():
     md += "\n## All Statistics\n"
     for emoji, name, (sm, bm) in all_stats:
         md += md_entry(emoji, name, sm, bm)
+        
+    class NumpyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super(NumpyEncoder, self).default(obj)
+            
+    summary_stats = {
+        "overall": {
+            "score": overall_m[0],
+            "bin": overall_m[1]
+        },
+        "prompts": {},
+        "models": {},
+        "splits": {}
+    }
+    
+    for emoji, name, (sm, bm) in prompt_stats:
+        summary_stats["prompts"][name] = {"score": sm, "bin": bm, "emoji": emoji}
+        
+    for emoji, name, (sm, bm) in mg_stats:
+        summary_stats["models"][name] = {"score": sm, "bin": bm, "emoji": emoji}
+        
+    for emoji, name, (sm, bm) in all_stats:
+        summary_stats["splits"][name] = {"score": sm, "bin": bm, "emoji": emoji}
+        
+    charts["summary_stats.json"] = json.dumps(summary_stats, indent=2, cls=NumpyEncoder).encode('utf-8')
 
     print("Uploading dataset...")
     upload_dataset(
