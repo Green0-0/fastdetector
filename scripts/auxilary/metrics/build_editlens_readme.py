@@ -58,7 +58,8 @@ def main():
     parser.add_argument("--fastdetector-prompt-metadata-column", type=str, default=None, help="Column name containing prompt metadata")
     parser.add_argument("--distance-metrics", nargs='*', default=[], help="Distance metric columns to plot against EditLens scores/bins")
     parser.add_argument("--distance-metrics-lower-bounds", nargs='*', type=float, default=[], help="Lower bounds for distance metrics")
-    parser.add_argument("--threshold-type", type=str, default="fpr0.5", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for classifiers.")
+    parser.add_argument("--threshold-type-score", type=str, default="fpr0.5", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for score classifiers.")
+    parser.add_argument("--threshold-type-bin", type=str, default="f1", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for bin classifiers.")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
@@ -156,8 +157,8 @@ def main():
         [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
     )
     
-    opt_t_score = opt_t_score_dict[args.threshold_type]
-    opt_t_bin = opt_t_bin_dict[args.threshold_type]
+    opt_t_score = opt_t_score_dict[args.threshold_type_score]
+    opt_t_bin = opt_t_bin_dict[args.threshold_type_bin]
     
     # Helper for stats
     def get_stats_for_mask(mask_test):
@@ -240,7 +241,7 @@ def main():
     for emoji, name, (sm, bm) in mg_stats:
         md += md_entry(emoji, name, sm, bm)
         
-    md += f"\n*Note: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data. Used {args.threshold_type} threshold.*\n\n"
+    md += f"\nNote: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data. Used {args.threshold_type_score} threshold for scores and {args.threshold_type_bin} threshold for bins.\n\n"
     
     md += "## Validation Threshold\n"
     md += f"Validation rows = {len(val_idx)} / Total rows = {len(result_ds)}\n\n"
