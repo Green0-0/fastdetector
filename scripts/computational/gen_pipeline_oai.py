@@ -2,26 +2,21 @@ import argparse
 import os
 import time
 import json
-from transformers import AutoTokenizer
 from datasets import Dataset
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.llm_utils import llm_server_context
 
 def main():
     start_time = time.time()
-    parser = argparse.ArgumentParser(description="Generate LLM data using an LLM server.")
+    parser = argparse.ArgumentParser(description="Generate LLM data using an arbitrary OpenAI-compatible endpoint.")
+    parser.add_argument("--api-url", type=str, required=True, help="OpenAI-compatible API URL.")
     parser.add_argument("--model-name", type=str, required=True, help="Model name to launch.")
-    parser.add_argument("--temperature", type=float, required=True, help="Generation temperature.")
-    parser.add_argument("--top-p", type=float, required=True, help="Generation top-p.")
-    parser.add_argument("--top-k", type=int, default=-1, help="Generation top-k.")
-    parser.add_argument("--presence-penalty", type=float, required=True, help="Generation presence penalty.")
+
     parser.add_argument("--disable-thinking", action="store_true", help="Pass enable_thinking=False to the chat template.")
 
-    parser.add_argument("--max-model-len", type=int, required=True, help="Max model length.")
-    parser.add_argument("--max-dataset-len", type=int, required=True, help="Max acceptable input length from the dataset.")
+    parser.add_argument("--max-dataset-words", type=int, required=True, help="Max acceptable input length from the dataset in words.")
 
     parser.add_argument("--prompt-file", type=str, required=True, help="Prompt JSON file.")
 
@@ -35,66 +30,62 @@ def main():
     args = parser.parse_args()
 
     generation_params = {
-        "temperature": args.temperature,
-        "top_p": args.top_p,
-        "top_k": args.top_k,
-        "presence_penalty": args.presence_penalty,
         "disable_thinking": args.disable_thinking,
+        "is_api_model": True,
     }
 
     print(f"Loading filtering prompt from file: {os.path.basename(args.prompt_file)}")
     prompt_list = load_prompts([args.prompt_file])
     prompts = PromptSet(prompt_list)
 
-    print(f"Loading tokenizer and streaming {args.num_samples} samples from {args.source_dataset}...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    print(f"Streaming {args.num_samples} samples from {args.source_dataset} (max {args.max_dataset_words} words)...")
+    def get_len(text): return len(text.split())
+
     ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
     samples = []
-    tokens_processed = 0
+    words_processed = 0
     for row in ds:
         text = row[args.source_column]
         text = str(text) if text is not None else ""
-        num_tokens = len(tokenizer.encode(text))
-        if num_tokens <= args.max_dataset_len:
+        num_words = get_len(text)
+        if num_words <= args.max_dataset_words:
             samples.append(text)
-            tokens_processed += num_tokens
+            words_processed += num_words
         if len(samples) >= args.num_samples:
             break
     print(f"Loaded {len(samples)} samples.")
 
-    with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_model_len=args.max_model_len) as api_url:
-        print(f"Using API endpoint: {api_url}")
-        result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
-            samples=samples,
-            api_url=api_url,
-            prompts=prompts,
-            generation_params=generation_params,
-        )
-        
-        num_rows = len(next(iter(result_dict.values()))) if result_dict else 0
-        result_dict["generator_model"] = [args.model_name] * num_rows
-        result_dict["generation_params"] = [json.dumps(generation_params)] * num_rows
-        
-        result_ds = Dataset.from_dict(result_dict)
+    api_key = os.environ.get("OPENAI_API_KEY", "EMPTY")
+    
+    print(f"Using API endpoint: {args.api_url}")
+    result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
+        samples=samples,
+        api_url=args.api_url,
+        prompts=prompts,
+        generation_params=generation_params,
+        api_key=api_key,
+        model_name=args.model_name,
+    )
+    
+    num_rows = len(next(iter(result_dict.values()))) if result_dict else 0
+    result_dict["generator_model"] = [args.model_name] * num_rows
+    result_dict["generation_params"] = [json.dumps(generation_params)] * num_rows
+    
+    result_ds = Dataset.from_dict(result_dict)
 
     total_runtime = time.time() - start_time
     readme_content = f"""# Auto-Generated FastDetector Dataset
 - Model Name: {args.model_name}
-- Temperature: {args.temperature}
-- Top P: {args.top_p}
-- Top K: {args.top_k}
-- Presence Penalty: {args.presence_penalty}
 - Disable Thinking: {args.disable_thinking}
 
-- Max Model Length: {args.max_model_len}
-- Max Dataset Length: {args.max_dataset_len}
+- Max Dataset Words: {args.max_dataset_words}
 
 - Prompt File: {args.prompt_file}
 - Total Train Prompts: {len(prompts.get_train())}
 
 - Source Dataset: {args.source_dataset}
 - Source Column: {args.source_column}
-- Total Tokens In Processed Dataset: {tokens_processed}
+- Total Words In Processed Dataset: {words_processed}
 - Target Num Samples: {args.num_samples}
 
 - Total Input Tokens Processed: {total_prompt_tokens}
@@ -104,7 +95,7 @@ def main():
 
 - Total Runtime: {total_runtime:.2f} seconds
 
-- Engine: vllm
+- Engine: OpenAI-Compatible
 """
     upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
     print("Done!")

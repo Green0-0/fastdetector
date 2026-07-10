@@ -72,7 +72,7 @@ def main():
 
     with llm_server_context(engine="aphrodite", model_name=args.model_name, port=None, max_model_len=args.max_model_len) as api_url:
         print(f"Using API endpoint: {api_url}")
-        result_dict = build_dataset(
+        result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
             samples=samples,
             api_url=api_url,
             prompts=prompts,
@@ -108,6 +108,9 @@ def main():
 - Source Column: {args.source_column}
 - Total Tokens In Processed Dataset: {tokens_processed}
 - Target Num Samples: {args.num_samples}
+
+- Total Input Tokens Processed: {total_prompt_tokens}
+- Total Output Tokens Processed: {total_completion_tokens}
 
 - Target Dataset: {args.target_dataset}
 
