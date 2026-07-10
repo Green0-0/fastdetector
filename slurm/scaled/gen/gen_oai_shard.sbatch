@@ -20,7 +20,7 @@ fi
 # Shard 8 and 9 are left untouched from the previous merging (array 0-7)
 SHARD_ID=8  
 API_URL="" 
-MODEL_NAME="gpt-5.4-mini"
+MODEL_NAME="gpt-5.4"
 
 SHARD_BASE="G-reen_cc-2021-filtered-split-${SHARD_ID}"
 TARGET_DS="G-reen/cc-2021-rewritten-${MODEL_NAME}"
