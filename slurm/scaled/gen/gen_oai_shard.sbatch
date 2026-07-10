@@ -13,6 +13,10 @@ export PYTHONUNBUFFERED=1
 
 CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
 
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
 # Shard 8 and 9 are left untouched from the previous merging (array 0-7)
 SHARD_ID=8  
 API_URL="" 
