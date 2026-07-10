@@ -25,6 +25,7 @@ echo "Starting dataset generation for shard ${SHARD_ID} using model ${MODEL_NAME
 
 python scripts/computational/gen_pipeline_oai.py \
     --api-url "$API_URL" \
+    --api-key-env "OPENAI_API_KEY" \
     --model-name "$MODEL_NAME" \
     --disable-thinking \
     --max-dataset-words 10000 \

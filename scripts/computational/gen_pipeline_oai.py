@@ -12,6 +12,7 @@ def main():
     start_time = time.time()
     parser = argparse.ArgumentParser(description="Generate LLM data using an arbitrary OpenAI-compatible endpoint.")
     parser.add_argument("--api-url", type=str, required=True, help="OpenAI-compatible API URL.")
+    parser.add_argument("--api-key-env", type=str, required=True, help="Name of the environment variable containing the API key.")
     parser.add_argument("--model-name", type=str, required=True, help="Model name to launch.")
 
     parser.add_argument("--disable-thinking", action="store_true", help="Pass enable_thinking=False to the chat template.")
@@ -55,7 +56,7 @@ def main():
             break
     print(f"Loaded {len(samples)} samples.")
 
-    api_key = os.environ.get("OPENAI_API_KEY", "EMPTY")
+    api_key = os.environ.get(args.api_key_env, "EMPTY")
     
     print(f"Using API endpoint: {args.api_url}")
     result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
