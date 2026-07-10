@@ -1,0 +1,29 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Caches & Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+cached_ds/
+
+# Slurm outputs
+*.out
+*.err
+slurm-*.out
+
+# IDEs & OS files
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
