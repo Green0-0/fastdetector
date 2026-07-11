@@ -60,6 +60,8 @@ def main():
     parser.add_argument("--distance-metrics-lower-bounds", nargs='*', type=float, default=[], help="Lower bounds for distance metrics")
     parser.add_argument("--threshold-type-score", type=str, default="fpr0.5", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for score classifiers.")
     parser.add_argument("--threshold-type-bin", type=str, default="f1", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for bin classifiers.")
+    parser.add_argument("--manual-threshold-score", type=float, default=-1.0, help="Manual threshold to use for score classifiers, overriding sweep (-1.0 disables).")
+    parser.add_argument("--manual-threshold-bin", type=float, default=-1.0, help="Manual threshold to use for bin classifiers, overriding sweep (-1.0 disables).")
     parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
     parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
     args = parser.parse_args()
@@ -157,8 +159,15 @@ def main():
         [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
     )
     
-    opt_t_score = opt_t_score_dict[args.threshold_type_score]
-    opt_t_bin = opt_t_bin_dict[args.threshold_type_bin]
+    if args.manual_threshold_score != -1.0:
+        opt_t_score = args.manual_threshold_score
+    else:
+        opt_t_score = opt_t_score_dict[args.threshold_type_score]
+        
+    if args.manual_threshold_bin != -1.0:
+        opt_t_bin = args.manual_threshold_bin
+    else:
+        opt_t_bin = opt_t_bin_dict[args.threshold_type_bin]
     
     # Helper for stats
     def get_stats_for_mask(mask_test):
@@ -241,7 +250,13 @@ def main():
     for emoji, name, (sm, bm) in mg_stats:
         md += md_entry(emoji, name, sm, bm)
         
-    md += f"\nNote: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. Thresholds used were attained by sweeping over a small validation set split from the data. Used {args.threshold_type_score} threshold for scores and {args.threshold_type_bin} threshold for bins.\n\n"
+    md += f"\nNote: ❗ means this was the hardest split by accuracy, and ✔️ means this was the easiest split by accuracy. "
+    if args.manual_threshold_score != -1.0 or args.manual_threshold_bin != -1.0:
+        t_s_str = f"manual {args.manual_threshold_score}" if args.manual_threshold_score != -1.0 else f"swept {args.threshold_type_score}"
+        t_b_str = f"manual {args.manual_threshold_bin}" if args.manual_threshold_bin != -1.0 else f"swept {args.threshold_type_bin}"
+        md += f"Thresholds used for classifiers: {t_s_str} threshold for scores and {t_b_str} threshold for bins.\n\n"
+    else:
+        md += f"Thresholds used were attained by sweeping over a small validation set split from the data. Used {args.threshold_type_score} threshold for scores and {args.threshold_type_bin} threshold for bins.\n\n"
     
     md += "## Validation Threshold\n"
     md += f"Validation rows = {len(val_idx)} / Total rows = {len(result_ds)}\n\n"

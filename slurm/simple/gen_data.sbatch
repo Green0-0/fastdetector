@@ -28,6 +28,8 @@ if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
   exit 1
 fi
 
+CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
+
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
 python scripts/computational/gen_pipeline.py \
@@ -41,6 +43,7 @@ python scripts/computational/gen_pipeline.py \
     --source-dataset G-reen/cc-2021-filtered \
     --source-column collected_subset_original_final_response \
     --num-samples 250000 \
-    --target-dataset G-reen/cc-2021-rewritten
+    --target-dataset G-reen/cc-2021-rewritten \
+    --cache-dir $CACHE_DIR
 
 echo "Dataset generation complete."

@@ -28,6 +28,8 @@ if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
   exit 1
 fi
 
+CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
+
 # ---- Run the dataset generation ----
 echo "Starting dataset generation..."
 python scripts/computational/gen_pipeline.py \
@@ -41,28 +43,33 @@ python scripts/computational/gen_pipeline.py \
     --source-dataset G-reen/cc-2021-raw \
     --source-column trafilatura_text \
     --num-samples 400000 \
-    --target-dataset G-reen/cc-2021-processed
+    --target-dataset G-reen/cc-2021-processed \
+    --cache-dir $CACHE_DIR
 
 python scripts/auxilary/metrics/calc_basic_pair_metrics.py \
     --source-dataset G-reen/cc-2021-processed \
     --columns original final_response \
     --target-dataset G-reen/cc-2021-processed-stats \
-    --deviated-lines --deviated-words --deviated-characters --loose-subset-collect --strict-subset
+    --deviated-lines --deviated-words --deviated-characters --loose-subset-collect --strict-subset \
+    --cache-dir $CACHE_DIR
 
 python scripts/auxilary/metrics/calc_quantiles.py \
     --source-dataset G-reen/cc-2021-processed-stats \
     --columns deviated_lines_proportion_original_final_response deviated_words_proportion_original_final_response deviated_characters_proportion_original_final_response \
-    --target-dataset G-reen/cc-2021-processed-stats
+    --target-dataset G-reen/cc-2021-processed-stats \
+    --cache-dir $CACHE_DIR
 
 python scripts/auxilary/metrics/build_readme.py \
     --source-dataset G-reen/cc-2021-processed-stats \
     --target-dataset G-reen/cc-2021-processed-stats \
     --summary-stat-columns is_loose_subset_original_final_response is_strict_subset_original_final_response deviated_lines_proportion_original_final_response deviated_words_proportion_original_final_response deviated_characters_proportion_original_final_response deviated_lines_original_final_response deviated_words_original_final_response deviated_characters_original_final_response \
-    --histogram-columns deviated_lines_original_final_response deviated_words_original_final_response deviated_characters_original_final_response deviated_lines_proportion_original_final_response deviated_words_proportion_original_final_response deviated_characters_proportion_original_final_response
+    --histogram-columns deviated_lines_original_final_response deviated_words_original_final_response deviated_characters_original_final_response deviated_lines_proportion_original_final_response deviated_words_proportion_original_final_response deviated_characters_proportion_original_final_response \
+    --cache-dir $CACHE_DIR
 
 python scripts/auxilary/dataset/subset_data.py \
     --source_dataset G-reen/cc-2021-processed-stats \
     --target_dataset G-reen/cc-2021-filtered \
-    --conditions "is_loose_subset_original_final_response=True,deviated_lines_proportion_original_final_response_quantile<0.9,deviated_words_proportion_original_final_response_quantile<0.9,deviated_characters_proportion_original_final_response_quantile<0.9"
+    --conditions "is_loose_subset_original_final_response=True,deviated_lines_proportion_original_final_response_quantile<0.9,deviated_words_proportion_original_final_response_quantile<0.9,deviated_characters_proportion_original_final_response_quantile<0.9" \
+    --cache-dir $CACHE_DIR
 
 echo "Dataset generation complete."
