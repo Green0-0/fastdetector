@@ -139,7 +139,13 @@ def main():
     np.random.seed(42)
     indices = np.arange(len(result_ds))
     np.random.shuffle(indices)
-    val_size = max(1, len(result_ds) // 10)
+    
+    skip_val = (args.manual_threshold_score != -1.0 and args.manual_threshold_bin != -1.0)
+    if skip_val:
+        val_size = 0
+    else:
+        val_size = max(1, len(result_ds) // 10)
+        
     val_idx = indices[:val_size]
     test_idx = indices[val_size:]
     
@@ -152,12 +158,13 @@ def main():
     charts = {}
     
     # Get sweeping plots on VAL
-    charts["val_sweep_scores.png"], opt_t_score_dict, _ = get_sweeping_classifier_plot(
-        [val_h_scores, val_a_scores], [False, True], False, True, ["Human", "AI"], "Val Sweep: Scores"
-    )
-    charts["val_sweep_bins.png"], opt_t_bin_dict, _ = get_sweeping_classifier_plot(
-        [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
-    )
+    if not skip_val:
+        charts["val_sweep_scores.png"], opt_t_score_dict, _ = get_sweeping_classifier_plot(
+            [val_h_scores, val_a_scores], [False, True], False, True, ["Human", "AI"], "Val Sweep: Scores"
+        )
+        charts["val_sweep_bins.png"], opt_t_bin_dict, _ = get_sweeping_classifier_plot(
+            [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
+        )
     
     if args.manual_threshold_score != -1.0:
         opt_t_score = args.manual_threshold_score
@@ -260,8 +267,11 @@ def main():
     
     md += "## Validation Threshold\n"
     md += f"Validation rows = {len(val_idx)} / Total rows = {len(result_ds)}\n\n"
-    md += "![Val Sweep Scores](val_sweep_scores.png)\n"
-    md += "![Val Sweep Bins](val_sweep_bins.png)\n\n"
+    if not skip_val:
+        md += "![Val Sweep Scores](val_sweep_scores.png)\n"
+        md += "![Val Sweep Bins](val_sweep_bins.png)\n\n"
+    else:
+        md += "Validation sweep was skipped because thresholds were manually provided.\n\n"
     
     md += "## Summary plots\n"
     

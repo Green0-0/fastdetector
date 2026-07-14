@@ -32,10 +32,6 @@ export PYTHONUNBUFFERED=1
 
 CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
 
-# Optional manual thresholds (-1.0 to disable and use sweep)
-MANUAL_THRESHOLD_SCORE=-1.0
-MANUAL_THRESHOLD_BIN=-1.0
-
 # ---- Run the dataset analysis ----
 python scripts/computational/run_editlens_stat.py --source-dataset G-reen/cc-2021-rewritten-stat --target-dataset G-reen/cc-2021-rewritten-stat-editlens --fastdetector-prompt-metadata-column prompt --cache-dir $CACHE_DIR
 
@@ -46,5 +42,5 @@ python scripts/auxilary/metrics/build_editlens_readme.py \
     --distance-metrics pairwise_cosdist_original_final_response pairwise_softngram_original_final_response \
     --distance-metrics-lower-bounds 0.03 0.06 \
     --cache-dir $CACHE_DIR \
-    --manual-threshold-score $MANUAL_THRESHOLD_SCORE \
-    --manual-threshold-bin $MANUAL_THRESHOLD_BIN
+    --manual-threshold-score -1.0 \
+    --manual-threshold-bin -1.0
