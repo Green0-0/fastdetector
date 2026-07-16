@@ -1,0 +1,14 @@
+num_samples = 50000
+source_column = "collected_subset_original_final_response"
+prompt_file = "prompts/combined_dataset_test.json"
+
+[pipeline]
+engine = "vllm"
+model_name = "Qwen/Qwen3-8B-AWQ"
+temperature = 0.7
+top_p = 0.8
+top_k = 20
+disable_thinking = true
+presence_penalty = 1.5
+max_model_len = 32000
+max_input_tokens = 15000

@@ -1,0 +1,20 @@
+# If this is specified, the dataset will be loaded/written directly with this name
+# and the prefixes/suffixes specified below will be ignored.
+override_dataset_input = ""
+override_dataset_output = ""
+
+# For convenience in running the pipeline, it is recommended to follow a
+# strict prefix-suffix dataset naming convention
+# the prefix represents the base dataset, and the suffix represents the pipeline phase
+# both reads and writes will adhere to this, unless an override dataset is specified
+dataset_prefix = "G-reen/cc-2021"
+raw_suffix = "raw"
+pre_filter_suffix = "processed"
+post_filter_suffix = "filtered"
+gen_suffix = "rewritten"
+stat_suffix = "stat"
+eval_suffix = "eval"
+
+save_locally_instead = false # Pushes to hf if false
+periodic_checkpoint = false # If there are intermediate pipeline steps, checkpoint them locally
+cache_dir = "/usr/project/xtmp/ccprocessing_cache/" # Change this path for your local setup

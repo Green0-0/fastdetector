@@ -7,22 +7,18 @@ from datasets import Dataset
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
-from fastdetector.utils import upload_dataset
+from fastdetector.utils import upload_dataset, upload_readme
 from fastdetector.llm_utils import llm_server_context
 
 def main():
     start_time = time.time()
-    parser = argparse.ArgumentParser(description="Generate LLM data using Aphrodite engine.")
+    parser = argparse.ArgumentParser(description="Generate LLM data using an LLM server.")
     parser.add_argument("--model-name", type=str, required=True, help="Model name to launch.")
     parser.add_argument("--temperature", type=float, required=True, help="Generation temperature.")
     parser.add_argument("--top-p", type=float, required=True, help="Generation top-p.")
     parser.add_argument("--top-k", type=int, default=-1, help="Generation top-k.")
     parser.add_argument("--presence-penalty", type=float, required=True, help="Generation presence penalty.")
     parser.add_argument("--disable-thinking", action="store_true", help="Pass enable_thinking=False to the chat template.")
-
-    parser.add_argument("--top-a", type=float, default=0.0, help="Generation top-a.")
-    parser.add_argument("--xtc", type=float, default=0.0, help="Generation xtc-probability (uses default threshold of 0.1).")
-    parser.add_argument("--nsigma", type=float, default=0.0, help="Generation nsigma.")
 
     parser.add_argument("--max-model-len", type=int, required=True, help="Max model length.")
     parser.add_argument("--max-dataset-len", type=int, required=True, help="Max acceptable input length from the dataset.")
@@ -44,10 +40,6 @@ def main():
         "top_k": args.top_k,
         "presence_penalty": args.presence_penalty,
         "disable_thinking": args.disable_thinking,
-        # aphrodite specific
-        "top_a": args.top_a,
-        "xtc_probability": args.xtc,
-        "nsigma": args.nsigma,
     }
 
     print(f"Loading filtering prompt from file: {os.path.basename(args.prompt_file)}")
@@ -70,7 +62,7 @@ def main():
             break
     print(f"Loaded {len(samples)} samples.")
 
-    with llm_server_context(engine="aphrodite", model_name=args.model_name, port=None, max_model_len=args.max_model_len) as api_url:
+    with llm_server_context(engine="vllm", model_name=args.model_name, port=None, max_model_len=args.max_model_len) as api_url:
         print(f"Using API endpoint: {api_url}")
         result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
             samples=samples,
@@ -94,10 +86,6 @@ def main():
 - Presence Penalty: {args.presence_penalty}
 - Disable Thinking: {args.disable_thinking}
 
-- Top A: {args.top_a}
-- XTC Probability: {args.xtc}
-- NSigma: {args.nsigma}
-
 - Max Model Length: {args.max_model_len}
 - Max Dataset Length: {args.max_dataset_len}
 
@@ -116,9 +104,11 @@ def main():
 
 - Total Runtime: {total_runtime:.2f} seconds
 
-- Engine: aphrodite
+- Engine: vllm
 """
-    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
+    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
+    if not args.save_locally_instead:
+        upload_readme(dataset_name=args.target_dataset, readme_content=readme_content)
     print("Done!")
 
 if __name__ == "__main__":

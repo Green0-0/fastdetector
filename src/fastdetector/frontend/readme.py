@@ -1,33 +1,86 @@
-import argparse
+from typing import Dict, Tuple, Any
+from datasets import Dataset
+
 import itertools
 import numpy as np
-from fastdetector.utils import load_dataset_local_fallback as load_dataset
-from fastdetector.utils import upload_dataset, upload_readme
+
+from fastdetector.frontend.config import StatConfig
 from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
 from fastdetector.statistics.statistics_basic import global_ngram_analysis, pairwise_jaccards
 
-def main():
-    parser = argparse.ArgumentParser(description="Build dataset README with summary stats, histograms, and classifiers.")
-    parser.add_argument("--source-dataset", type=str, required=True, help="Dataset to analyze")
-    parser.add_argument("--target-dataset", type=str, required=True, help="Dataset to push to")
-    parser.add_argument("--summary-stat-columns", nargs='*', default=[], help="Columns to compute mean, max, min, std for.")
-    parser.add_argument("--histogram-columns", nargs='*', default=[], help="Histogram setups, e.g., 'A/B' 'C' 'D/E/F'")
-    parser.add_argument("--scatterplot-columns", nargs='*', default=[], help="Scatterplot setups, e.g., 'X/Y1/Y2'")
-    parser.add_argument("--classifier-columns", nargs='*', default=[], help="Classifier setups, e.g., 'A:true/B:false'")
-    parser.add_argument("--text-columns-analyze", nargs='*', default=[], help="Columns to compute global n-gram and jaccard.")
-    parser.add_argument("--pairwise-correlations", nargs='*', default=[], help="Columns to compute pairwise pearson correlations.")
-    parser.add_argument("--threshold-type", type=str, default="fpr0.5", choices=["accuracy", "fpr1", "fpr0.1", "fpr0.5", "fpr0.01", "f1"], help="Threshold type to use for classifiers.")
-    parser.add_argument("--save-locally-instead", action="store_true", help="Save dataset locally in cached_ds folder instead of uploading")
-    parser.add_argument("--cache-dir", type=str, default="cached_ds", help="Cache directory for local datasets")
-    args = parser.parse_args()
-
-    print(f"Downloading dataset {args.source_dataset}...")
-    ds = load_dataset(args.source_dataset, split="train", cache_dir=args.cache_dir)
-
-    readme_content = f"# FastDetector Dataset Metrics\n\n"
+def build_readme_content(ds: Dataset, config: StatConfig) -> Tuple[str, Dict[str, Any]]:
+    """Generate README markdown and associated charts from dataset and config.
     
-    if args.text_columns_analyze:
-        for col_a, col_b in itertools.combinations(args.text_columns_analyze, 2):
+    Args:
+        ds: The HuggingFace dataset.
+        config: The StatConfig used to generate the stats.
+        
+    Returns:
+        A tuple of (readme_content_str, charts_dict)
+    """
+    col_a = config.human_column
+    col_b = config.ai_column
+    
+    summary_stat_columns = []
+    histogram_columns = []
+    scatterplot_columns = []
+    classifier_columns = []
+    text_columns_analyze = [col_a, col_b]
+    pairwise_correlations = []
+    
+    if config.jaccards_1: summary_stat_columns.append(f"jaccard_1_{col_a}_{col_b}")
+    if config.jaccards_2: summary_stat_columns.append(f"jaccard_2_{col_a}_{col_b}")
+    if config.jaccards_3: summary_stat_columns.append(f"jaccard_3_{col_a}_{col_b}")
+    if config.levenshteins: summary_stat_columns.append(f"levenshtein_{col_a}_{col_b}")
+    
+    if config.pairwise_softngram:
+        summary_stat_columns.append(f"pairwise_softngram_{col_a}_{col_b}")
+        histogram_columns.append(f"pairwise_softngram_{col_a}_{col_b}")
+    if config.pairwise_cosim:
+        summary_stat_columns.append(f"pairwise_cosdist_{col_a}_{col_b}")
+        histogram_columns.append(f"pairwise_cosdist_{col_a}_{col_b}")
+        pairwise_correlations.append(f"pairwise_cosdist_{col_a}_{col_b}")
+    if config.bertscore:
+        summary_stat_columns.append(f"pairwise_bertscore_f1_{col_a}_{col_b}")
+        histogram_columns.append(f"pairwise_bertscore_f1_{col_a}_{col_b}")
+        pairwise_correlations.append(f"pairwise_bertscore_f1_{col_a}_{col_b}")
+    if config.moverscore:
+        summary_stat_columns.append(f"pairwise_moverscore_{col_a}_{col_b}")
+        histogram_columns.append(f"pairwise_moverscore_{col_a}_{col_b}")
+        pairwise_correlations.append(f"pairwise_moverscore_{col_a}_{col_b}")
+    if config.reranker_score:
+        summary_stat_columns.append(f"pairwise_cross_encoder_{col_a}_{col_b}")
+        histogram_columns.append(f"pairwise_cross_encoder_{col_a}_{col_b}")
+        pairwise_correlations.append(f"pairwise_cross_encoder_{col_a}_{col_b}")
+        
+    need_llm = any([config.perplexity, config.entropy, config.topp_outlier, config.topk_outlier, config.binoculars_score, config.fastdetectgpt_score])
+    if need_llm:
+        for idx, cp in enumerate(config.llm_checkpoints):
+            suffix = config.col_suffixes[idx] if idx < len(config.col_suffixes) else f"_model_{idx}"
+            if config.perplexity:
+                summary_stat_columns.extend([f"{col_a}_perplexity{suffix}", f"{col_b}_perplexity{suffix}"])
+                histogram_columns.append(f"{col_a}_perplexity{suffix}/{col_b}_perplexity{suffix}")
+            if config.entropy:
+                summary_stat_columns.extend([f"{col_a}_entropy{suffix}", f"{col_b}_entropy{suffix}"])
+                histogram_columns.append(f"{col_a}_entropy{suffix}/{col_b}_entropy{suffix}")
+            if config.fastdetectgpt_score:
+                summary_stat_columns.extend([f"{col_a}_fastdetectgpt{suffix}", f"{col_b}_fastdetectgpt{suffix}"])
+                histogram_columns.append(f"{col_a}_fastdetectgpt{suffix}/{col_b}_fastdetectgpt{suffix}")
+                classifier_columns.append(f"{col_a}_fastdetectgpt{suffix}:true/{col_b}_fastdetectgpt{suffix}:false")
+                
+        if config.binoculars_score and len(config.llm_checkpoints) >= 2:
+            summary_stat_columns.extend([f"{col_a}_binoculars", f"{col_b}_binoculars"])
+            histogram_columns.append(f"{col_a}_binoculars/{col_b}_binoculars")
+            classifier_columns.append(f"{col_a}_binoculars:true/{col_b}_binoculars:false")
+
+    if pairwise_correlations and len(pairwise_correlations) > 1:
+        scatterplot_columns.append("/".join(pairwise_correlations))
+        
+    readme_content = f"# FastDetector Dataset Metrics\n\n"
+    charts = {}
+    
+    if text_columns_analyze:
+        for col_a, col_b in itertools.combinations(text_columns_analyze, 2):
             if col_a not in ds.column_names or col_b not in ds.column_names:
                 print(f"Warning: {col_a} or {col_b} not in dataset. Skipping text analysis.")
                 continue
@@ -73,9 +126,9 @@ def main():
             global_jaccard = pairwise_jaccards([" ".join([str(t) for t in texts_a if t])], [" ".join([str(t) for t in texts_b if t])], 1)[0]
             readme_content += f"\n### Global Jaccard (n=1)\n{global_jaccard:.4f}\n\n"
 
-    if args.summary_stat_columns:
+    if summary_stat_columns:
         readme_content += "## Summary Statistics\n"
-        for col in args.summary_stat_columns:
+        for col in summary_stat_columns:
             if col not in ds.column_names:
                 print(f"Warning: column {col} not found for summary stats. Skipping.")
                 continue
@@ -87,9 +140,9 @@ def main():
             readme_content += f"- **{col}**: Mean = {mean_val:.4f}, Std = {std_val:.4f}, Max = {max_val:.4f}, Min = {min_val:.4f}\n"
         readme_content += "\n"
 
-    if args.pairwise_correlations:
+    if pairwise_correlations:
         readme_content += "## Pearson Correlation Coefficients\n"
-        for col_a, col_b in itertools.combinations(args.pairwise_correlations, 2):
+        for col_a, col_b in itertools.combinations(pairwise_correlations, 2):
             if col_a not in ds.column_names or col_b not in ds.column_names:
                 print(f"Warning: {col_a} or {col_b} not in dataset. Skipping diff.")
                 continue
@@ -98,16 +151,14 @@ def main():
             corr = np.corrcoef(arr1, arr2)[0, 1]
             readme_content += f"- **{col_a} vs {col_b}**: {corr:.4f}\n"
         readme_content += "\n"
-
-    charts = {}
     
-    if args.classifier_columns:
+    if classifier_columns:
         readme_content += "## Classifier Optimal Thresholds\n"
         optimal_thresholds = {}
         conf_matrices = {}
         classifier_images = []
         
-        for setup in args.classifier_columns:
+        for setup in classifier_columns:
             parts = setup.split('/')
             arrays = []
             labels = []
@@ -142,8 +193,8 @@ def main():
             charts[img_name] = chart_img
             classifier_images.append(img_name)
             
-            opt_t = opt_t_dict[args.threshold_type]
-            optimal_thresholds[title_suffix] = (opt_t, opt_acc, args.threshold_type)
+            opt_t = opt_t_dict[config.threshold_type]
+            optimal_thresholds[title_suffix] = (opt_t, opt_acc, config.threshold_type)
             conf_matrices[title_suffix] = get_confusion_matrix(arrays, labels, False, opt_t, f"Confusion Matrix: {title_suffix}")
             
         for k, v in optimal_thresholds.items():
@@ -158,9 +209,9 @@ def main():
             readme_content += f"![Classifier]({img})\n"
         readme_content += "\n"
 
-    if args.histogram_columns:
+    if histogram_columns:
         readme_content += "## Histograms\n"
-        for setup in args.histogram_columns:
+        for setup in histogram_columns:
             cols = setup.split('/')
             arrays = []
             legend_labels = []
@@ -186,9 +237,9 @@ def main():
             readme_content += f"![Histogram]({img_name})\n"
         readme_content += "\n"
 
-    if args.scatterplot_columns:
+    if scatterplot_columns:
         readme_content += "## Scatterplots\n"
-        for setup in args.scatterplot_columns:
+        for setup in scatterplot_columns:
             cols = setup.split('/')
             if len(cols) < 2:
                 print(f"Warning: Invalid scatterplot format '{setup}'. Expected X/Y1[/Y2...].")
@@ -225,20 +276,4 @@ def main():
             readme_content += f"![Scatterplot]({img_name})\n"
         readme_content += "\n"
 
-    print(f"Uploading dataset to {args.target_dataset}...")
-    upload_dataset(
-        dataset=ds,
-        dataset_name=args.target_dataset,
-        save_locally_instead=args.save_locally_instead,
-        cache_dir=args.cache_dir
-    )
-    if not args.save_locally_instead:
-        upload_readme(
-            dataset_name=args.target_dataset,
-            files=charts,
-            readme_content=readme_content
-        )
-    print("Done!")
-
-if __name__ == "__main__":
-    main()
+    return readme_content, charts

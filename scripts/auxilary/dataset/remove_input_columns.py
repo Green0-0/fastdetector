@@ -1,6 +1,6 @@
 import argparse
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
-from fastdetector.utils import upload_dataset
+from fastdetector.utils import upload_dataset, upload_readme
 
 def main():
     parser = argparse.ArgumentParser(description="Remove input columns from a dataset.")
@@ -31,11 +31,15 @@ def main():
     upload_dataset(
         dataset=dataset,
         dataset_name=args.target_dataset,
-        append_files_source=args.source_dataset,
-        append_files_exclude_type=['.parquet', '.arrow', '.gitattributes', '.git/'],
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )
+    if not args.save_locally_instead:
+        upload_readme(
+            dataset_name=args.target_dataset,
+            append_files_source=args.source_dataset,
+            append_files_exclude_type=['.parquet', '.arrow', '.gitattributes', '.git/']
+        )
     print("Done!")
 
 if __name__ == '__main__':

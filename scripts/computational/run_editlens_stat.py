@@ -23,7 +23,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from fastdetector.utils import upload_dataset
+from fastdetector.utils import upload_dataset, upload_readme
 
 class NormedLinear(torch.nn.Module):
     """Linear layer preceded by LayerNorm to keep logits well-scaled."""
@@ -232,10 +232,14 @@ def main():
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
-        readme_content=readme_content,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )
+    if not args.save_locally_instead:
+        upload_readme(
+            dataset_name=args.target_dataset,
+            readme_content=readme_content
+        )
     print("Done!")
 
 if __name__ == "__main__":

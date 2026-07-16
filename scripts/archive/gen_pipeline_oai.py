@@ -6,7 +6,7 @@ from datasets import Dataset
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
-from fastdetector.utils import upload_dataset
+from fastdetector.utils import upload_dataset, upload_readme
 
 def main():
     start_time = time.time()
@@ -98,7 +98,9 @@ def main():
 
 - Engine: OpenAI-Compatible
 """
-    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, readme_content=readme_content, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
+    upload_dataset(dataset=result_ds, dataset_name=args.target_dataset, save_locally_instead=args.save_locally_instead, cache_dir=args.cache_dir)
+    if not args.save_locally_instead:
+        upload_readme(dataset_name=args.target_dataset, readme_content=readme_content)
     print("Done!")
 
 if __name__ == "__main__":

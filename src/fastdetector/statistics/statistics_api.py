@@ -7,6 +7,7 @@ from typing import Optional
 from transformers import AutoModel, AutoTokenizer
 
 from fastdetector.statistics.statistics_basic import extract_ngrams
+import gc
 
 async def _fetch_logprobs_async(client: AsyncOpenAI, model_name: str, text: str, top_logprobs_k: int, sem: asyncio.Semaphore):
     async with sem:
@@ -98,6 +99,12 @@ def batch_gen_embeddings(texts: list[str], model_name: str = "Qwen/Qwen3-Embeddi
 
     model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
     embeddings = model.encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
+    
+    del model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     return embeddings
 
 def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str = "Qwen/Qwen3-Reranker-4B", batch_size: int = 2, as_distance: bool = True) -> list[float]:
@@ -121,6 +128,12 @@ def batch_cross_encoder(texts_a: list[str], texts_b: list[str], model_name: str 
     model = CrossEncoder(model_name, trust_remote_code=True, **kwargs)
     pairs = list(zip(texts_a, texts_b))
     scores = model.predict(pairs, batch_size=batch_size)
+    
+    del model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    
     if as_distance:
         return (-1.0 * scores).tolist()
     return scores.tolist()
@@ -211,113 +224,78 @@ def batch_soft_ngram_scores(
             del similarity_matrix
         except NameError:
             pass
-        torch.cuda.empty_cache()
+        
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
         
     return results
 
-_cached_token_models = {}
-
-def batch_extract_token_embeddings(
-    texts: list[str],
+def generate_token_embeddings_pairs(
+    texts_a: list[str],
+    texts_b: list[str],
     model_name: str = "answerdotai/ModernBERT-base",
     batch_size: int = 4,
-) -> tuple[list[torch.Tensor], list[list[str]]]:
+    chunk_size: int = 100,
+):
     """Extract normalized token-level embeddings and subword tokens using a bidirectional encoder.
+    Yields chunks of embeddings and tokens to avoid OOM.
     
     Args:
-        texts: List of texts.
-        model_name: HuggingFace model identifier for a bidirectional encoder.
-        batch_size: Inference batch size.
-        
-    Returns:
-        Tuple of (embs, tokens) where:
-            - embs is a list of NxD tensors.
-            - tokens is a list of lists of subword strings.
-    """
-    global _cached_token_models
-    
-    if model_name not in _cached_token_models:
-        print(f"Loading {model_name}...")
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModel.from_pretrained(model_name)
-        model.eval()
-        if torch.cuda.is_available():
-            model = model.cuda()
-        _cached_token_models[model_name] = (model, tokenizer)
-            
-    model, tokenizer = _cached_token_models[model_name]
-        
-    all_embs = []
-    all_tokens = []
-    
-    for i in range(0, len(texts), batch_size):
-        batch_texts = texts[i:i+batch_size]
-        
-        inputs = tokenizer(batch_texts, padding=True, return_tensors="pt", truncation=True, max_length=512)
-        
-        if torch.cuda.is_available():
-            inputs = {k: v.cuda() for k, v in inputs.items()}
-            
-        with torch.no_grad():
-            outputs = model(**inputs)
-            
-        batch_embs = []
-        batch_tokens = []
-        
-        for b_idx in range(len(batch_texts)):
-            mask = inputs['attention_mask'][b_idx]
-            length = mask.sum().item()
-            
-            if length > 2:
-                embs = outputs.last_hidden_state[b_idx, 1:length-1]
-                embs = torch.nn.functional.normalize(embs, p=2, dim=1)
-                batch_embs.append(embs)
-                
-                ids = inputs['input_ids'][b_idx, 1:length-1]
-                batch_tokens.append(tokenizer.convert_ids_to_tokens(ids))
-            else:
-                batch_embs.append(torch.empty((0, outputs.last_hidden_state.size(-1))))
-                batch_tokens.append([])
-                
-        all_embs.extend([emb.cpu() for emb in batch_embs])
-        all_tokens.extend(batch_tokens)
-            
-    return all_embs, all_tokens
-
-def batch_gen_chunked_embeddings(texts_list: list[list[str]], model_name: str = "Qwen/Qwen3-Embedding-4B", batch_size: int = 4) -> list[np.ndarray]:
-    """Generate normalized embeddings for a list of lists of chunks.
-    
-    Args:
-        texts_list: List of lists of string chunks.
+        texts_a: First list of texts.
+        texts_b: Second list of texts.
         model_name: HuggingFace model identifier.
-        batch_size: Batch size for inference.
+        batch_size: Inference batch size.
+        chunk_size: How many texts to yield per iteration.
         
-    Returns:
-        List of 2D numpy arrays, where each array corresponds to the embeddings for the chunks in a text.
+    Yields:
+        Tuple of (embs_a, toks_a, embs_b, toks_b) for each chunk.
     """
-    flat_texts = []
-    lengths = []
-    for chunks in texts_list:
-        flat_texts.extend(chunks)
-        lengths.append(len(chunks))
+    print(f"Loading {model_name}...")
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
+    model.eval()
+    if torch.cuda.is_available():
+        model = model.cuda()
         
-    if not flat_texts:
-        return [np.empty((0, 0)) for _ in texts_list]
-        
-    kwargs = {}
-    if "qwen3" in model_name.lower():
-        kwargs["model_kwargs"] = {"attn_implementation": "flash_attention_2", "torch_dtype": torch.bfloat16}
-        kwargs["processor_kwargs"] = {"padding_side": "left"}
+    def _extract_chunk(texts):
+        all_embs = []
+        all_tokens = []
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i+batch_size]
+            inputs = tokenizer(batch_texts, padding=True, return_tensors="pt", truncation=True, max_length=512)
+            if torch.cuda.is_available():
+                inputs = {k: v.cuda() for k, v in inputs.items()}
+            with torch.no_grad():
+                outputs = model(**inputs)
+            
+            for b_idx in range(len(batch_texts)):
+                mask = inputs['attention_mask'][b_idx]
+                length = mask.sum().item()
+                if length > 2:
+                    embs = outputs.last_hidden_state[b_idx, 1:length-1]
+                    embs = torch.nn.functional.normalize(embs, p=2, dim=1)
+                    all_embs.append(embs.cpu().numpy())
+                    ids = inputs['input_ids'][b_idx, 1:length-1]
+                    all_tokens.append(tokenizer.convert_ids_to_tokens(ids))
+                else:
+                    all_embs.append(np.empty((0, outputs.last_hidden_state.size(-1))))
+                    all_tokens.append([])
+        return all_embs, all_tokens
 
-    model = SentenceTransformer(model_name, trust_remote_code=True, **kwargs)
-    flat_embeddings = model.encode(flat_texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
-    
-    results = []
-    idx = 0
-    for length in lengths:
-        if length > 0:
-            results.append(flat_embeddings[idx:idx+length])
-            idx += length
-        else:
-            results.append(np.empty((0, flat_embeddings.shape[1])))
-    return results
+    for i in range(0, len(texts_a), chunk_size):
+        chunk_a = texts_a[i:i+chunk_size]
+        chunk_b = texts_b[i:i+chunk_size]
+        
+        embs_a, toks_a = _extract_chunk(chunk_a)
+        embs_b, toks_b = _extract_chunk(chunk_b)
+        
+        yield embs_a, toks_a, embs_b, toks_b
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+    del model
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()

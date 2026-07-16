@@ -1,0 +1,23 @@
+# External scripts do NOT respect globals.toml, make sure you specifiy the dataset path
+dataset_path = ""
+save_locally_instead = false
+cache_dir = "/usr/project/xtmp/ccprocessing_cache/"
+
+metadata_columns = ["prompt", "generator_model"]
+
+base_model = "FacebookAI/roberta-large"
+checkpoint = "pangram/editlens_roberta-large"
+max_length = 512
+batch_size = 24
+
+# Instead of rows with paired human-AI responses
+# This script expects a column of text and another column with the class
+text_column = "original"
+classification_column = "is_human"
+
+# Splits the test set into a small validation set to determine classification thresholds
+validation_size = 0.1
+threshold_type_bin = "f1"
+threshold_type_score = "fpr0.5"
+manual_threshold_score = -1.0
+manual_threshold_bin = -1.0

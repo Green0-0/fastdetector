@@ -1,7 +1,7 @@
 import argparse
 import json
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
-from fastdetector.utils import upload_dataset
+from fastdetector.utils import upload_dataset, upload_readme
 from fastdetector.statistics.statistics_llm import (
     entropies_approx, perplexities, top_p_outlier_percentages, top_k_outlier_percentages,
     fastdetectgpt_scores_approx, binoculars_scores_approx
@@ -94,10 +94,14 @@ def main():
     upload_dataset(
         dataset=ds,
         dataset_name=args.target_dataset,
-        readme_content=readme_content,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )
+    if not args.save_locally_instead:
+        upload_readme(
+            dataset_name=args.target_dataset,
+            readme_content=readme_content
+        )
     print("Done!")
 
 if __name__ == "__main__":

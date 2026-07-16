@@ -1,0 +1,21 @@
+num_samples = 400000
+source_column = "trafilatura_text"
+prompt_file = "prompts/filter_contiguous_subset.json"
+
+# The dataset will be split into subsets 'shard_1', 'shard_2', etc.  
+# -1 means no splitting.
+output_shards = -1
+conditions = "is_loose_subset=True,deviated_lines_proportion_quantile<0.9,deviated_words_proportion_quantile<0.9,deviated_characters_proportion_quantile<0.9"
+
+# Standard llm pipeline params
+[pipeline]
+engine = "vllm"
+model_name = "google/gemma-4-E4B-it"
+temperature = 0.0
+top_p = 1.0
+presence_penalty = 0.0
+max_model_len = 32000
+max_input_tokens = 15000
+
+
+

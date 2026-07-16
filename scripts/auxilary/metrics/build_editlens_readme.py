@@ -4,7 +4,7 @@ import io
 import json
 import random
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
-from fastdetector.utils import upload_dataset
+from fastdetector.utils import upload_dataset, upload_readme
 from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot, compute_auroc
 
 def compute_metrics(h_vals, a_vals, threshold, dist_metrics_dict, flip_inequality=False):
@@ -355,11 +355,15 @@ def main():
     upload_dataset(
         dataset=result_ds,
         dataset_name=args.target_dataset,
-        files=charts,
-        readme_content=md,
         save_locally_instead=args.save_locally_instead,
         cache_dir=args.cache_dir
     )
+    if not args.save_locally_instead:
+        upload_readme(
+            dataset_name=args.target_dataset,
+            files=charts,
+            readme_content=md
+        )
     print("Done!")
 
 if __name__ == "__main__":

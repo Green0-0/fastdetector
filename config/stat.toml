@@ -1,0 +1,40 @@
+human_column = "original"
+ai_column = "final_response"
+
+# True means the metric will be calculated
+# For embeddings/llms, specifying false will skip using the model altogether
+jaccards_1 = true
+jaccards_2 = true
+jaccards_3 = false
+levenshteins = true
+
+moverscore = true
+bertscore = true
+pairwise_cosim = true
+pairwise_softngram = true
+
+perplexity = true
+entropy = true
+topp_outlier = true
+topk_outlier = true
+binoculars_score = true
+fastdetectgpt_score = true
+reranker_score = true
+threshold_type = "accuracy"
+
+# If set to true, embedding and logprob matrices will be deleted after use
+remove_columns_afterwards = true
+
+# These define the models used for specific metrics
+softngram_model = "all-MiniLM-L6-v2"
+embedding_model = "Qwen/Qwen3-Embedding-4B"
+token_embedding_model = "answerdotai/ModernBERT-base"
+reranker_model = "Qwen/Qwen3-Reranker-4B"
+batch_size = 4
+
+llm_checkpoints = [
+    "unsloth/Llama-3.2-3B-Instruct",
+    "unsloth/Llama-3.2-3B"
+]
+col_suffixes = ["_llama_instruct", "_llama_base"]
+top_logprobs_k = 100
