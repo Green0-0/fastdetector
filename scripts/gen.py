@@ -1,6 +1,6 @@
 import argparse
-import tomllib
-from fastdetector.frontend.config import GenConfig, GlobalsConfig
+from fastdetector.frontend.config import GenConfig
+from fastdetector.frontend.loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
 
 def main():
@@ -8,25 +8,15 @@ def main():
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--gen-config", type=str, required=True, help="Path to gen TOML (e.g. config/gen/shard_0.toml)")
     parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to subset the dataset.")
-    
+
     args = parser.parse_args()
 
-    with open(args.globals_config, "rb") as f:
-        globals_dict = tomllib.load(f)
-    
-    with open(args.gen_config, "rb") as f:
-        gen_dict = tomllib.load(f)
-        
-    globals_config = GlobalsConfig(**globals_dict)
-    gen_config = GenConfig(**gen_dict)
-    
-    source_dataset = f"{globals_config.dataset_prefix}-{globals_config.post_filter_suffix}"
-    if globals_config.override_dataset_input:
-        source_dataset = globals_config.override_dataset_input
-    
-    target_dataset = f"{globals_config.dataset_prefix}-{globals_config.gen_suffix}"
-    if globals_config.override_dataset_output:
-        target_dataset = globals_config.override_dataset_output
+    globals_config, gen_config = load_config_pair(
+        args.globals_config, args.gen_config, GenConfig
+    )
+
+    source_dataset = globals_config.resolve_input_dataset(globals_config.post_filter_suffix)
+    target_dataset = globals_config.resolve_output_dataset(globals_config.gen_suffix)
 
     print(f"Running generation pipeline...")
     print(f"Source Dataset: {source_dataset}")

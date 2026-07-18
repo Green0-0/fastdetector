@@ -1,6 +1,6 @@
 import argparse
-import tomllib
-from fastdetector.frontend.config import FilterConfig, GlobalsConfig
+from fastdetector.frontend.config import FilterConfig
+from fastdetector.frontend.loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
@@ -18,24 +18,16 @@ def main():
     parser = argparse.ArgumentParser(description="Run the dataset filtering pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--filter-config", type=str, default="config/filter.toml", help="Path to filter.toml")
-    
+
     args = parser.parse_args()
 
-    with open(args.globals_config, "rb") as f:
-        globals_dict = tomllib.load(f)
-    
-    with open(args.filter_config, "rb") as f:
-        filter_dict = tomllib.load(f)
-        
-    globals_config = GlobalsConfig(**globals_dict)
-    filter_config = FilterConfig(**filter_dict)
-    
-    source_dataset = f"{globals_config.dataset_prefix}-{globals_config.raw_suffix}"
-    if globals_config.override_dataset_input:
-        source_dataset = globals_config.override_dataset_input
-    
+    globals_config, filter_config = load_config_pair(
+        args.globals_config, args.filter_config, FilterConfig
+    )
+
+    source_dataset = globals_config.resolve_input_dataset(globals_config.raw_suffix)
     intermediate_dataset = f"{globals_config.dataset_prefix}-{globals_config.pre_filter_suffix}"
-    
+
     print(f"Running filtering generation pipeline...")
     run_pipeline(
         gen_config=filter_config,
@@ -108,9 +100,7 @@ def main():
 - Conditions: {conditions}
 """
     
-    filtered_dataset = f"{globals_config.dataset_prefix}-{globals_config.post_filter_suffix}"
-    if globals_config.override_dataset_output:
-        filtered_dataset = globals_config.override_dataset_output
+    filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
         
     if filter_config.output_shards > 0:
         shard_size = len(ds_filtered) // filter_config.output_shards

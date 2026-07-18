@@ -1,7 +1,7 @@
 import argparse
-import tomllib
 from datasets import concatenate_datasets
-from fastdetector.frontend.config import StatConfig, GlobalsConfig
+from fastdetector.frontend.config import StatConfig
+from fastdetector.frontend.loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_readme
 from fastdetector.frontend.readme import build_readme_content
@@ -13,17 +13,11 @@ def main():
     parser.add_argument("--total-shards", type=int, required=True, help="Total number of shards to load and concatenate.")
     args = parser.parse_args()
 
-    with open(args.globals_config, "rb") as f:
-        globals_dict = tomllib.load(f)
-    with open(args.stat_config, "rb") as f:
-        stat_dict = tomllib.load(f)
-        
-    globals_config = GlobalsConfig(**globals_dict)
-    stat_config = StatConfig(**stat_dict)
-    
-    target_dataset = f"{globals_config.dataset_prefix}-{globals_config.stat_suffix}"
-    if globals_config.override_dataset_output:
-        target_dataset = globals_config.override_dataset_output
+    globals_config, stat_config = load_config_pair(
+        args.globals_config, args.stat_config, StatConfig
+    )
+
+    target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
 
     print(f"Loading {args.total_shards} shards from {target_dataset}...")
     shards = []

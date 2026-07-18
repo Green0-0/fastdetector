@@ -1,11 +1,9 @@
 import argparse
-import tomllib
-import time
 import json
-import itertools
 import numpy as np
 
-from fastdetector.frontend.config import StatConfig, GlobalsConfig
+from fastdetector.frontend.config import StatConfig
+from fastdetector.frontend.loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
@@ -39,21 +37,12 @@ def main():
     parser.add_argument("--batch-id", type=int, required=True, help="Batch ID to subset the dataset.")
     args = parser.parse_args()
 
-    with open(args.globals_config, "rb") as f:
-        globals_dict = tomllib.load(f)
-    with open(args.stat_config, "rb") as f:
-        stat_dict = tomllib.load(f)
-        
-    globals_config = GlobalsConfig(**globals_dict)
-    stat_config = StatConfig(**stat_dict)
-    
-    source_dataset = f"{globals_config.dataset_prefix}-{globals_config.gen_suffix}"
-    if globals_config.override_dataset_input:
-        source_dataset = globals_config.override_dataset_input
-        
-    target_dataset = f"{globals_config.dataset_prefix}-{globals_config.stat_suffix}"
-    if globals_config.override_dataset_output:
-        target_dataset = globals_config.override_dataset_output
+    globals_config, stat_config = load_config_pair(
+        args.globals_config, args.stat_config, StatConfig
+    )
+
+    source_dataset = globals_config.resolve_input_dataset(globals_config.gen_suffix)
+    target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
         
     print(f"Loading dataset {source_dataset} (subset index {args.batch_id})...")
     ds = load_dataset(source_dataset, split="train", cache_dir=globals_config.cache_dir, subset_index=args.batch_id)
