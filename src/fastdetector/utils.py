@@ -183,7 +183,7 @@ def upload_readme(
 
 def apply_filter_conditions(dataset: Dataset, conditions: list, filter_type: str = "AND") -> Dataset:
     """
-    Applies structured dictionary conditions to filter a dataset.
+    Applies structured ConditionConfig conditions to filter a dataset.
     Supported operators: ==, !=, >, <, >=, <=
     """
     if not conditions:
@@ -192,20 +192,20 @@ def apply_filter_conditions(dataset: Dataset, conditions: list, filter_type: str
     print("Filtering dataset with parsed conditions:")
     for c in conditions:
         print(c)
-        
+
     def filter_func(example):
         bools = []
         for cond in conditions:
-            col = cond.column if hasattr(cond, 'column') else cond['column']
-            op = cond.operator if hasattr(cond, 'operator') else cond['operator']
-            val = cond.value if hasattr(cond, 'value') else cond['value']
-            
+            col = cond.column
+            op = cond.operator
+            val = cond.value
+
             if col not in example or example[col] is None:
                 bools.append(False)
                 continue
-                
+
             ex_val = example[col]
-            
+
             try:
                 if op == '==': bools.append(ex_val == val)
                 elif op == '!=': bools.append(ex_val != val)
@@ -218,10 +218,10 @@ def apply_filter_conditions(dataset: Dataset, conditions: list, filter_type: str
                 if op == '==': bools.append(ex_val == val)
                 elif op == '!=': bools.append(ex_val != val)
                 else: bools.append(False)
-                
+
         if filter_type.upper() == "AND":
             return all(bools)
         else:
             return any(bools)
-            
+
     return dataset.filter(filter_func, num_proc=4)

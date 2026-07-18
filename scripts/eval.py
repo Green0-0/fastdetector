@@ -166,7 +166,7 @@ def main():
     indices = np.arange(len(result_ds))
     np.random.shuffle(indices)
     
-    skip_val = (eval_config.manual_threshold_score != -1.0 and eval_config.manual_threshold_bin != -1.0)
+    skip_val = (eval_config.manual_threshold_score is not None and eval_config.manual_threshold_bin is not None)
     if skip_val:
         val_size = 0
     else:
@@ -194,12 +194,12 @@ def main():
         opt_t_score_dict = {}
         opt_t_bin_dict = {}
     
-    if eval_config.manual_threshold_score != -1.0:
+    if eval_config.manual_threshold_score is not None:
         opt_t_score = eval_config.manual_threshold_score
     else:
         opt_t_score = opt_t_score_dict.get(eval_config.threshold_type_score, 0.5)
         
-    if eval_config.manual_threshold_bin != -1.0:
+    if eval_config.manual_threshold_bin is not None:
         opt_t_bin = eval_config.manual_threshold_bin
     else:
         opt_t_bin = opt_t_bin_dict.get(eval_config.threshold_type_bin, 0.5)

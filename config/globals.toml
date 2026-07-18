@@ -16,5 +16,4 @@ stat_suffix = "stat"
 eval_suffix = "eval"
 
 save_locally_instead = false # Pushes to hf if false
-periodic_checkpoint = false # If there are intermediate pipeline steps, checkpoint them locally
 cache_dir = "/usr/project/xtmp/ccprocessing_cache/" # Change this path for your local setup
