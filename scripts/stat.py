@@ -9,13 +9,13 @@ from fastdetector.utils import upload_dataset
 from fastdetector.llm_utils import llm_server_context
 
 # APIs
-from fastdetector.statistics.statistics_api import (
+from fastdetector.statistics.logprobs_api import fetch_logprobs_all
+from fastdetector.statistics.embeddings_api import (
     batch_gen_embeddings,
     generate_token_embeddings_pairs,
-    batch_soft_ngram_scores,
-    fetch_logprobs_all,
-    batch_cross_encoder
+    batch_cross_encoder,
 )
+from fastdetector.statistics.softngram_api import batch_soft_ngram_scores
 
 # Metrics
 from fastdetector.statistics.statistics_basic import (
