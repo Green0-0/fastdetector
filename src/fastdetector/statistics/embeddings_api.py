@@ -9,7 +9,6 @@ Split out of statistics_api.py for modularity.
 """
 
 import gc
-from typing import Optional
 
 import numpy as np
 import torch

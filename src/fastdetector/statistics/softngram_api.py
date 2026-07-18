@@ -8,10 +8,7 @@ requiring exact n-gram matches, it counts an n-gram in the edited text as
 under a sentence embedding model.
 """
 
-import gc
-
 import torch
-from sentence_transformers import SentenceTransformer
 
 from fastdetector.statistics.statistics_basic import extract_ngrams
 from fastdetector.statistics.embeddings_api import _build_sentence_transformer, _release_model
