@@ -15,6 +15,14 @@ from fastdetector.statistics.plotting import (  # noqa: F401
     get_scatterplot,
 )
 
+__all__ = [
+    "compute_auroc",
+    "get_histogram",
+    "get_sweeping_classifier_plot",
+    "get_confusion_matrix",
+    "get_scatterplot",
+]
+
 
 def compute_auroc(
     y_true: list[bool] | list[int] | np.ndarray,
