@@ -14,6 +14,7 @@ batch_size = 24
 # This script expects a column of text and another column with the class
 text_column = "original"
 classification_column = "is_human"
+default_class = "" # If a classification column is not included, instead assume all rows are in this class.
 
 # Splits the test set into a small validation set to determine classification thresholds
 validation_size = 0.1

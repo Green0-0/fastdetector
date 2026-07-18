@@ -14,8 +14,19 @@ manual_threshold_score = -1.0
 manual_threshold_bin = -1.0
 
 # If the distance is below the lower bound, the row will be dropped
-distance_metric_filter_type = "AND"
-distance_metrics_lower_bounds = [0.03, 0.06]
+filter_type = "AND"
+
+[[filter_conditions]]
+column = "pairwise_cosdist_original_final_response"
+operator = ">="
+value = 0.03
+
+[[filter_conditions]]
+column = "pairwise_softngram_original_final_response"
+operator = ">="
+value = 0.06
+
+# Distance metrics to plot in README
 distance_metrics = [
     "pairwise_cosdist_original_final_response",
     "pairwise_softngram_original_final_response"

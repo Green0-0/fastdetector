@@ -1,7 +1,6 @@
-import uuid
 import os
-import re
 import shutil
+import tempfile
 from typing import Dict
 from huggingface_hub import HfApi, hf_hub_download
 from datasets import Dataset, load_from_disk, load_dataset, concatenate_datasets, get_dataset_config_names
@@ -22,22 +21,8 @@ def load_dataset_local_fallback(dataset_name: str, cache_dir: str, split="train"
     local_path = os.path.join(cache_dir, safe_name)
     if os.path.exists(local_path):
         if not os.path.exists(os.path.join(local_path, "state.json")) and not os.path.exists(os.path.join(local_path, "dataset_info.json")):
-            tmp_path = local_path + "_tmp"
-            if os.path.exists(tmp_path) and os.path.exists(os.path.join(tmp_path, "state.json")):
-                print(f"Found gutted local path, but a complete _tmp directory exists. Recovering from {tmp_path}...")
-                
-                old_path = local_path + "_old_" + uuid.uuid4().hex[:8]
-                os.rename(local_path, old_path)
-                os.rename(tmp_path, local_path)
-                
-                print(f"Loading dataset locally from {local_path}...")
-                return load_from_disk(local_path)
-            else:
-                print(f"Local path {local_path} exists but is corrupted/empty. Falling back to Hugging Face Hub: {dataset_name}...")
-                if config_name:
-                    return load_dataset(dataset_name, name=config_name, split=split, cache_dir=cache_dir)
-                else:
-                    return load_dataset(dataset_name, split=split, cache_dir=cache_dir)
+            print(f"Local path {local_path} exists but is corrupted/empty. Falling back to Hugging Face Hub: {dataset_name}...")
+            return load_dataset(dataset_name, name=config_name, split=split, cache_dir=cache_dir) if config_name else load_dataset(dataset_name, split=split, cache_dir=cache_dir)
                 
         print(f"Loading dataset locally from {local_path}...")
         return load_from_disk(local_path)
@@ -86,24 +71,17 @@ def upload_dataset(
             safe_name = f"{safe_name}_{config_name}"
         local_path = os.path.join(cache_dir, safe_name)
         print(f"Saving dataset locally to '{local_path}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
-        tmp_path = local_path + "_tmp"
-        if os.path.exists(tmp_path):
-            shutil.rmtree(tmp_path)
-        dataset.save_to_disk(tmp_path)
         
-        old_path = None
-        if os.path.exists(local_path):
-            import uuid
-            old_path = local_path + "_old_" + uuid.uuid4().hex[:8]
-            os.rename(local_path, old_path)
-            
-        os.rename(tmp_path, local_path)
-        
-        if old_path and os.path.exists(old_path):
-            try:
-                shutil.rmtree(old_path)
-            except OSError:
-                pass
+        with tempfile.TemporaryDirectory(dir=cache_dir) as tmp_dir:
+            dataset.save_to_disk(tmp_dir)
+            if os.path.exists(local_path):
+                old_dir = tempfile.mkdtemp(dir=cache_dir)
+                os.replace(local_path, old_dir)
+                os.replace(tmp_dir, local_path)
+                shutil.rmtree(old_dir, ignore_errors=True)
+            else:
+                os.replace(tmp_dir, local_path)
+            os.mkdir(tmp_dir) # Prevent tempfile cleanup from failing
     else:
         print(f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows and {len(dataset.column_names)} columns...")
         dataset.push_to_hub(dataset_name, config_name=config_name)
@@ -203,86 +181,47 @@ def upload_readme(
     except Exception as e:
         print(f"Error uploading files to HuggingFace Hub: {e}")
 
-def apply_string_filter_conditions(dataset: Dataset, conditions: str) -> Dataset:
+def apply_filter_conditions(dataset: Dataset, conditions: list, filter_type: str = "AND") -> Dataset:
     """
-    Parses a comma-separated string of conditions and applies them to a dataset.
-    Supported operators: =, ==, !=, >, <, >=, <=
+    Applies structured dictionary conditions to filter a dataset.
+    Supported operators: ==, !=, >, <, >=, <=
     """
     if not conditions:
         return dataset
+
+    print("Filtering dataset with parsed conditions:")
+    for c in conditions:
+        print(c)
         
-    raw_conditions = [c.strip() for c in conditions.split(',')]
-    
-    parsed_conditions = []
-    
-    pattern = re.compile(r'^(\w+)\s*([=><!]+)\s*(.*)$')
-    
-    for cond in raw_conditions:
-        match = pattern.match(cond)
-        if match:
-            column, operator, value = match.groups()
+    def filter_func(example):
+        bools = []
+        for cond in conditions:
+            col = cond.column if hasattr(cond, 'column') else cond['column']
+            op = cond.operator if hasattr(cond, 'operator') else cond['operator']
+            val = cond.value if hasattr(cond, 'value') else cond['value']
             
-            if value.isdigit():
-                value = int(value)
-            else:
-                try:
-                    value = float(value)
-                except ValueError:
-                    if value.lower() in ['true', 'false']:
-                        value = value.lower() == 'true'
-                    else:
-                        value = value.strip('\'"')
-                    
-            parsed_conditions.append({
-                'column': column,
-                'operator': operator,
-                'value': value
-            })
+            if col not in example or example[col] is None:
+                bools.append(False)
+                continue
+                
+            ex_val = example[col]
+            
+            try:
+                if op == '==': bools.append(ex_val == val)
+                elif op == '!=': bools.append(ex_val != val)
+                elif op == '>': bools.append(float(ex_val) > float(val))
+                elif op == '<': bools.append(float(ex_val) < float(val))
+                elif op == '>=': bools.append(float(ex_val) >= float(val))
+                elif op == '<=': bools.append(float(ex_val) <= float(val))
+                else: bools.append(False)
+            except (ValueError, TypeError):
+                if op == '==': bools.append(ex_val == val)
+                elif op == '!=': bools.append(ex_val != val)
+                else: bools.append(False)
+                
+        if filter_type.upper() == "AND":
+            return all(bools)
         else:
-            print(f"Warning: Could not parse condition '{cond}'")
+            return any(bools)
             
-    if parsed_conditions:
-        print("Parsed Conditions:")
-        for condition in parsed_conditions:
-            print(condition)
-        
-        print("Filtering dataset...")
-        def filter_func(example):
-            for cond in parsed_conditions:
-                col = cond['column']
-                op = cond['operator']
-                val = cond['value']
-                
-                if col not in example:
-                    return False
-                    
-                ex_val = example[col]
-                
-                try:
-                    if op == '==':
-                        if not ex_val == val: return False
-                    elif op == '!=':
-                        if not ex_val != val: return False
-                    elif op == '>':
-                        if not float(ex_val) > float(val): return False
-                    elif op == '<':
-                        if not float(ex_val) < float(val): return False
-                    elif op == '>=':
-                        if not float(ex_val) >= float(val): return False
-                    elif op == '<=':
-                        if not float(ex_val) <= float(val): return False
-                    elif op == '=':
-                        if not ex_val == val: return False
-                    else:
-                        raise ValueError(f"Unknown operator: {op}")
-                except (ValueError, TypeError):
-                    if op in ['==', '!=', '=']:
-                        if op in ['==', '='] and ex_val != val: return False
-                        if op == '!=' and ex_val == val: return False
-                    else:
-                        return False
-            return True
-        
-        return dataset.filter(filter_func)
-    
-    return dataset
+    return dataset.filter(filter_func, num_proc=4)

@@ -57,13 +57,19 @@ class GenConfig(BaseModel):
     prompt_file: str
     pipeline: PipelineConfig
 
+class ConditionConfig(BaseModel):
+    column: str
+    operator: str
+    value: Any
+
 class FilterConfig(BaseModel):
     """Configuration for the filtering script (filter.py)."""
     num_samples: int
     source_column: str
     prompt_file: str
     output_shards: int
-    conditions: str
+    conditions: List[ConditionConfig]
+    filter_type: str = "AND"
     pipeline: PipelineConfig
 
 class EvalConfig(BaseModel):
@@ -86,10 +92,12 @@ class EvalConfig(BaseModel):
     manual_threshold_score: float
     manual_threshold_bin: float
     
-    # Distance Metrics
-    distance_metric_filter_type: str
-    distance_metrics_lower_bounds: List[float]
-    distance_metrics: List[str]
+    # Dataset Filtering
+    filter_type: str = "AND"
+    filter_conditions: List[ConditionConfig] = []
+    
+    # Distance Metrics for Correlation/Plots
+    distance_metrics: List[str] = []
 
 class StatConfig(BaseModel):
     """Configuration for the comprehensive dataset statistics pipeline (stat.py)."""

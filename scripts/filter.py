@@ -3,7 +3,7 @@ import tomllib
 from fastdetector.frontend.config import FilterConfig, GlobalsConfig
 from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
-from fastdetector.utils import upload_dataset, upload_readme, apply_string_filter_conditions
+from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
 
 from fastdetector.statistics.statistics_basic import (
     deviated_lines,
@@ -101,7 +101,7 @@ def main():
         
     conditions = filter_config.conditions
     print(f"Filtering dataset with conditions: {conditions}")
-    ds_filtered = apply_string_filter_conditions(ds, conditions)
+    ds_filtered = apply_filter_conditions(ds, conditions, filter_config.filter_type)
     
     filtered_readme = f"""
 ## Filtering Applied
