@@ -159,40 +159,11 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
             base_model.score = NormedLinear(hidden_size, n_buckets, device=device)
 
         model = PeftModel.from_pretrained(base_model, checkpoint_path)
-
-        # Safety check: if the adapter does not contain a "score" key in its
-        # state dict, then the NormedLinear head we just installed has fresh
-        # random weights — the model will produce garbage predictions. Warn
-        # loudly so the user knows the checkpoint is incomplete.
-        _warn_if_score_head_missing(model, checkpoint_path)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(checkpoint_path)
 
     model.eval()
     return model, tokenizer, is_qlora
-
-
-def _warn_if_score_head_missing(model, checkpoint_path: str) -> None:
-    """Warn if the loaded PEFT model's adapter state dict has no 'score' key.
-
-    This catches the case where a QLoRA adapter was saved without its
-    classification head — the NormedLinear replacement would then have
-    random weights and produce garbage predictions.
-    """
-    try:
-        # PeftModel exposes the merged state dict via state_dict(); the
-        # adapter keys are prefixed with "base_model.model.".
-        adapter_keys = [k for k in model.state_dict().keys() if "score" in k]
-        if not adapter_keys:
-            print(
-                f"WARNING: The QLoRA adapter at {checkpoint_path} does not "
-                f"appear to contain a 'score' head. The NormedLinear head "
-                f"will have random weights — predictions will be garbage. "
-                f"Make sure the adapter was saved with its classification head."
-            )
-    except Exception:
-        # Don't let a diagnostic warning crash the load.
-        pass
 
 
 def compute_editlens_scores(
@@ -256,11 +227,19 @@ def compute_editlens_scores(
     device = next(model.parameters()).device
     all_logits = []
 
+    # bf16 autocast on CUDA: speeds up inference and halves memory on
+    # bf16-capable GPUs. On CPU it's a no-op. For QLoRA, bnb_4bit_compute_dtype
+    # already handles bf16 compute, but autocast is harmless.
+    use_autocast = device.type == "cuda"
     with torch.no_grad():
         for batch in dataloader:
             batch = {k: v.to(device) for k, v in batch.items()}
-            outputs = model(**batch)
-            all_logits.append(outputs.logits.detach().cpu().numpy())
+            if use_autocast:
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    outputs = model(**batch)
+            else:
+                outputs = model(**batch)
+            all_logits.append(outputs.logits.float().detach().cpu().numpy())
 
     if not all_logits:
         return [], []
