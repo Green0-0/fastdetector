@@ -4,7 +4,7 @@ prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "oai"
-model_name = "gpt-4o"+
+model_name = "gpt-4o"
 parallelization_type = "none"
 temperature = 0.7
 top_p = 1.0
