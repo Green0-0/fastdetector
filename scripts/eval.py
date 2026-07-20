@@ -2,10 +2,9 @@ import argparse
 import time
 import json
 import numpy as np
-import tomllib
-from datasets import Dataset
 
-from fastdetector.frontend.config import EvalConfig, GlobalsConfig
+from fastdetector.frontend.config import EvalConfig
+from fastdetector.frontend.loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
 from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot, compute_auroc
@@ -61,21 +60,12 @@ def main():
     parser.add_argument("--eval-config", type=str, default="config/eval.toml", help="Path to eval.toml")
     args = parser.parse_args()
 
-    with open(args.globals_config, "rb") as f:
-        globals_dict = tomllib.load(f)
-    with open(args.eval_config, "rb") as f:
-        eval_dict = tomllib.load(f)
-        
-    globals_config = GlobalsConfig(**globals_dict)
-    eval_config = EvalConfig(**eval_dict)
+    globals_config, eval_config = load_config_pair(
+        args.globals_config, args.eval_config, EvalConfig
+    )
 
-    source_dataset = f"{globals_config.dataset_prefix}-{globals_config.stat_suffix}"
-    if globals_config.override_dataset_input:
-        source_dataset = globals_config.override_dataset_input
-        
-    target_dataset = f"{globals_config.dataset_prefix}-{globals_config.eval_suffix}"
-    if globals_config.override_dataset_output:
-        target_dataset = globals_config.override_dataset_output
+    source_dataset = globals_config.resolve_input_dataset(globals_config.stat_suffix)
+    target_dataset = globals_config.resolve_output_dataset(globals_config.eval_suffix)
 
     print(f"Loading dataset {source_dataset}...")
     result_ds = load_dataset(source_dataset, split="train", cache_dir=globals_config.cache_dir)
