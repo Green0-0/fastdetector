@@ -5,6 +5,7 @@ from fastdetector.frontend.config import StatConfig
 from fastdetector.frontend.loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
+from fastdetector.engine import Engine
 from fastdetector.llm_utils import llm_server_context
 
 # APIs
@@ -294,7 +295,7 @@ def compute_llm_metrics(ds, stat_config: StatConfig):
         print(f"Launching {checkpoint} to fetch logprobs (Suffix: {suffix})...")
 
         with llm_server_context(
-            engine="vllm",
+            engine=Engine.VLLM,
             model_name=checkpoint,
             port=None,
             max_logprobs=stat_config.top_logprobs_k,

@@ -76,7 +76,7 @@ def _resolve_engine_binary(engine: Engine) -> tuple[str, Engine]:
 
 
 def launch_engine_server(
-    engine: Engine | str,
+    engine: Engine,
     model_name: str,
     port: int,
     max_logprobs: int = 10,
@@ -87,13 +87,11 @@ def launch_engine_server(
 
     The subprocess's stdout and stderr are streamed to the parent process's
     stdout/stderr so that engine startup logs (model loading progress, CUDA
-    errors, etc.) are visible. Previously, the subprocess inherited no
-    redirection and its output was lost, making startup failures hard to
-    diagnose.
+    errors, etc.) are visible.
 
     Args:
-        engine: Engine enum (or string name) for the backend. Must be a
-            local-server engine (vLLM or Aphrodite).
+        engine: Engine for the backend. Must be a local-server engine
+            (vLLM or Aphrodite).
         model_name: HuggingFace model ID or local path.
         port: Port for the OpenAI-compatible API server.
         max_logprobs: Maximum number of top logprobs the server will return.
@@ -108,8 +106,6 @@ def launch_engine_server(
         RuntimeError: if the server fails to become healthy within the timeout
             (currently 20 minutes). The subprocess is terminated before raising.
     """
-    if isinstance(engine, str):
-        engine = Engine.from_str(engine)
     if not engine.is_local_server:
         raise ValueError(
             f"{engine} is not a local-server engine. "
@@ -196,21 +192,20 @@ def launch_engine_server(
     )
 
 
-def _terminate_proc(proc: subprocess.Popen, engine: Engine | str, timeout: int = 60) -> None:
+def _terminate_proc(proc: subprocess.Popen, engine: Engine, timeout: int = 60) -> None:
     """Terminate a subprocess gracefully, escalating to kill if needed."""
-    engine_label = engine.value if isinstance(engine, Engine) else str(engine)
     proc.terminate()
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        print(f"{engine_label} server did not terminate, killing it...")
+        print(f"{engine.value} server did not terminate, killing it...")
         proc.kill()
         proc.wait()
 
 
 @contextmanager
 def llm_server_context(
-    engine: Engine | str,
+    engine: Engine,
     model_name: str,
     port: int | None = None,
     max_logprobs: int = 10,
@@ -224,8 +219,8 @@ def llm_server_context(
     server on context exit (including on exception).
 
     Args:
-        engine: Engine enum (or string name) for the backend. Must be a
-            local-server engine (vLLM or Aphrodite).
+        engine: Engine for the backend. Must be a local-server engine
+            (vLLM or Aphrodite).
         model_name: HuggingFace model ID or local path.
         port: Port for the API server. If None, a free port is chosen.
         max_logprobs: Maximum top-logprobs the server will return.
@@ -239,8 +234,6 @@ def llm_server_context(
         ValueError: if the engine is not a local-server engine.
         RuntimeError: if the server fails to start within the timeout.
     """
-    if isinstance(engine, str):
-        engine = Engine.from_str(engine)
     if not engine.is_local_server:
         raise ValueError(
             f"{engine} is not a local-server engine. "

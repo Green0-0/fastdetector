@@ -109,7 +109,7 @@ def run_pipeline(
     print(f"Loaded {len(samples)} samples with a total of {tokens_or_words_processed} tokens.")
 
     if uses_tokenizer:
-        with llm_server_context(engine=pipe_config.engine.value, model_name=pipe_config.model_name, port=None, max_model_len=pipe_config.max_model_len) as api_url:
+        with llm_server_context(engine=pipe_config.engine, model_name=pipe_config.model_name, port=None, max_model_len=pipe_config.max_model_len) as api_url:
             print(f"Using API endpoint: {api_url}")
             result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
                 samples=samples,
