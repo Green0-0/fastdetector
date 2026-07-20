@@ -165,10 +165,17 @@ def make_llm_metrics_processor(
             s1 = col_suffixes[0] if len(col_suffixes) > 0 else "_model_0"
             s2 = col_suffixes[1] if len(col_suffixes) > 1 else "_model_1"
             for col in (col_a, col_b):
-                token_lps = examples[f"{col}_token_logprobs{s1}"]
+                # Binoculars needs M2 (performer) actual token logprobs
+                # for the numerator (PPL_performer). Both columns are
+                # already fetched by make_logprobs_processor — we just
+                # need to grab the s2 (M2) column as well.
+                token_lps_m1 = examples[f"{col}_token_logprobs{s1}"]
+                token_lps_m2 = examples[f"{col}_token_logprobs{s2}"]
                 lp1 = deserialize_top_logprobs(examples[f"{col}_top_logprobs{s1}"])
                 lp2 = deserialize_top_logprobs(examples[f"{col}_top_logprobs{s2}"])
-                result[f"{col}_binoculars"] = binoculars_scores_approx(token_lps, lp1, lp2)
+                result[f"{col}_binoculars"] = binoculars_scores_approx(
+                    token_lps_m1, lp1, lp2, token_lps_m2
+                )
 
         return result
     return process_llm_metrics

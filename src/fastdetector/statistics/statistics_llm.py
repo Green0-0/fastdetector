@@ -101,68 +101,137 @@ def fastdetectgpt_scores_approx(token_logprobs: list[list[float | None]], top_lo
             
     return results
 
-def binoculars_scores_approx(token_logprobs_m1: list[list[float | None]], 
+def binoculars_scores_approx(token_logprobs_m1: list[list[float | None]],
                              top_logprobs_m1: list[list[dict[str, float]]],
-                             top_logprobs_m2: list[list[dict[str, float]]]) -> list[float]:
-    """Approximate Binoculars score using top-N logprobs.
-    B = log(PPL_M1) / log(X-PPL_M1_M2)
-    log(PPL_M1) = - 1/N sum log p_M1(x_i)
-    log(X-PPL_M1_M2) = 1/N sum_i H(M2_i, M1_i)
-    H(M2_i, M1_i) = - sum_v p_M2(v) log p_M1(v)
-    
+                             top_logprobs_m2: list[list[dict[str, float]]],
+                             token_logprobs_m2: list[list[float | None]]) -> list[float]:
+    """Approximate Binoculars score, matching the official Hans et al. (2024) implementation.
+
+    Official formula (https://github.com/ahans30/Binoculars/blob/main/binoculars/detector.py):
+
+        B(x) = PPL_performer(x) / X-PPL(x)
+             = (-mean log p_M2(x_i)) / (mean H(p_M1, p_M2))
+             = (-mean log p_M2(x_i)) / (mean_i -sum_v p_M1(v) log p_M2(v))
+
+    where M1 = observer, M2 = performer. The score is in **nats**
+    (i.e., the ratio of cross-entropies, not the ratio of exponentiated
+    perplexities) — this matches the official code, which computes
+    `ppl / x_ppl` where both `ppl` and `x_ppl` are mean cross-entropies
+    in nats.
+
+    Direction (verified against the official repo's README example,
+    which reports B = 0.7566 for ChatGPT text vs the 0.9013 threshold):
+
+        - AI-generated text  → B < 1 (performer is confident on its own outputs)
+        - human-written text → B > 1 (performer is less confident)
+
+    The previous implementation in this file computed
+    `PPL_observer / H(p_M2, p_M1)` — i.e. the observer/performer roles
+    were swapped in both the numerator and the denominator. That is a
+    *different* formula from the paper and from the official code, and
+    does not reproduce the official threshold of ~0.9013 used for
+    detection.
+
+    Top-N logprobs approximation: only the top-N entries of each
+    distribution are available, so the cross-entropy
+    `H(p_M1, p_M2) = -sum_v p_M1(v) log p_M2(v)` is approximated by:
+
+      * For v in M1's top-N with v also in M2's top-N: use the exact
+        `log p_M2(v)` from `top_m2[v]`.
+      * For v in M1's top-N but NOT in M2's top-N: use the tail bound
+        `lp_tail_m2 = log(min(p_min_m2, M_m2))` (an upper bound on
+        `log p_M2(v)` for v outside M2's top-N, since `p_M2(v) <= p_min_m2`
+        whenever v is not in the top-N).
+      * For v in M1's tail (total mass `M_m1`): assume all tail mass
+        sits at `lp_tail_m2`, contributing `-M_m1 * lp_tail_m2`.
+
+    This tail heuristic is the same one used by `entropies_approx` and
+    `fastdetectgpt_scores_approx`; it is a known approximation, not a
+    closed-form solution.
+
     Args:
         token_logprobs_m1: Actual token logprobs from M1 (Observer).
+            (Unused by the official formula but kept because the
+            caller has it readily available and to keep the function
+            signature self-documenting about which model is which.)
         top_logprobs_m1: Top logprobs dicts from M1 (Observer).
         top_logprobs_m2: Top logprobs dicts from M2 (Performer).
-        
+        token_logprobs_m2: Actual token logprobs from M2 (Performer).
+            Required for the numerator (PPL_M2).
+
     Returns:
-        List of approximated Binoculars scores.
+        List of Binoculars scores (PPL_M2 / H(p_M1, p_M2), in nats).
+        Lower = more AI-like; the official accuracy threshold is ~0.9013.
     """
     results = []
-    for token_lps_m1, top_lps_m1, top_lps_m2 in zip(token_logprobs_m1, top_logprobs_m1, top_logprobs_m2):
-        if not token_lps_m1 or not top_lps_m1 or not top_lps_m2:
+    for token_lps_m2, top_lps_m1, top_lps_m2, token_lps_m1 in zip(
+        token_logprobs_m2, top_logprobs_m1, top_logprobs_m2, token_logprobs_m1
+    ):
+        # Validate inputs. We need M1's top_logprobs (for the denominator),
+        # M2's top_logprobs (for the denominator tail bound), and M2's token
+        # logprobs (for the numerator).
+        if not top_lps_m1 or not top_lps_m2 or not token_lps_m2:
             results.append(0.0)
             continue
-            
-        total_lp_m1 = 0.0
+
+        total_neg_lp_m2 = 0.0
         total_cross_entropy = 0.0
         valid_tokens = 0
-        
-        for lp_m1, top_m1, top_m2 in zip(token_lps_m1, top_lps_m1, top_lps_m2):
-            if lp_m1 is None or not top_m1 or not top_m2:
+
+        for lp_m2, top_m1, top_m2, lp_m1 in zip(
+            token_lps_m2, top_lps_m1, top_lps_m2, token_lps_m1
+        ):
+            if lp_m2 is None or not top_m1 or not top_m2 or lp_m1 is None:
                 continue
-                
+
+            # --- Build distributions / tail bounds ---
             p_m1_dict = {k: math.exp(v) for k, v in top_m1.items()}
             p_m2_dict = {k: math.exp(v) for k, v in top_m2.items()}
-            
-            Z_m1 = sum(p_m1_dict.values())
-            M_m1 = max(0.0, 1.0 - Z_m1)
-            p_min_m1 = min(p_m1_dict.values()) if p_m1_dict else 0.0
-            p_bound_m1 = min(p_min_m1, M_m1)
-            lp_tail_m1 = math.log(p_bound_m1 + 1e-12)
-            
+
+            # Tail bound for M2: an upper bound on log p_M2(v) for any v
+            # not in M2's top-N. Since p_M2(v) <= p_min_m2 for such v
+            # (otherwise v would be in the top-N), we have
+            # log p_M2(v) <= log p_min_m2. We also cap by M_m2 (tail mass)
+            # to handle the degenerate single-tail-token case.
             Z_m2 = sum(p_m2_dict.values())
             M_m2 = max(0.0, 1.0 - Z_m2)
-            
+            p_min_m2 = min(p_m2_dict.values()) if p_m2_dict else 0.0
+            p_bound_m2 = min(p_min_m2, M_m2)
+            lp_tail_m2 = math.log(p_bound_m2 + 1e-12)
+
+            # Tail mass for M1 (used to weight the lump tail contribution
+            # in the cross-entropy denominator).
+            Z_m1 = sum(p_m1_dict.values())
+            M_m1 = max(0.0, 1.0 - Z_m1)
+
+            # --- Compute H(p_M1, p_M2) = -sum_v p_M1(v) log p_M2(v) ---
+            # Iterate over M1's top-N tokens. For each, look up log p_M2(v)
+            # in M2's top-N if present, else use the M2 tail bound.
             cross_entropy = 0.0
-            for v, p_m2_v in p_m2_dict.items():
-                if v in top_m1:
-                    lp_m1_v = top_m1[v]
+            for v, p_m1_v in p_m1_dict.items():
+                if v in top_m2:
+                    lp_m2_v = top_m2[v]
                 else:
-                    lp_m1_v = lp_tail_m1
-                cross_entropy -= p_m2_v * lp_m1_v
-                
-            cross_entropy -= M_m2 * lp_tail_m1
-            
-            total_lp_m1 += lp_m1
+                    lp_m2_v = lp_tail_m2
+                cross_entropy -= p_m1_v * lp_m2_v
+
+            # Add the contribution from M1's tail (mass M_m1) — assume all
+            # tail mass sits at the M2 tail bound, same heuristic as
+            # entropies_approx / fastdetectgpt_scores_approx.
+            cross_entropy -= M_m1 * lp_tail_m2
+
+            # --- Accumulate numerator (PPL_M2) and denominator (X-PPL) ---
+            total_neg_lp_m2 += -lp_m2  # = -log p_M2(x_i)
             total_cross_entropy += cross_entropy
             valid_tokens += 1
-            
+
         if valid_tokens > 0 and total_cross_entropy > 1e-6:
-            results.append(-total_lp_m1 / total_cross_entropy)
+            # B = PPL_M2 / X-PPL (both in nats — ratio of mean cross-entropies,
+            # matching the official implementation).
+            results.append(total_neg_lp_m2 / total_cross_entropy)
         else:
             results.append(0.0)
-            
+
     return results
 
 def perplexities(token_logprobs: list[list[float | None]]) -> list[float]:
