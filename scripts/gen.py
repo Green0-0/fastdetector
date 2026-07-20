@@ -3,7 +3,7 @@ import argparse
 from fastdetector.frontend.toml_config import GenConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_dataset, upload_readme
+from fastdetector.utils import upload_readme
 
 
 def main() -> None:
@@ -37,12 +37,9 @@ def main() -> None:
     )
 
     config_name = f"shard_{args.batch_id}" if args.batch_id is not None else "default"
-    
-    upload_dataset(
-        dataset=result_ds,
-        dataset_name=target_dataset,
-        config_name=config_name
-    )
+
+    print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
+    result_ds.push_to_hub(target_dataset, config_name=config_name)
     upload_readme(dataset_name=target_dataset, readme_content=readme_content)
 
 

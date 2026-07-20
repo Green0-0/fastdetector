@@ -7,7 +7,7 @@ import numpy as np
 from fastdetector.frontend.toml_config import EvalConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset
-from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
+from fastdetector.utils import upload_readme, apply_filter_conditions
 from fastdetector.statistics.statistics_utils import compute_auroc
 from fastdetector.statistics.plotting import (
     get_histogram,
@@ -359,7 +359,7 @@ def main():
     target_dataset = globals_config.resolve_output_dataset(globals_config.eval_suffix)
 
     print(f"Loading dataset {source_dataset}...")
-    result_ds = load_dataset(source_dataset, split="train", cache_dir=globals_config.cache_dir)
+    result_ds = load_dataset(source_dataset, split="train")
 
     if "original" not in result_ds.column_names or "final_response" not in result_ds.column_names:
         raise ValueError(
@@ -605,10 +605,7 @@ def main():
 
     # --- Upload ---
     print("Uploading dataset...")
-    upload_dataset(
-        dataset=result_ds,
-        dataset_name=target_dataset,
-    )
+    result_ds.push_to_hub(target_dataset)
     upload_readme(
         dataset_name=target_dataset,
         files=charts,

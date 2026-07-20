@@ -2,7 +2,7 @@ import argparse
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
+from fastdetector.utils import upload_readme, apply_filter_conditions
 
 from fastdetector.statistics.statistics_basic import (
     deviated_lines,
@@ -73,11 +73,7 @@ def main():
 - Total rows: {len(ds)}
 """
     print(f"Uploading updated dataset to {intermediate_dataset}...")
-    upload_dataset(
-        dataset=ds,
-        dataset_name=intermediate_dataset,
-        config_name="default"
-    )
+    ds.push_to_hub(intermediate_dataset, config_name="default")
     upload_readme(
         dataset_name=intermediate_dataset,
         readme_content=readme_content,
@@ -112,11 +108,7 @@ def main():
 
     for dataset_shard, config_name in shards_to_upload:
         print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(dataset_shard)} samples...")
-        upload_dataset(
-            dataset=dataset_shard,
-            dataset_name=filtered_dataset,
-            config_name=config_name
-        )
+        dataset_shard.push_to_hub(filtered_dataset, config_name=config_name)
 
     upload_readme(
         dataset_name=filtered_dataset,

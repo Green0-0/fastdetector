@@ -33,7 +33,7 @@ def main() -> None:
     shards: list[Dataset] = []
     for i in range(args.total_shards):
         print(f"  Loading shard_{i}...")
-        shard_ds = load_dataset(target_dataset, split="train", cache_dir=globals_config.cache_dir, subset_index=i)
+        shard_ds = load_dataset(target_dataset, split="train", subset_index=i)
         shards.append(shard_ds)
 
     print("Concatenating shards...")
