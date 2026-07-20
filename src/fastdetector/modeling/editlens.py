@@ -249,6 +249,11 @@ def compute_editlens_scores(
     bucket_preds = np.argmax(probs, axis=1)
 
     bucket_labels = np.arange(n_buckets)
-    score_preds = (probs @ bucket_labels) / (n_buckets - 1)
+    if n_buckets <= 1:
+        # With only 1 bucket, the score is trivially 0.0 (no edit distance).
+        # Avoid division by zero in the (n_buckets - 1) normalization.
+        score_preds = np.zeros(len(probs))
+    else:
+        score_preds = (probs @ bucket_labels) / (n_buckets - 1)
 
     return bucket_preds.tolist(), score_preds.tolist()
