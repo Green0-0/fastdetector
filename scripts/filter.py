@@ -2,7 +2,7 @@ import argparse
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
+from fastdetector.utils import upload_readme, apply_filter_conditions
 
 from fastdetector.statistics.statistics_basic import (
     deviated_lines,
@@ -73,19 +73,12 @@ def main():
 - Total rows: {len(ds)}
 """
     print(f"Uploading updated dataset to {intermediate_dataset}...")
-    upload_dataset(
-        dataset=ds,
+    ds.push_to_hub(intermediate_dataset, config_name="default")
+    upload_readme(
         dataset_name=intermediate_dataset,
-        save_locally_instead=globals_config.save_locally_instead,
-        cache_dir=globals_config.cache_dir,
-        config_name="default"
+        readme_content=readme_content,
+        append_readme_source=intermediate_dataset
     )
-    if not globals_config.save_locally_instead:
-        upload_readme(
-            dataset_name=intermediate_dataset,
-            readme_content=readme_content,
-            append_readme_source=intermediate_dataset
-        )
 
     conditions = filter_config.conditions
     print(f"Filtering dataset with conditions: {conditions}")
@@ -115,20 +108,13 @@ def main():
 
     for dataset_shard, config_name in shards_to_upload:
         print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(dataset_shard)} samples...")
-        upload_dataset(
-            dataset=dataset_shard,
-            dataset_name=filtered_dataset,
-            save_locally_instead=globals_config.save_locally_instead,
-            cache_dir=globals_config.cache_dir,
-            config_name=config_name
-        )
+        dataset_shard.push_to_hub(filtered_dataset, config_name=config_name)
 
-    if not globals_config.save_locally_instead:
-        upload_readme(
-            dataset_name=filtered_dataset,
-            readme_content=filtered_readme,
-            append_readme_source=intermediate_dataset
-        )
+    upload_readme(
+        dataset_name=filtered_dataset,
+        readme_content=filtered_readme,
+        append_readme_source=intermediate_dataset
+    )
 
 if __name__ == "__main__":
     main()

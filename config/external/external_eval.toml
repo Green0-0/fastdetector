@@ -1,7 +1,5 @@
 # External scripts do NOT respect globals.toml, make sure you specifiy the dataset path
 dataset_path = ""
-save_locally_instead = false
-cache_dir = "/usr/project/xtmp/ccprocessing_cache/"
 
 metadata_columns = ["prompt", "generator_model"]
 

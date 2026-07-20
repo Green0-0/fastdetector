@@ -11,7 +11,7 @@ from datasets import concatenate_datasets, Dataset
 
 from fastdetector.frontend.toml_config import StatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_local_fallback as load_dataset
+from fastdetector.utils import load_dataset
 from fastdetector.utils import upload_readme
 from fastdetector.frontend.readme import build_readme_content
 
@@ -33,7 +33,7 @@ def main() -> None:
     shards: list[Dataset] = []
     for i in range(args.total_shards):
         print(f"  Loading shard_{i}...")
-        shard_ds = load_dataset(target_dataset, split="train", cache_dir=globals_config.cache_dir, subset_index=i)
+        shard_ds = load_dataset(target_dataset, split="train", subset_index=i)
         shards.append(shard_ds)
 
     print("Concatenating shards...")
@@ -43,17 +43,14 @@ def main() -> None:
     print("Building README content...")
     readme_content, charts = build_readme_content(ds, stat_config)
 
-    if not globals_config.save_locally_instead:
-        print(f"Uploading README to {target_dataset}...")
-        upload_readme(
-            dataset_name=target_dataset,
-            files=charts,
-            readme_content=readme_content,
-            append_readme_source=target_dataset
-        )
-        print("Done!")
-    else:
-        print("save_locally_instead is True. Skipping README upload.")
+    print(f"Uploading README to {target_dataset}...")
+    upload_readme(
+        dataset_name=target_dataset,
+        files=charts,
+        readme_content=readme_content,
+        append_readme_source=target_dataset
+    )
+    print("Done!")
 
 
 if __name__ == "__main__":

@@ -21,10 +21,6 @@ class GlobalsConfig(BaseModel):
     stat_suffix: str
     eval_suffix: str
 
-    # Execution & Storage Flags
-    save_locally_instead: bool
-    cache_dir: str
-
     # Engine Virtual Environment Paths
     vllm_venv_path: str = ".vllm"
     aphrodite_venv_path: str = ".aphrodite"

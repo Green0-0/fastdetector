@@ -1,49 +1,35 @@
-import os
-import shutil
-import tempfile
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
 from huggingface_hub import HfApi, hf_hub_download
-from datasets import (
-    Dataset,
-    load_from_disk,
-    load_dataset,
-    get_dataset_config_names,
-)
+from datasets import Dataset
+from datasets import load_dataset as _hf_load_dataset
+from datasets import get_dataset_config_names
 
 
-def load_dataset_local_fallback(
+def load_dataset(
     dataset_name: str,
-    cache_dir: str,
     split: str = "train",
     subset_index: Optional[int] = 0,
 ) -> Dataset:
-    """Load a dataset, preferring Hugging Face Hub and falling back to local cache.
+    """Load a dataset from the Hugging Face Hub, resolving a shard by index.
 
-    Resolution order:
-    1. Attempt to load from Hugging Face Hub via ``load_dataset``.
-    2. If that fails (e.g. network error, dataset not found), check for a local
-       save at ``<cache_dir>/<safe_name>``.
-    3. If the local save doesn't exist or is corrupted, raise an error.
-
-    The local path is derived from the dataset name (with ``/`` → ``_``).
-    If the dataset has multiple configs on the Hub, it uses the config
-    corresponding to ``subset_index`` (unless it is None). If it's a local-only 
-    dataset, it attempts to load the shard corresponding to ``subset_index`` 
-    or the default (if subset_index is None, it only attempts the default).
+    When ``subset_index`` is not ``None`` the dataset's configs are listed and
+    the config at position ``subset_index`` is loaded. This preserves the
+    sharding/subset-access behavior used throughout the pipeline (each shard
+    is uploaded as a separate HF config named ``shard_<i>``).
 
     Args:
         dataset_name: HF Hub dataset repo ID (e.g. "G-reen/cc-2021-rewritten").
-        cache_dir: Local cache directory.
         split: Dataset split (default "train").
-        subset_index: Index into the dataset's config list (default 0). If None, no sharding logic is used.
+        subset_index: Index into the dataset's config list (default 0). If
+            ``None``, the default config is loaded without shard resolution.
 
     Returns:
         The loaded Dataset.
     """
     config_name = None
-    try:
-        if subset_index is not None:
+    if subset_index is not None:
+        try:
             configs = get_dataset_config_names(dataset_name)
             if configs and subset_index < len(configs):
                 config_name = configs[subset_index]
@@ -51,146 +37,22 @@ def load_dataset_local_fallback(
                     f"Resolved subset_index {subset_index} to config "
                     f"'{config_name}' for dataset {dataset_name}"
                 )
-    except Exception as e:
-        print(
-            f"Warning: could not list configs for '{dataset_name}': "
-            f"{type(e).__name__}: {e}. Proceeding without config name."
-        )
+            else:
+                print(
+                    f"Warning: dataset '{dataset_name}' has {len(configs) if configs else 0} "
+                    f"configs; subset_index {subset_index} is out of range. "
+                    f"Falling back to the default config."
+                )
+        except Exception as e:
+            print(
+                f"Warning: could not list configs for '{dataset_name}': "
+                f"{type(e).__name__}: {e}. Loading the default config."
+            )
 
-    try:
-        print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
-        return _load_from_hub(dataset_name, config_name, split, cache_dir)
-    except Exception as e:
-        print(f"Failed to load from Hugging Face Hub: {e}. Falling back to local cache.")
-
-    safe_name_base = dataset_name.replace('/', '_')
-    
-    # Determine potential local paths based on whether config_name was resolved
-    possible_paths = []
-    if config_name and config_name != "default":
-        possible_paths.append(os.path.join(cache_dir, f"{safe_name_base}_{config_name}"))
-    else:
-        # For local-only datasets, check for shard-specific path first, then default
-        if subset_index is not None:
-            possible_paths.append(os.path.join(cache_dir, f"{safe_name_base}_shard_{subset_index}"))
-        possible_paths.append(os.path.join(cache_dir, safe_name_base))
-        
-    local_path = next((p for p in possible_paths if os.path.exists(p)), None)
-
-    if not local_path:
-        raise FileNotFoundError(
-            f"Dataset '{dataset_name}' not found on Hub, and no matching "
-            f"local cache found in {cache_dir}. Checked paths: {possible_paths}"
-        )
-
-    has_state = os.path.exists(os.path.join(local_path, "state.json"))
-    has_info = os.path.exists(os.path.join(local_path, "dataset_info.json"))
-    if not has_state and not has_info:
-        raise ValueError(
-            f"Local path {local_path} exists but is corrupted/empty "
-            f"(no state.json or dataset_info.json)."
-        )
-
-    print(f"Loading dataset locally from {local_path}...")
-    return load_from_disk(local_path)
-
-
-def _load_from_hub(
-    dataset_name: str,
-    config_name: Optional[str],
-    split: str,
-    cache_dir: str,
-) -> Dataset:
-    """Load a dataset from HuggingFace Hub, optionally with a config name."""
+    print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
     if config_name:
-        return load_dataset(dataset_name, name=config_name, split=split, cache_dir=cache_dir)
-    else:
-        return load_dataset(dataset_name, split=split, cache_dir=cache_dir)
-
-
-def upload_dataset(
-    dataset: Dataset,
-    dataset_name: str,
-    save_locally_instead: bool = False,
-    cache_dir: str = "cached_ds",
-    config_name: str = "default",
-) -> None:
-    """Upload a dataset to the Hugging Face Hub or save locally.
-
-    Args:
-        dataset: The dataset to upload.
-        dataset_name: The name of the dataset to upload to.
-        save_locally_instead: If True, save to ``cache_dir`` instead of
-            pushing to the Hub.
-        cache_dir: Local cache directory (used when save_locally_instead).
-        config_name: The configuration name (used for both Hub push and
-            local save path).
-    """
-    # Push or save the dataset
-    if save_locally_instead:
-        _save_dataset_locally(dataset, dataset_name, cache_dir, config_name)
-    else:
-        print(
-            f"Pushing dataset to '{dataset_name}' with {len(dataset)} rows "
-            f"and {len(dataset.column_names)} columns..."
-        )
-        dataset.push_to_hub(dataset_name, config_name=config_name)
-
-
-def _save_dataset_locally(
-    dataset: Dataset,
-    dataset_name: str,
-    cache_dir: str,
-    config_name: str,
-) -> None:
-    """Save a dataset to a local path with atomic replace.
-
-    The dataset is first saved to a temporary directory (inside cache_dir so
-    it's on the same filesystem for atomic os.replace). Then:
-
-    - If the target path doesn't exist: rename temp → target.
-    - If the target path exists: move the old target to a backup dir, rename
-      temp → target, then delete the backup. This is atomic from the
-      perspective of any reader (the target path always points to either the
-      old or the new dataset, never a half-written state).
-
-    Uses a plain ``tempfile.mkdtemp`` for the backup (instead of
-    ``TemporaryDirectory``) so we control cleanup explicitly.
-    """
-    os.makedirs(cache_dir, exist_ok=True)
-    safe_name = dataset_name.replace('/', '_')
-    if config_name and config_name != "default":
-        safe_name = f"{safe_name}_{config_name}"
-    local_path = os.path.join(cache_dir, safe_name)
-    print(
-        f"Saving dataset locally to '{local_path}' with {len(dataset)} rows "
-        f"and {len(dataset.column_names)} columns..."
-    )
-
-    # Save to a temp dir on the same filesystem as cache_dir (required for
-    # atomic os.replace). We manage cleanup manually rather than using a
-    # TemporaryDirectory context manager, because we move the temp dir's
-    # contents away before the context would clean up.
-    tmp_dir = tempfile.mkdtemp(dir=cache_dir)
-    try:
-        dataset.save_to_disk(tmp_dir)
-
-        if os.path.exists(local_path):
-            # Move the old dataset aside, then move the new one into place,
-            # then delete the old one. Each os.replace is atomic on the same
-            # filesystem.
-            backup_dir = tempfile.mkdtemp(dir=cache_dir)
-            # Remove the empty backup dir so os.replace can move local_path into it
-            os.rmdir(backup_dir)
-            os.replace(local_path, backup_dir)
-            os.replace(tmp_dir, local_path)
-            shutil.rmtree(backup_dir, ignore_errors=True)
-        else:
-            os.replace(tmp_dir, local_path)
-    except Exception:
-        # Clean up the temp dir on any failure to avoid leaving orphan dirs.
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        raise
+        return _hf_load_dataset(dataset_name, name=config_name, split=split)
+    return _hf_load_dataset(dataset_name, split=split)
 
 
 def upload_readme(
@@ -203,12 +65,11 @@ def upload_readme(
 
     Args:
         dataset_name: The name of the dataset to upload to.
-        files: Additional files to upload (filename → bytes), such as charts.
+        files: Additional files to upload (filename -> bytes), such as charts.
         readme_content: The content of the readme.
         append_readme_source: If set, download the README from this dataset
             and prepend it to *readme_content*.
     """
-    # 1. Handle README download and concatenation
     prev_readme = ""
     if append_readme_source:
         try:
@@ -234,7 +95,6 @@ def upload_readme(
     if files is None:
         files = {}
 
-    # 2. Upload README.md and other files
     api = HfApi()
     try:
         print(f"Uploading README.md to '{dataset_name}'...")
