@@ -36,12 +36,9 @@ def main():
         source_column=filter_config.source_column,
         source_dataset_name=source_dataset,
     )
-    
-    col_a = "original"
-    col_b = "final_response"
-    
-    originals = ds[col_a]
-    news = ds[col_b]
+        
+    originals = ds["original"]
+    news = ds["final_response"]
 
     print("Computing metrics...")
     prop_dl, dl = deviated_lines(originals, news)

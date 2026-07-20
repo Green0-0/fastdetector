@@ -1,9 +1,3 @@
-"""Async OpenAI-compatible chat completion client for batched generation.
-
-Exposes :func:`batch_generate` (sync wrapper) and :func:`build_dataset`
-which iterates chat turns and scatters responses into per-sample columns.
-"""
-
 import asyncio
 from typing import Any
 

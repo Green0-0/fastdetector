@@ -16,76 +16,83 @@ def load_dataset_local_fallback(
     dataset_name: str,
     cache_dir: str,
     split: str = "train",
-    subset_index: int = 0,
+    subset_index: Optional[int] = 0,
 ) -> Dataset:
-    """Load a dataset, preferring a local cache and falling back to HF Hub.
+    """Load a dataset, preferring Hugging Face Hub and falling back to local cache.
 
     Resolution order:
-    1. If a local save exists at ``<cache_dir>/<safe_name>`` and is not
-       corrupted, load it via ``load_from_disk``.
-    2. Otherwise, load from HuggingFace Hub via ``load_dataset``.
+    1. Attempt to load from Hugging Face Hub via ``load_dataset``.
+    2. If that fails (e.g. network error, dataset not found), check for a local
+       save at ``<cache_dir>/<safe_name>``.
+    3. If the local save doesn't exist or is corrupted, raise an error.
 
-    The local path is derived from the dataset name (with ``/`` → ``_``) and,
-    if the dataset has multiple configs, the config name corresponding to
-    ``subset_index``.
+    The local path is derived from the dataset name (with ``/`` → ``_``).
+    If the dataset has multiple configs on the Hub, it uses the config
+    corresponding to ``subset_index`` (unless it is None). If it's a local-only 
+    dataset, it attempts to load the shard corresponding to ``subset_index`` 
+    or the default (if subset_index is None, it only attempts the default).
 
     Args:
         dataset_name: HF Hub dataset repo ID (e.g. "G-reen/cc-2021-rewritten").
         cache_dir: Local cache directory.
         split: Dataset split (default "train").
-        subset_index: Index into the dataset's config list (default 0).
+        subset_index: Index into the dataset's config list (default 0). If None, no sharding logic is used.
 
     Returns:
         The loaded Dataset.
-
-    Note:
-        The config-name resolution via ``get_dataset_config_names`` catches
-        ``Exception`` because HF Hub can fail in many ways (network errors,
-        private repos, non-existent datasets) and in all those cases we want
-        to fall back to loading with no config name. A warning is printed so
-        the failure is not silent.
     """
     config_name = None
     try:
-        configs = get_dataset_config_names(dataset_name)
-        if configs and subset_index < len(configs):
-            config_name = configs[subset_index]
-            print(
-                f"Resolved subset_index {subset_index} to config "
-                f"'{config_name}' for dataset {dataset_name}"
-            )
+        if subset_index is not None:
+            configs = get_dataset_config_names(dataset_name)
+            if configs and subset_index < len(configs):
+                config_name = configs[subset_index]
+                print(
+                    f"Resolved subset_index {subset_index} to config "
+                    f"'{config_name}' for dataset {dataset_name}"
+                )
     except Exception as e:
-        # Print the failure (could be auth/network) but proceed: loading
-        # without a config name may still succeed for single-config datasets.
         print(
             f"Warning: could not list configs for '{dataset_name}': "
             f"{type(e).__name__}: {e}. Proceeding without config name."
         )
 
-    safe_name = dataset_name.replace('/', '_')
-    if config_name and config_name != "default":
-        safe_name = f"{safe_name}_{config_name}"
-    local_path = os.path.join(cache_dir, safe_name)
-
-    if os.path.exists(local_path):
-        # A valid saved-to-disk directory contains either state.json
-        # (arrow-based) or dataset_info.json (parquet-based). If neither
-        # exists, the directory is corrupted or partial — fall back to Hub.
-        has_state = os.path.exists(os.path.join(local_path, "state.json"))
-        has_info = os.path.exists(os.path.join(local_path, "dataset_info.json"))
-        if not has_state and not has_info:
-            print(
-                f"Local path {local_path} exists but is corrupted/empty "
-                f"(no state.json or dataset_info.json). Falling back to "
-                f"Hugging Face Hub: {dataset_name}..."
-            )
-            return _load_from_hub(dataset_name, config_name, split, cache_dir)
-
-        print(f"Loading dataset locally from {local_path}...")
-        return load_from_disk(local_path)
-    else:
+    try:
         print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
         return _load_from_hub(dataset_name, config_name, split, cache_dir)
+    except Exception as e:
+        print(f"Failed to load from Hugging Face Hub: {e}. Falling back to local cache.")
+
+    safe_name_base = dataset_name.replace('/', '_')
+    
+    # Determine potential local paths based on whether config_name was resolved
+    possible_paths = []
+    if config_name and config_name != "default":
+        possible_paths.append(os.path.join(cache_dir, f"{safe_name_base}_{config_name}"))
+    else:
+        # For local-only datasets, check for shard-specific path first, then default
+        if subset_index is not None:
+            possible_paths.append(os.path.join(cache_dir, f"{safe_name_base}_shard_{subset_index}"))
+        possible_paths.append(os.path.join(cache_dir, safe_name_base))
+        
+    local_path = next((p for p in possible_paths if os.path.exists(p)), None)
+
+    if not local_path:
+        raise FileNotFoundError(
+            f"Dataset '{dataset_name}' not found on Hub, and no matching "
+            f"local cache found in {cache_dir}. Checked paths: {possible_paths}"
+        )
+
+    has_state = os.path.exists(os.path.join(local_path, "state.json"))
+    has_info = os.path.exists(os.path.join(local_path, "dataset_info.json"))
+    if not has_state and not has_info:
+        raise ValueError(
+            f"Local path {local_path} exists but is corrupted/empty "
+            f"(no state.json or dataset_info.json)."
+        )
+
+    print(f"Loading dataset locally from {local_path}...")
+    return load_from_disk(local_path)
 
 
 def _load_from_hub(

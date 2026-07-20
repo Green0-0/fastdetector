@@ -1,10 +1,3 @@
-"""CLI entry point: run the LLM generation pipeline.
-
-Loads globals.toml + a gen TOML (e.g. config/gen/shard_0.toml), resolves
-the source/target dataset names from the prefix+suffix scheme, and calls
-:func:`fastdetector.frontend.pipe.run_pipeline`.
-"""
-
 import argparse
 
 from fastdetector.frontend.toml_config import GenConfig

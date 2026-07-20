@@ -1,16 +1,3 @@
-"""Prompt dataclass and PromptSet cursor-based iterator.
-
-A :class:`Prompt` is a single chat-conversation template (one or more user
-turns, plus optional few-shot examples and metadata). A :class:`PromptSet`
-wraps a list of prompts and exposes cursor-based ``next_train`` / ``next_test``
-methods that wrap around, so callers can pull prompts in bulk without
-managing an index.
-
-``{{DOC}}`` placeholders in ``chat_turns`` are substituted with sample text
-by :meth:`PromptSet.map`. ``{{RESP_N}}`` placeholders (substituted by the
-caller in :mod:`fastdetector.generator`) hold the model response from turn N.
-"""
-
 import json
 import random
 from dataclasses import dataclass, field

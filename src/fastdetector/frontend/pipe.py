@@ -3,7 +3,7 @@ import time
 import json
 from transformers import AutoTokenizer
 from datasets import Dataset
-from fastdetector.utils import load_dataset_local_fallback as load_dataset
+from fastdetector.utils import load_dataset_local_fallback
 from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.llm_utils import llm_server_context
@@ -71,10 +71,8 @@ def run_pipeline(
     prompt_list = load_prompts([prompt_file])
     prompts = PromptSet(prompt_list)
 
-    subset_idx = batch_id if batch_id is not None else 0
-
-    print(f"Streaming {num_samples} samples from {source_dataset_name} (subset index {subset_idx})...")
-    ds = load_dataset(source_dataset_name, split="train", cache_dir=globals_config.cache_dir, subset_index=subset_idx)
+    print(f"Streaming {num_samples} samples from {source_dataset_name} (subset index {batch_id})...")
+    ds = load_dataset_local_fallback(source_dataset_name, split="train", cache_dir=globals_config.cache_dir, subset_index=batch_id)
 
     samples = []
     tokens_or_words_processed = 0
