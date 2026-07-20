@@ -8,7 +8,6 @@ from datasets import (
     Dataset,
     load_from_disk,
     load_dataset,
-    concatenate_datasets,
     get_dataset_config_names,
 )
 
@@ -105,44 +104,22 @@ def _load_from_hub(
 def upload_dataset(
     dataset: Dataset,
     dataset_name: str,
-    append_rows_source: Optional[str] = None,
     save_locally_instead: bool = False,
     cache_dir: str = "cached_ds",
     config_name: str = "default",
 ) -> None:
     """Upload a dataset to the Hugging Face Hub or save locally.
 
-    Optionally appends rows from a previous dataset (``append_rows_source``)
-    before uploading.
-
     Args:
         dataset: The dataset to upload.
         dataset_name: The name of the dataset to upload to.
-        append_rows_source: If set, load this dataset from the Hub and
-            concatenate its rows with *dataset* before uploading.
         save_locally_instead: If True, save to ``cache_dir`` instead of
             pushing to the Hub.
         cache_dir: Local cache directory (used when save_locally_instead).
         config_name: The configuration name (used for both Hub push and
             local save path).
     """
-    # 1. Handle row concatenation
-    if append_rows_source:
-        try:
-            print(f"Loading previous dataset from '{append_rows_source}' to append rows...")
-            prev_ds = load_dataset(append_rows_source, split="train", name=config_name)
-            print(
-                f"Concatenating previous dataset ({len(prev_ds)} rows) with "
-                f"new dataset ({len(dataset)} rows)..."
-            )
-            dataset = concatenate_datasets([prev_ds, dataset])
-        except Exception as e:
-            print(
-                f"Warning: Could not load previous dataset from "
-                f"'{append_rows_source}': {e}. Uploading new dataset only."
-            )
-
-    # 2. Push or save the dataset
+    # Push or save the dataset
     if save_locally_instead:
         _save_dataset_locally(dataset, dataset_name, cache_dir, config_name)
     else:
@@ -217,8 +194,6 @@ def upload_readme(
     files: Optional[Dict[str, bytes]] = None,
     readme_content: str = "",
     append_readme_source: Optional[str] = None,
-    append_files_source: Optional[str] = None,
-    append_files_exclude_type: Optional[List[str]] = None,
 ) -> None:
     """Upload a README and associated files to the Hugging Face Hub.
 
@@ -228,17 +203,8 @@ def upload_readme(
         readme_content: The content of the readme.
         append_readme_source: If set, download the README from this dataset
             and prepend it to *readme_content*.
-        append_files_source: If set, download all non-excluded files from this
-            dataset and add them to *files* (unless already present). Defaults
-            to *append_readme_source* if not set.
-        append_files_exclude_type: File extensions/prefixes to exclude when
-            fetching from *append_files_source*. Defaults to
-            ``['.parquet', '.arrow', '.gitattributes', '.git/']``.
     """
     # 1. Handle README download and concatenation
-    if append_files_source and not append_readme_source:
-        append_readme_source = append_files_source
-
     prev_readme = ""
     if append_readme_source:
         try:
@@ -261,37 +227,10 @@ def upload_readme(
     else:
         combined_readme = readme_content
 
-    # 2. Handle appending additional files
     if files is None:
         files = {}
 
-    if append_files_source:
-        if append_files_exclude_type is None:
-            append_files_exclude_type = ['.parquet', '.arrow', '.gitattributes', '.git/']
-        try:
-            print(f"Fetching original files from '{append_files_source}'...")
-            api = HfApi()
-            repo_files = api.list_repo_files(repo_id=append_files_source, repo_type="dataset")
-
-            for file in repo_files:
-                if any(file.endswith(ext) or file.startswith(ext) for ext in append_files_exclude_type):
-                    continue
-
-                if file == 'README.md':
-                    continue
-
-                if file not in files:
-                    print(f"Fetching {file}...")
-                    try:
-                        path = hf_hub_download(repo_id=append_files_source, filename=file, repo_type="dataset")
-                        with open(path, 'rb') as f:
-                            files[file] = f.read()
-                    except Exception as e:
-                        print(f"Warning: failed to download {file}: {e}")
-        except Exception as e:
-            print(f"Warning: failed to list/fetch repo files from '{append_files_source}': {e}")
-
-    # 3. Upload README.md and other files
+    # 2. Upload README.md and other files
     api = HfApi()
     try:
         print(f"Uploading README.md to '{dataset_name}'...")
