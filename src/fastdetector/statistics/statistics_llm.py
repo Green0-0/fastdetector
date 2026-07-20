@@ -240,20 +240,28 @@ def top_p_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_
     Args:
         top_logprobs: For each text, a list of dictionaries mapping top tokens to logprobs.
         token_logprobs: For each text, a list of logprobs for the actual tokens.
-        p: Probability mass threshold (e.g., 0.9).
-        
+        p: Probability mass threshold, in (0, 1]. Common values: 0.9, 0.95.
+
     Returns:
-        List of outlier percentages.
+        List of outlier percentages in [0, 1]. Returns ``NaN`` for texts
+        where no position had usable top-logprobs (so callers can
+        distinguish "0% outliers" from "metric undefined").
+
+    Raises:
+        ValueError: if ``p`` is not in (0, 1].
     """
+    if not (0 < p <= 1):
+        raise ValueError(f"p must be in (0, 1], got {p}")
+
     results = []
     for text_top_lps, text_token_lps in zip(top_logprobs, token_logprobs):
         if not text_top_lps or not text_token_lps:
-            results.append(0.0)
+            results.append(float('nan'))
             continue
-            
+
         outlier_count = 0
         total_count = 0
-        
+
         for token_lp, top_lps in zip(text_token_lps, text_top_lps):
             if token_lp is not None and top_lps is not None and len(top_lps) > 0:
                 total_count += 1
@@ -284,39 +292,60 @@ def top_p_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_
                 # API, so it only collapses true numerical ties.
                 if token_lp < threshold_lp - 1e-5:
                     outlier_count += 1
-                    
-        results.append(outlier_count / total_count if total_count > 0 else 0.0)
+
+        if total_count > 0:
+            results.append(outlier_count / total_count)
+        else:
+            results.append(float('nan'))
     return results
 
 def top_k_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_logprobs: list[list[float | None]], k: int) -> list[float]:
     """Compute the percentage of tokens outside the top-k probability mass for each text.
-    
+
     Args:
         top_logprobs: For each text, a list of dictionaries mapping top tokens to logprobs.
         token_logprobs: For each text, a list of logprobs for the actual tokens.
-        k: Top-k threshold.
-        
+        k: Top-k threshold. Must be >= 1.
+
     Returns:
-        List of outlier percentages.
+        List of outlier percentages in [0, 1]. Positions where the model
+        returned fewer than ``k`` top logprobs (so the k-th largest is
+        undefined) are excluded from both the numerator and denominator;
+        ``NaN`` is returned for texts where *every* position was excluded,
+        so callers can distinguish "0% outliers" from "metric undefined".
+
+    Raises:
+        ValueError: if ``k < 1``.
     """
+    if k < 1:
+        raise ValueError(f"k must be >= 1, got {k}")
+
     results = []
     for text_top_lps, text_token_lps in zip(top_logprobs, token_logprobs):
         if not text_top_lps or not text_token_lps:
-            results.append(0.0)
+            results.append(float('nan'))
             continue
-            
+
         outlier_count = 0
         total_count = 0
-        
+
         for token_lp, top_lps in zip(text_token_lps, text_top_lps):
+            # Skip positions where we don't have enough top logprobs to
+            # determine the k-th largest. Skipping (rather than silently
+            # treating the position as non-outlier) is correct, but if
+            # ALL positions are skipped the percentage is undefined and
+            # we return NaN so downstream code can detect it.
             if token_lp is None or top_lps is None or len(top_lps) < k:
                 continue
-                
+
             total_count += 1
             sorted_lps = sorted(top_lps.values(), reverse=True)
             kth_lp = sorted_lps[k-1]
             if token_lp < kth_lp - 1e-5:
                 outlier_count += 1
-                
-        results.append(outlier_count / total_count if total_count > 0 else 0.0)
+
+        if total_count > 0:
+            results.append(outlier_count / total_count)
+        else:
+            results.append(float('nan'))
     return results

@@ -23,6 +23,12 @@ fastdetectgpt_score = true
 reranker_score = true
 threshold_type = "accuracy"
 
+# Thresholds for the outlier metrics. ``topk_threshold`` MUST be
+# ``<= top_logprobs_k`` or the top-k outlier metric returns NaN for
+# every text (the k-th largest logprob cannot be computed).
+topp_threshold = 0.95
+topk_threshold = 50
+
 # If set to true, embedding and logprob matrices will be deleted after use
 remove_columns_afterwards = true
 
