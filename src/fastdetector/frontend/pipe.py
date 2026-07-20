@@ -28,7 +28,7 @@ def run_pipeline(
     (e.g. ``filter.py``) can continue processing without re-loading from the Hub.
 
     Args:
-        globals_config: GlobalsConfig with cache_dir, venv paths, etc.
+        globals_config: GlobalsConfig with venv paths, dataset name resolution, etc.
         pipe_config: Pipeline settings (engine, model_name, etc).
         prompt_file: Path to the prompt file.
         num_samples: Number of samples to process.
@@ -75,7 +75,6 @@ def run_pipeline(
     ds = load_dataset(
         source_dataset_name,
         split="train",
-        cache_dir=globals_config.cache_dir,
         subset_index=batch_id,
     )
 
