@@ -1,9 +1,5 @@
 """Engine type enumeration for LLM inference backends.
 
-Centralizes the string-based engine selection logic that was previously
-scattered across pipe.py, llm_utils.py, and generator.py as ad-hoc
-string equality checks.
-
 Engine is a str enum so it serializes cleanly to TOML/JSON (the value is
 the lowercase string name, e.g. "vllm", "aphrodite", "oai").
 """
@@ -20,22 +16,6 @@ class Engine(str, Enum):
     VLLM = "vllm"
     APHRODITE = "aphrodite"
     OAI = "oai"
-
-    @classmethod
-    def from_str(cls, value: str) -> "Engine":
-        """Parse an engine name from a string (case-insensitive).
-
-        Raises:
-            ValueError: if the string doesn't match a known engine.
-        """
-        normalized = value.lower().strip()
-        for member in cls:
-            if member.value == normalized:
-                return member
-        raise ValueError(
-            f"Unsupported LLM engine: {value!r}. "
-            f"Supported: {[e.value for e in cls]}"
-        )
 
     @property
     def is_local_server(self) -> bool:
