@@ -73,14 +73,29 @@ class PipeConfig(BaseModel):
     def _flatten_pipeline_section(cls, data: Any) -> Any:
         """Flatten the TOML ``[pipeline]`` sub-section into the top level.
 
-        Allows ``PipeConfig(**toml_dict)`` to work for gen.toml and
-        filter.toml, both of which group engine/sampling fields under a
+        gen.toml and filter.toml both group engine/sampling fields under a
         ``[pipeline]`` table while keeping ``num_samples``/``source_column``/
-        ``prompt_file`` at the top level.
+        ``prompt_file`` at the top level. This validator flattens that layout
+        so callers can pass the raw TOML dict directly:
+        ``PipeConfig(**tomllib.load(f))``.
+
+        Raises:
+            ValueError: if the input is not a dict or has no ``[pipeline]``
+                section. The flat-dict layout (engine/model_name at the top
+                level) is no longer supported.
         """
-        if isinstance(data, dict) and "pipeline" in data:
-            pipeline = dict(data["pipeline"])
-            flat = {k: v for k, v in data.items() if k != "pipeline"}
-            flat.update(pipeline)
-            return flat
-        return data
+        if not isinstance(data, dict):
+            raise ValueError(
+                "PipeConfig must be initialized from a dict with a [pipeline] section; "
+                f"got {type(data).__name__}."
+            )
+        if "pipeline" not in data:
+            raise ValueError(
+                "PipeConfig requires a [pipeline] section in the TOML config "
+                "(engine, model_name, temperature, etc. must live under [pipeline], "
+                "not at the top level)."
+            )
+        pipeline = dict(data["pipeline"])
+        flat = {k: v for k, v in data.items() if k != "pipeline"}
+        flat.update(pipeline)
+        return flat
