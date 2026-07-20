@@ -8,15 +8,13 @@ from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
 from fastdetector.utils import upload_dataset, upload_readme
 from fastdetector.llm_utils import llm_server_context
-from fastdetector.frontend.config import GenConfig, FilterConfig, GlobalsConfig
+from fastdetector.frontend.config import GlobalsConfig
+from fastdetector.frontend.pipeconfig import PipeConfig
 from fastdetector.engine import Engine
 
-# run_pipeline is shared by gen.py and filter.py; both config types expose
-# the same .pipeline / .source_column / .num_samples / .prompt_file interface.
-PipelineConfigT = GenConfig | FilterConfig
 
 def run_pipeline(
-    gen_config: PipelineConfigT,
+    pipe_config: PipeConfig,
     globals_config: GlobalsConfig,
     source_dataset_name: str,
     target_dataset_name: str,
@@ -30,8 +28,7 @@ def run_pipeline(
     (e.g. filter.py) can continue processing without re-loading from disk/Hub.
 
     Args:
-        gen_config: GenConfig or FilterConfig (both expose .pipeline,
-            .source_column, .num_samples, .prompt_file).
+        pipe_config: PipeConfig with engine, sampling params, and dataset-shaping knobs.
         globals_config: GlobalsConfig with cache_dir, save_locally_instead, etc.
         source_dataset_name: Dataset to read samples from.
         target_dataset_name: Dataset to upload the result to.
@@ -43,56 +40,55 @@ def run_pipeline(
         the in-memory copy can ignore the return value.
     """
     start_time = time.time()
-    pipe_cfg = gen_config.pipeline
 
     print(f"Running generation pipeline...")
     print(f"Target dataset: {target_dataset_name}")
-    print(f"Using engine: {pipe_cfg.engine.value}")
-    print(f"Using model: {pipe_cfg.model_name}")
+    print(f"Using engine: {pipe_config.engine.value}")
+    print(f"Using model: {pipe_config.model_name}")
 
     generation_params = {
-        "temperature": pipe_cfg.temperature,
-        "top_p": pipe_cfg.top_p,
-        "top_k": pipe_cfg.top_k,
-        "presence_penalty": pipe_cfg.presence_penalty,
-        "disable_thinking": pipe_cfg.disable_thinking,
+        "temperature": pipe_config.temperature,
+        "top_p": pipe_config.top_p,
+        "top_k": pipe_config.top_k,
+        "presence_penalty": pipe_config.presence_penalty,
+        "disable_thinking": pipe_config.disable_thinking,
     }
 
     # is_api_model tells generator.py to use API-model sampling-param semantics
     # (no temperature/top_p/top_k; disable_thinking → reasoning_effort="none").
-    if pipe_cfg.engine == Engine.OAI:
+    if pipe_config.engine == Engine.OAI:
         generation_params["is_api_model"] = True
 
-    if pipe_cfg.engine == Engine.APHRODITE:
+    if pipe_config.engine == Engine.APHRODITE:
         generation_params.update({
-            "top_a": pipe_cfg.top_a,
-            "xtc_probability": pipe_cfg.xtc_probability,
-            "nsigma": pipe_cfg.nsigma,
+            "top_a": pipe_config.top_a,
+            "xtc_probability": pipe_config.xtc_probability,
+            "nsigma": pipe_config.nsigma,
         })
 
-    print(f"Loading prompts from file: {os.path.basename(gen_config.prompt_file)}")
-    prompt_list = load_prompts([gen_config.prompt_file])
+    print(f"Loading prompts from file: {os.path.basename(pipe_config.prompt_file)}")
+    prompt_list = load_prompts([pipe_config.prompt_file])
     prompts = PromptSet(prompt_list)
 
     subset_idx = batch_id if batch_id is not None else 0
     config_name = f"shard_{batch_id}" if batch_id is not None else "default"
 
-    print(f"Streaming {gen_config.num_samples} samples from {source_dataset_name} (subset index {subset_idx})...")
+    print(f"Streaming {pipe_config.num_samples} samples from {source_dataset_name} (subset index {subset_idx})...")
     ds = load_dataset(source_dataset_name, split="train", cache_dir=globals_config.cache_dir, subset_index=subset_idx)
 
     samples = []
     tokens_or_words_processed = 0
     dropped_count = 0
 
-    uses_tokenizer = pipe_cfg.engine.uses_tokenizer
+    uses_tokenizer = pipe_config.engine.uses_tokenizer
     if uses_tokenizer:
-        tokenizer = AutoTokenizer.from_pretrained(pipe_cfg.model_name)
-        length_limit = pipe_cfg.max_input_tokens
+        tokenizer = AutoTokenizer.from_pretrained(pipe_config.model_name)
+        length_limit = pipe_config.max_input_tokens
     else:
-        length_limit = pipe_cfg.max_dataset_words
+        length_limit = pipe_config.max_dataset_words
 
     for row in ds:
-        text = row[gen_config.source_column]
+        text = row[pipe_config.source_column]
         text = str(text) if text is not None else ""
 
         if uses_tokenizer:
@@ -106,14 +102,14 @@ def run_pipeline(
 
         samples.append(text)
         tokens_or_words_processed += count
-        if len(samples) >= gen_config.num_samples:
+        if len(samples) >= pipe_config.num_samples:
             break
 
     print(f"Dropped {dropped_count} samples over the length limit ({length_limit}).")
     print(f"Loaded {len(samples)} samples with a total of {tokens_or_words_processed} tokens.")
 
     if uses_tokenizer:
-        with llm_server_context(engine=pipe_cfg.engine.value, model_name=pipe_cfg.model_name, port=None, max_model_len=pipe_cfg.max_model_len) as api_url:
+        with llm_server_context(engine=pipe_config.engine.value, model_name=pipe_config.model_name, port=None, max_model_len=pipe_config.max_model_len) as api_url:
             print(f"Using API endpoint: {api_url}")
             result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
                 samples=samples,
@@ -123,18 +119,18 @@ def run_pipeline(
             )
     else:
         # api_key_env may be None for a local unauthenticated endpoint.
-        if pipe_cfg.api_key_env is not None:
-            api_key = os.environ.get(pipe_cfg.api_key_env, "EMPTY")
+        if pipe_config.api_key_env is not None:
+            api_key = os.environ.get(pipe_config.api_key_env, "EMPTY")
         else:
             api_key = "EMPTY"
-        print(f"Using API endpoint: {pipe_cfg.api_url}")
+        print(f"Using API endpoint: {pipe_config.api_url}")
         result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
             samples=samples,
-            api_url=pipe_cfg.api_url,
+            api_url=pipe_config.api_url,
             prompts=prompts,
             generation_params=generation_params,
             api_key=api_key,
-            model_name=pipe_cfg.model_name,
+            model_name=pipe_config.model_name,
         )
 
     # Guard against silent column-length mismatches in result_dict.
@@ -149,26 +145,26 @@ def run_pipeline(
     else:
         num_rows = 0
 
-    result_dict["generator_model"] = [pipe_cfg.model_name] * num_rows
+    result_dict["generator_model"] = [pipe_config.model_name] * num_rows
     result_dict["generation_params"] = [json.dumps(generation_params)] * num_rows
 
     result_ds = Dataset.from_dict(result_dict)
 
     total_runtime = time.time() - start_time
     readme_content = f"""# Auto-Generated FastDetector Dataset
-- Model Name: {pipe_cfg.model_name}
-- Temperature: {pipe_cfg.temperature}
-- Top P: {pipe_cfg.top_p}
-- Top K: {pipe_cfg.top_k}
-- Presence Penalty: {pipe_cfg.presence_penalty}
-- Disable Thinking: {pipe_cfg.disable_thinking}
+- Model Name: {pipe_config.model_name}
+- Temperature: {pipe_config.temperature}
+- Top P: {pipe_config.top_p}
+- Top K: {pipe_config.top_k}
+- Presence Penalty: {pipe_config.presence_penalty}
+- Disable Thinking: {pipe_config.disable_thinking}
 
-- Prompt File: {gen_config.prompt_file}
+- Prompt File: {pipe_config.prompt_file}
 - Total Train Prompts: {len(prompts.get_train())}
 
 - Source Dataset: {source_dataset_name}
-- Source Column: {gen_config.source_column}
-- Target Num Samples: {gen_config.num_samples}
+- Source Column: {pipe_config.source_column}
+- Target Num Samples: {pipe_config.num_samples}
 
 - Total Input Tokens Processed: {total_prompt_tokens}
 - Total Output Tokens Processed: {total_completion_tokens}
@@ -177,7 +173,7 @@ def run_pipeline(
 
 - Total Runtime: {total_runtime:.2f} seconds
 
-- Engine: {pipe_cfg.engine.value}
+- Engine: {pipe_config.engine.value}
 """
     upload_dataset(
         dataset=result_ds,

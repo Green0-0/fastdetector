@@ -30,7 +30,7 @@ def main():
     print(f"Running filtering generation pipeline...")
     # run_pipeline uploads the result and returns the in-memory Dataset.
     ds = run_pipeline(
-        gen_config=filter_config,
+        pipe_config=filter_config,
         globals_config=globals_config,
         source_dataset_name=source_dataset,
         target_dataset_name=intermediate_dataset,
