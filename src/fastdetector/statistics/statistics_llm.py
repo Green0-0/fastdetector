@@ -39,7 +39,20 @@ def entropies_approx(top_logprobs: list[list[dict[str, float]]]) -> list[float]:
 
 def fastdetectgpt_scores_approx(token_logprobs: list[list[Optional[float]]], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
     """Approximate FastDetectGPT score for each text using top-N logprobs.
-    Score = mean((log_prob(x_i) - E[log_prob(x_i)]) / Std[log_prob(x_i)])
+    
+    Computes the mean of per-position z-scores as defined in the FastDetectGPT
+    paper (Bao et al., 2023):
+        s(x) = (1/T) * sum_t z_t
+    where z_t = (log p(x_t) - E[log p(x_t)]) / sqrt(Var[log p(x_t)])
+    
+    Previously, the implementation incorrectly computed:
+        (sum dev_t) / sqrt(sum var_t)
+    which is the z-score of the total deviation, NOT the mean per-position
+    z-score. The two formulas differ substantially:
+    - The correct formula is length-normalized (comparable across texts of
+      different lengths).
+    - The old formula scales as ~sqrt(T) for longer texts, systematically
+      over-scoring them.
     
     Args:
         token_logprobs: Logprobs of the actual tokens.
@@ -51,13 +64,10 @@ def fastdetectgpt_scores_approx(token_logprobs: list[list[Optional[float]]], top
     results = []
     for text_token_lps, text_top_lps in zip(token_logprobs, top_logprobs):
         if not text_token_lps or not text_top_lps:
-            results.append(0.0)
+            results.append(float('nan'))
             continue
             
-        total_lp = 0.0
-        total_expected_lp = 0.0
-        total_variance = 0.0
-        valid_tokens = 0
+        z_scores = []
         
         for lp, top_lps in zip(text_token_lps, text_top_lps):
             if lp is None or top_lps is None or len(top_lps) == 0:
@@ -87,16 +97,13 @@ def fastdetectgpt_scores_approx(token_logprobs: list[list[Optional[float]]], top
             
             variance = max(0.0, expected_lp_sq - (expected_lp ** 2))
             
-            total_lp += lp
-            total_expected_lp += expected_lp
-            total_variance += variance
-            valid_tokens += 1
+            if variance > 1e-12:
+                z_scores.append((lp - expected_lp) / math.sqrt(variance))
             
-        if valid_tokens > 0 and total_variance > 1e-6:
-            sequence_score = (total_lp - total_expected_lp) / math.sqrt(total_variance)
-            results.append(sequence_score)
+        if z_scores:
+            results.append(float(np.mean(z_scores)))
         else:
-            results.append(0.0)
+            results.append(float('nan'))
             
     return results
 
