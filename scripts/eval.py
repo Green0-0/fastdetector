@@ -1,5 +1,4 @@
 import argparse
-import ast
 import json
 import time
 
@@ -185,76 +184,104 @@ def md_entry(emoji, header, sm, bm):
     )
 
 
-def _safe_parse_dict(val):
-    """Parse a dict from a string or return None on failure.
+def _parse_genparams(val):
+    """Parse the generation_params value for a single dataset row.
 
-    Handles both JSON-encoded strings (from json.dumps, used by pipe.py) and
-    Python-dict-style strings (from str(dict), used by older code paths).
+    pipe.py writes ``generation_params`` as ``json.dumps(generation_params)``
+    (a JSON-encoded string). When the dataset round-trips through parquet,
+    the value may already be a dict (parquet auto-deserializes JSON columns).
 
-    The previous code used json.loads(g.replace("'", '"')) which breaks on any
-    string value containing apostrophes (e.g. "don't"). This function tries
-    json.loads first (correct for JSON), then falls back to ast.literal_eval
-    (correct for Python dict literals with single quotes).
+    Args:
+        val: Either a JSON string or a dict.
+
+    Returns:
+        The parsed dict, or ``None`` if *val* is falsy.
+
+    Raises:
+        json.JSONDecodeError: if *val* is a string that isn't valid JSON.
     """
     if isinstance(val, dict):
         return val
-    if isinstance(val, str):
-        try:
-            d = json.loads(val)
-            if isinstance(d, dict):
-                return d
-        except (json.JSONDecodeError, ValueError):
-            pass
-        try:
-            d = ast.literal_eval(val)
-            if isinstance(d, dict):
-                return d
-        except (ValueError, SyntaxError):
-            pass
-    return None
+    if not val:
+        return None
+    return json.loads(val)
 
 
 def extract_prompt_types(result_ds, prompt_col):
     """Extract the PROMPT_TYPE metadata field from the prompt column.
 
-    Returns a numpy array of strings (one per row), defaulting to "Unknown"
-    for rows without a PROMPT_TYPE.
+    Each prompt is a dict shaped like ``{"chat_turns": ..., "metadata": {...}}``
+    as produced by ``PromptSet.map`` in ``fastdetector.prompting.prompts``.
+    Rows whose prompt is empty or whose ``metadata`` lacks ``PROMPT_TYPE``
+    default to ``"Unknown"``.
+
+    Args:
+        result_ds: The dataset produced by stat.py.
+        prompt_col: Name of the prompt column. May be ``None`` or refer to a
+            column that doesn't exist in *result_ds*; in that case the function
+            returns ``(array_of_"Unknown", False)`` so the caller can skip
+            the per-prompt-type breakdown.
+
+    Returns:
+        A tuple ``(prompt_types, has_prompts)`` where ``prompt_types`` is a
+        numpy array of strings (one per row) and ``has_prompts`` is True iff
+        the prompt column was found.
     """
-    prompt_types = np.array(["Unknown"] * len(result_ds))
     if not (prompt_col and prompt_col in result_ds.column_names):
-        return prompt_types, False
+        return np.array(["Unknown"] * len(result_ds)), False
 
     pts = []
     for p in result_ds[prompt_col]:
         pt = "Unknown"
-        if p and isinstance(p, dict) and isinstance(p.get("metadata"), dict):
+        if p and isinstance(p.get("metadata"), dict):
             pt = str(p["metadata"].get("PROMPT_TYPE", "Unknown"))
         pts.append(pt)
     return np.array(pts), True
 
 
 def extract_model_genconfig(result_ds, model_col):
-    """Extract a "model_name (Temp: X)" string per row from model + generation_params columns.
+    """Extract a "model_name (Temp: X)" string per row.
 
-    Returns a numpy array of strings and a bool indicating whether the
-    columns were found.
+    Pulls the model name from *model_col* and the temperature from the
+    ``generation_params`` column (JSON-encoded). Both columns are written by
+    ``pipe.py`` together, so a dataset that has only one is inconsistent and
+    raises ``ValueError``.
+
+    Args:
+        result_ds: The dataset produced by stat.py.
+        model_col: Name of the column holding the model name (e.g.
+            ``"generator_model"``).
+
+    Returns:
+        A tuple ``(mg_str_np, has_model_genconfig)`` where ``mg_str_np`` is a
+        numpy array of strings (one per row) and ``has_model_genconfig`` is
+        True iff both columns were present.
+
+    Raises:
+        ValueError: if exactly one of ``model_col`` and ``generation_params``
+            is present in *result_ds*.
     """
-    mg_str_np = np.array(["Unknown"] * len(result_ds))
     has_model_col = model_col in result_ds.column_names
     has_genparams = "generation_params" in result_ds.column_names
-    if not (has_model_col or has_genparams):
-        return mg_str_np, False
-
-    m_list = result_ds[model_col] if has_model_col else ["Unknown"] * len(result_ds)
-    g_list = result_ds["generation_params"] if has_genparams else ["Unknown"] * len(result_ds)
+    if not has_model_col and not has_genparams:
+        return np.array(["Unknown"] * len(result_ds)), False
+    if not has_model_col or not has_genparams:
+        missing = []
+        if not has_model_col:
+            missing.append(model_col)
+        if not has_genparams:
+            missing.append("generation_params")
+        raise ValueError(
+            f"Dataset is missing column(s) {missing} expected for "
+            f"model/genconfig extraction. pipe.py writes both columns "
+            f"together — a dataset with only one is inconsistent."
+        )
 
     parsed = []
-    for m, g in zip(m_list, g_list):
+    for m, g in zip(result_ds[model_col], result_ds["generation_params"]):
         m_str = str(m).split('/')[-1] if m else "Unknown"
-        temp = "Unknown"
-        d = _safe_parse_dict(g)
-        if d is not None:
-            temp = d.get("temperature", "Unknown")
+        d = _parse_genparams(g)
+        temp = d.get("temperature", "Unknown") if d is not None else "Unknown"
         parsed.append(f"{m_str} (Temp: {temp})")
     return np.array(parsed), True
 
