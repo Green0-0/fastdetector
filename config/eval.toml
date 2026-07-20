@@ -9,7 +9,7 @@ batch_size = 24
 # Splits the test set into a small validation set to determine classification thresholds
 validation_size = 0.1
 threshold_type_bin = "f1"
-threshold_type_score = "fpr0.5"
+threshold_type_score = "fpr_0_5pct"
 # manual_threshold_score / manual_threshold_bin: omit (or set to null) to auto-derive
 # from the validation sweep; set to a float to force a manual threshold.
 

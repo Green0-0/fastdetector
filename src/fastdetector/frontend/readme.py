@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 
 from fastdetector.frontend.config import StatConfig
-from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
+from fastdetector.statistics.plotting import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
 from fastdetector.statistics.statistics_basic import global_ngram_analysis, pairwise_jaccards
 
 def build_readme_content(ds: Dataset, config: StatConfig) -> Tuple[str, Dict[str, Any]]:

@@ -7,7 +7,8 @@ from fastdetector.frontend.config import EvalConfig
 from fastdetector.frontend.loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
-from fastdetector.statistics.statistics_utils import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot, compute_auroc
+from fastdetector.statistics.statistics_utils import compute_auroc
+from fastdetector.statistics.plotting import get_histogram, get_sweeping_classifier_plot, get_confusion_matrix, get_scatterplot
 from fastdetector.modeling.editlens import infer_n_buckets, get_model_and_tokenizer, compute_editlens_scores
 
 def compute_metrics(h_vals, a_vals, threshold, dist_metrics_dict, flip_inequality=False):
