@@ -90,12 +90,18 @@ def _collect_column_lists(config: StatConfig) -> dict:
             if config.fastdetectgpt_score:
                 summary_stat_columns.extend([f"{col_a}_fastdetectgpt{suffix}", f"{col_b}_fastdetectgpt{suffix}"])
                 histogram_columns.append(f"{col_a}_fastdetectgpt{suffix}/{col_b}_fastdetectgpt{suffix}")
-                classifier_columns.append(f"{col_a}_fastdetectgpt{suffix}:true/{col_b}_fastdetectgpt{suffix}:false")
+                # FastDetectGPT assigns HIGHER scores to AI text (positive curvature).
+                # The classifier uses "score > threshold → positive" by default, so
+                # AI must be the positive class for the direction to be correct.
+                classifier_columns.append(f"{col_b}_fastdetectgpt{suffix}:true/{col_a}_fastdetectgpt{suffix}:false")
 
         if config.binoculars_score and len(config.llm_checkpoints) >= 2:
             summary_stat_columns.extend([f"{col_a}_binoculars", f"{col_b}_binoculars"])
             histogram_columns.append(f"{col_a}_binoculars/{col_b}_binoculars")
-            classifier_columns.append(f"{col_a}_binoculars:true/{col_b}_binoculars:false")
+            # Binoculars (PPL_M1/PPL_M2): AI text has higher scores (B > 1),
+            # human text has B ≈ 1. The classifier uses "score > threshold → positive",
+            # so AI must be the positive class.
+            classifier_columns.append(f"{col_b}_binoculars:true/{col_a}_binoculars:false")
 
     if pairwise_correlations and len(pairwise_correlations) > 1:
         scatterplot_columns.append("/".join(pairwise_correlations))
