@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List, Any
 
-from fastdetector.engine import Engine
+from fastdetector.frontend.pipeconfig import PipeConfig
 
 class GlobalsConfig(BaseModel):
     """Global configuration settings for dataset processing, paths, and naming conventions."""
@@ -36,59 +36,24 @@ class GlobalsConfig(BaseModel):
             return self.override_dataset_output
         return f"{self.dataset_prefix}-{suffix}"
 
-class PipelineConfig(BaseModel):
-    """Configuration for the LLM generation pipeline and engine parameters."""
-
-    # Core Engine Settings.
-    # engine accepts both Engine enum instances and string values (e.g. "vllm"
-    # from TOML); pydantic coerces strings to Engine automatically.
-    engine: Engine
-    model_name: str
-
-    # Sampling Parameters.
-    # top_k / disable_thinking are optional because filter.toml legitimately
-    # omits them (filtering uses temperature=0 and ignores these knobs).
-    temperature: float
-    top_p: float
-    top_k: Optional[int] = None
-    disable_thinking: Optional[bool] = None
-    presence_penalty: float
-
-    # Length Limits (Optional)
-    max_model_len: Optional[int] = None
-    max_input_tokens: Optional[int] = None
-
-    # Aphrodite-specific Sampling Parameters
-    top_a: float = 0.0
-    xtc_probability: float = 0.0
-    nsigma: float = 0.0
-
-    # API & General Settings
-    api_url: Optional[str] = None
-    api_key_env: Optional[str] = None
-    max_dataset_words: Optional[int] = None
-
-class GenConfig(BaseModel):
-    """Configuration for the generation scripts (gen.py)."""
-    num_samples: int
-    source_column: str
-    prompt_file: str
-    pipeline: PipelineConfig
 
 class ConditionConfig(BaseModel):
     column: str
     operator: str
     value: Any
 
-class FilterConfig(BaseModel):
-    """Configuration for the filtering script (filter.py)."""
-    num_samples: int
-    source_column: str
-    prompt_file: str
+
+class FilterConfig(PipeConfig):
+    """Configuration for the filtering script (filter.py).
+
+    Extends :class:`PipeConfig` with filter-specific fields. The ``PipeConfig``
+    portion drives ``run_pipeline``; the extras below drive the post-pipeline
+    filtering step.
+    """
     output_shards: int
-    conditions: List[ConditionConfig]
+    conditions: List[ConditionConfig] = []
     filter_type: str = "AND"
-    pipeline: PipelineConfig
+
 
 class EvalConfig(BaseModel):
     """Configuration for downstream evaluation and classification thresholds."""
@@ -118,6 +83,7 @@ class EvalConfig(BaseModel):
 
     # Distance Metrics for Correlation/Plots
     distance_metrics: List[str] = []
+
 
 class StatConfig(BaseModel):
     """Configuration for the comprehensive dataset statistics pipeline (stat.py)."""

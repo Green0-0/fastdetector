@@ -1,5 +1,5 @@
 import argparse
-from fastdetector.frontend.config import GenConfig
+from fastdetector.frontend.pipeconfig import PipeConfig
 from fastdetector.frontend.loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
 
@@ -11,8 +11,8 @@ def main():
 
     args = parser.parse_args()
 
-    globals_config, gen_config = load_config_pair(
-        args.globals_config, args.gen_config, GenConfig
+    globals_config, pipe_config = load_config_pair(
+        args.globals_config, args.gen_config, PipeConfig
     )
 
     source_dataset = globals_config.resolve_input_dataset(globals_config.post_filter_suffix)
@@ -21,10 +21,10 @@ def main():
     print(f"Running generation pipeline...")
     print(f"Source Dataset: {source_dataset}")
     print(f"Target Dataset: {target_dataset}")
-    print(f"Engine: {gen_config.pipeline.engine}")
+    print(f"Engine: {pipe_config.engine}")
 
     run_pipeline(
-        gen_config=gen_config,
+        pipe_config=pipe_config,
         globals_config=globals_config,
         source_dataset_name=source_dataset,
         target_dataset_name=target_dataset,
