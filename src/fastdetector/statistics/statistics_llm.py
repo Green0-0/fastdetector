@@ -194,7 +194,7 @@ def perplexities(token_logprobs: list[list[float | None]]) -> list[float]:
 
 def top_p_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_logprobs: list[list[float | None]], p: float) -> list[float]:
     """Compute the percentage of tokens outside the top-p probability mass for each text.
-    
+
     Args:
         top_logprobs: For each text, a list of dictionaries mapping top tokens to logprobs.
         token_logprobs: For each text, a list of logprobs for the actual tokens.
@@ -215,19 +215,32 @@ def top_p_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_
         for token_lp, top_lps in zip(text_token_lps, text_top_lps):
             if token_lp is not None and top_lps is not None and len(top_lps) > 0:
                 total_count += 1
-                sorted_probs = sorted([math.exp(lp) for lp in top_lps.values()], reverse=True)
-                cumulative = 0.0
-                threshold_prob = 0.0
-                for prob in sorted_probs:
-                    cumulative += prob
-                    if cumulative >= p:
-                        threshold_prob = prob
+                # Sort top logprobs (not probs) in descending order so we can
+                # work in log space — comparing in probability space with an
+                # absolute tolerance is incorrect for very small probabilities
+                # (e.g. a token_prob of 1e-10 vs threshold_prob of 2e-10 would
+                # pass `token_prob < threshold_prob - 1e-6` because the right
+                # hand side becomes negative).
+                sorted_lps = sorted(top_lps.values(), reverse=True)
+                cumulative_prob = 0.0
+                threshold_lp = None
+                for lp in sorted_lps:
+                    cumulative_prob += math.exp(lp)
+                    if cumulative_prob >= p:
+                        threshold_lp = lp
                         break
-                if cumulative < p:
-                    threshold_prob = sorted_probs[-1]
-                    
-                token_prob = math.exp(token_lp)
-                if token_prob < threshold_prob - 1e-6:
+                if threshold_lp is None:
+                    # Top-N mass did not reach p — fall back to the smallest
+                    # top-N logprob as the threshold.
+                    threshold_lp = sorted_lps[-1]
+
+                # Compare in log space with a small absolute tolerance. log is
+                # monotonic so `token_prob < threshold_prob` is equivalent to
+                # `token_lp < threshold_lp`. The tolerance of 1e-5 nats is
+                # roughly 0.001% probability ratio, which is well below the
+                # numerical precision of fp32 logprobs from vLLM/the OpenAI
+                # API, so it only collapses true numerical ties.
+                if token_lp < threshold_lp - 1e-5:
                     outlier_count += 1
                     
         results.append(outlier_count / total_count if total_count > 0 else 0.0)
