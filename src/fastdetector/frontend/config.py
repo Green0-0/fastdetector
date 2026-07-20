@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional, List, Any
 
+from fastdetector.engine import Engine
+
 class GlobalsConfig(BaseModel):
     """Global configuration settings for dataset processing, paths, and naming conventions."""
 
@@ -37,8 +39,10 @@ class GlobalsConfig(BaseModel):
 class PipelineConfig(BaseModel):
     """Configuration for the LLM generation pipeline and engine parameters."""
 
-    # Core Engine Settings
-    engine: str
+    # Core Engine Settings.
+    # engine accepts both Engine enum instances and string values (e.g. "vllm"
+    # from TOML); pydantic coerces strings to Engine automatically.
+    engine: Engine
     model_name: str
 
     # Sampling Parameters.

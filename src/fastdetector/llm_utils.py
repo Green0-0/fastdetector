@@ -7,6 +7,8 @@ from contextlib import contextmanager
 
 import requests
 
+from fastdetector.engine import Engine
+
 # Total startup timeout = HEALTH_CHECK_INTERVALS * HEALTH_CHECK_INTERVAL_SECS.
 # vLLM / Aphrodite can take 5–10 minutes to load a large model on first run
 # (weights download + CUDA kernel compilation), so we allow up to 20 minutes.
@@ -46,42 +48,35 @@ def get_gpu_count() -> int:
     raise RuntimeError("No GPUs found! CUDA_VISIBLE_DEVICES not set.")
 
 
-def _resolve_engine_binary(engine: str) -> tuple[str, str]:
-    """Resolve the engine binary path and return (bin_path, engine_label).
+def _resolve_engine_binary(engine: Engine) -> tuple[str, Engine]:
+    """Resolve the engine binary path and return (bin_path, engine).
 
-    Reads the venv path from VLLM_VENV_PATH (for vLLM) or APHRODITE_VENV_PATH
-    (for Aphrodite, defaulting to .aphrodite).
+    Reads the venv path from the engine's venv_env_var property
+    (VLLM_VENV_PATH for vLLM, APHRODITE_VENV_PATH for Aphrodite).
 
     Raises:
         RuntimeError: if the venv env var is unset or the binary is missing.
-        ValueError: if the engine name is not recognized.
     """
-    engine_lower = engine.lower()
-    if engine_lower == "vllm":
-        venv_path = os.environ.get("VLLM_VENV_PATH")
-        if not venv_path:
-            raise RuntimeError(
-                "VLLM_VENV_PATH environment variable is not set. Please set "
-                "VLLM_VENV_PATH to the path of the virtual environment "
-                "containing the vLLM installation."
-            )
-        bin_path = os.path.join(venv_path, "bin", "vllm")
-    elif engine_lower == "aphrodite":
-        venv_path = os.environ.get("APHRODITE_VENV_PATH", ".aphrodite")
-        bin_path = os.path.join(venv_path, "bin", "aphrodite")
-    else:
-        raise ValueError(f"Unsupported LLM engine: {engine}")
+    venv_path = os.environ.get(engine.venv_env_var, engine.venv_default)
+    if not venv_path:
+        raise RuntimeError(
+            f"{engine.venv_env_var} environment variable is not set. Please set "
+            f"{engine.venv_env_var} to the path of the virtual environment "
+            f"containing the {engine.value} installation."
+        )
+    bin_name = engine.value  # "vllm" or "aphrodite"
+    bin_path = os.path.join(venv_path, "bin", bin_name)
 
     if not os.path.isfile(bin_path) or not os.access(bin_path, os.X_OK):
         raise RuntimeError(
-            f"{engine} executable not found or not executable at: {bin_path}"
+            f"{engine.value} executable not found or not executable at: {bin_path}"
         )
 
-    return bin_path, engine_lower
+    return bin_path, engine
 
 
 def launch_engine_server(
-    engine: str,
+    engine: Engine | str,
     model_name: str,
     port: int,
     max_logprobs: int = 10,
@@ -97,7 +92,8 @@ def launch_engine_server(
     diagnose.
 
     Args:
-        engine: "vllm" or "aphrodite".
+        engine: Engine enum (or string name) for the backend. Must be a
+            local-server engine (vLLM or Aphrodite).
         model_name: HuggingFace model ID or local path.
         port: Port for the OpenAI-compatible API server.
         max_logprobs: Maximum number of top logprobs the server will return.
@@ -108,16 +104,22 @@ def launch_engine_server(
         The subprocess.Popen handle once the server is healthy.
 
     Raises:
+        ValueError: if the engine is not a local-server engine.
         RuntimeError: if the server fails to become healthy within the timeout
             (currently 20 minutes). The subprocess is terminated before raising.
     """
-    gpu_count = get_gpu_count()
-    bin_path, engine_lower = _resolve_engine_binary(engine)
+    if isinstance(engine, str):
+        engine = Engine.from_str(engine)
+    if not engine.is_local_server:
+        raise ValueError(
+            f"{engine} is not a local-server engine. "
+            f"Only {Engine.VLLM.value} and {Engine.APHRODITE.value} can be launched."
+        )
 
-    if engine_lower == "vllm":
-        cmd_prefix = [bin_path, "serve", model_name]
-    else:  # aphrodite
-        cmd_prefix = [bin_path, "run", model_name]
+    gpu_count = get_gpu_count()
+    bin_path, _ = _resolve_engine_binary(engine)
+
+    cmd_prefix = [bin_path, engine.serve_subcommand, model_name]
 
     cmd = cmd_prefix + [
         "--port", str(port),
@@ -194,20 +196,21 @@ def launch_engine_server(
     )
 
 
-def _terminate_proc(proc: subprocess.Popen, engine: str, timeout: int = 60) -> None:
+def _terminate_proc(proc: subprocess.Popen, engine: Engine | str, timeout: int = 60) -> None:
     """Terminate a subprocess gracefully, escalating to kill if needed."""
+    engine_label = engine.value if isinstance(engine, Engine) else str(engine)
     proc.terminate()
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        print(f"{engine} server did not terminate, killing it...")
+        print(f"{engine_label} server did not terminate, killing it...")
         proc.kill()
         proc.wait()
 
 
 @contextmanager
 def llm_server_context(
-    engine: str,
+    engine: Engine | str,
     model_name: str,
     port: int | None = None,
     max_logprobs: int = 10,
@@ -221,7 +224,8 @@ def llm_server_context(
     server on context exit (including on exception).
 
     Args:
-        engine: "vllm" or "aphrodite".
+        engine: Engine enum (or string name) for the backend. Must be a
+            local-server engine (vLLM or Aphrodite).
         model_name: HuggingFace model ID or local path.
         port: Port for the API server. If None, a free port is chosen.
         max_logprobs: Maximum top-logprobs the server will return.
@@ -232,24 +236,29 @@ def llm_server_context(
         The API base URL string.
 
     Raises:
-        ValueError: if the engine is not "vllm" or "aphrodite".
+        ValueError: if the engine is not a local-server engine.
         RuntimeError: if the server fails to start within the timeout.
     """
+    if isinstance(engine, str):
+        engine = Engine.from_str(engine)
+    if not engine.is_local_server:
+        raise ValueError(
+            f"{engine} is not a local-server engine. "
+            f"Only {Engine.VLLM.value} and {Engine.APHRODITE.value} can be launched."
+        )
+
     if port is None:
         port = get_free_port()
 
     proc = None
     try:
-        if engine.lower() in ("vllm", "aphrodite"):
-            proc = launch_engine_server(
-                engine, model_name, port,
-                max_logprobs, gpu_memory_utilization, max_model_len,
-            )
-        else:
-            raise ValueError(f"Unsupported LLM engine: {engine}")
+        proc = launch_engine_server(
+            engine, model_name, port,
+            max_logprobs, gpu_memory_utilization, max_model_len,
+        )
         yield f"http://localhost:{port}/v1"
     finally:
         if proc is not None:
-            print(f"Shutting down {engine} server...")
+            print(f"Shutting down {engine.value} server...")
             _terminate_proc(proc, engine)
-            print(f"{engine} server shutdown complete.")
+            print(f"{engine.value} server shutdown complete.")

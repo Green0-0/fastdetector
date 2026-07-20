@@ -9,6 +9,7 @@ from fastdetector.generator import build_dataset
 from fastdetector.utils import upload_dataset, upload_readme
 from fastdetector.llm_utils import llm_server_context
 from fastdetector.frontend.config import GenConfig, FilterConfig, GlobalsConfig
+from fastdetector.engine import Engine
 
 # run_pipeline is shared by gen.py and filter.py; both config types expose
 # the same .pipeline / .source_column / .num_samples / .prompt_file interface.
@@ -46,7 +47,7 @@ def run_pipeline(
 
     print(f"Running generation pipeline...")
     print(f"Target dataset: {target_dataset_name}")
-    print(f"Using engine: {pipe_cfg.engine}")
+    print(f"Using engine: {pipe_cfg.engine.value}")
     print(f"Using model: {pipe_cfg.model_name}")
 
     generation_params = {
@@ -57,10 +58,12 @@ def run_pipeline(
         "disable_thinking": pipe_cfg.disable_thinking,
     }
 
-    if pipe_cfg.engine == "oai":
-        generation_params.update({"is_api_model": True})
+    # is_api_model tells generator.py to use API-model sampling-param semantics
+    # (no temperature/top_p/top_k; disable_thinking → reasoning_effort="none").
+    if pipe_cfg.engine == Engine.OAI:
+        generation_params["is_api_model"] = True
 
-    if pipe_cfg.engine == "aphrodite":
+    if pipe_cfg.engine == Engine.APHRODITE:
         generation_params.update({
             "top_a": pipe_cfg.top_a,
             "xtc_probability": pipe_cfg.xtc_probability,
@@ -81,7 +84,7 @@ def run_pipeline(
     tokens_or_words_processed = 0
     dropped_count = 0
 
-    uses_tokenizer = pipe_cfg.engine in ("vllm", "aphrodite")
+    uses_tokenizer = pipe_cfg.engine.uses_tokenizer
     if uses_tokenizer:
         tokenizer = AutoTokenizer.from_pretrained(pipe_cfg.model_name)
         length_limit = pipe_cfg.max_input_tokens
@@ -110,7 +113,7 @@ def run_pipeline(
     print(f"Loaded {len(samples)} samples with a total of {tokens_or_words_processed} tokens.")
 
     if uses_tokenizer:
-        with llm_server_context(engine=pipe_cfg.engine, model_name=pipe_cfg.model_name, port=None, max_model_len=pipe_cfg.max_model_len) as api_url:
+        with llm_server_context(engine=pipe_cfg.engine.value, model_name=pipe_cfg.model_name, port=None, max_model_len=pipe_cfg.max_model_len) as api_url:
             print(f"Using API endpoint: {api_url}")
             result_dict, total_prompt_tokens, total_completion_tokens = build_dataset(
                 samples=samples,
@@ -174,7 +177,7 @@ def run_pipeline(
 
 - Total Runtime: {total_runtime:.2f} seconds
 
-- Engine: {pipe_cfg.engine}
+- Engine: {pipe_cfg.engine.value}
 """
     upload_dataset(
         dataset=result_ds,
