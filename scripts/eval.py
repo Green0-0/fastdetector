@@ -6,7 +6,7 @@ import numpy as np
 
 from fastdetector.frontend.toml_config import EvalConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_local_fallback as load_dataset
+from fastdetector.utils import load_dataset
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
 from fastdetector.statistics.statistics_utils import compute_auroc
 from fastdetector.statistics.plotting import (
@@ -608,15 +608,12 @@ def main():
     upload_dataset(
         dataset=result_ds,
         dataset_name=target_dataset,
-        save_locally_instead=globals_config.save_locally_instead,
-        cache_dir=globals_config.cache_dir,
     )
-    if not globals_config.save_locally_instead:
-        upload_readme(
-            dataset_name=target_dataset,
-            files=charts,
-            readme_content=md,
-        )
+    upload_readme(
+        dataset_name=target_dataset,
+        files=charts,
+        readme_content=md,
+    )
     print("Done!")
 
 

@@ -41,12 +41,9 @@ def main() -> None:
     upload_dataset(
         dataset=result_ds,
         dataset_name=target_dataset,
-        save_locally_instead=globals_config.save_locally_instead,
-        cache_dir=globals_config.cache_dir,
         config_name=config_name
     )
-    if not globals_config.save_locally_instead:
-        upload_readme(dataset_name=target_dataset, readme_content=readme_content)
+    upload_readme(dataset_name=target_dataset, readme_content=readme_content)
 
 
 if __name__ == "__main__":

@@ -21,9 +21,9 @@ class GlobalsConfig(BaseModel):
     stat_suffix: str
     eval_suffix: str
 
-    # Execution & Storage Flags
-    save_locally_instead: bool
-    cache_dir: str
+    # Optional HF datasets cache directory. When None, the HF default cache
+    # (~/.cache/huggingface/datasets) is used.
+    cache_dir: Optional[str] = None
 
     # Engine Virtual Environment Paths
     vllm_venv_path: str = ".vllm"

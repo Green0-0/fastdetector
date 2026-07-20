@@ -76,16 +76,13 @@ def main():
     upload_dataset(
         dataset=ds,
         dataset_name=intermediate_dataset,
-        save_locally_instead=globals_config.save_locally_instead,
-        cache_dir=globals_config.cache_dir,
         config_name="default"
     )
-    if not globals_config.save_locally_instead:
-        upload_readme(
-            dataset_name=intermediate_dataset,
-            readme_content=readme_content,
-            append_readme_source=intermediate_dataset
-        )
+    upload_readme(
+        dataset_name=intermediate_dataset,
+        readme_content=readme_content,
+        append_readme_source=intermediate_dataset
+    )
 
     conditions = filter_config.conditions
     print(f"Filtering dataset with conditions: {conditions}")
@@ -118,17 +115,14 @@ def main():
         upload_dataset(
             dataset=dataset_shard,
             dataset_name=filtered_dataset,
-            save_locally_instead=globals_config.save_locally_instead,
-            cache_dir=globals_config.cache_dir,
             config_name=config_name
         )
 
-    if not globals_config.save_locally_instead:
-        upload_readme(
-            dataset_name=filtered_dataset,
-            readme_content=filtered_readme,
-            append_readme_source=intermediate_dataset
-        )
+    upload_readme(
+        dataset_name=filtered_dataset,
+        readme_content=filtered_readme,
+        append_readme_source=intermediate_dataset
+    )
 
 if __name__ == "__main__":
     main()

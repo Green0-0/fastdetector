@@ -3,7 +3,7 @@ import json
 
 from fastdetector.frontend.toml_config import StatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_local_fallback as load_dataset
+from fastdetector.utils import load_dataset
 from fastdetector.utils import upload_dataset
 from fastdetector.frontend.engine_config import EngineConfig as Engine
 from fastdetector.llm_utils import llm_server_context
@@ -395,8 +395,6 @@ def main():
     upload_dataset(
         dataset=ds,
         dataset_name=target_dataset,
-        save_locally_instead=globals_config.save_locally_instead,
-        cache_dir=globals_config.cache_dir,
         config_name=f"shard_{args.batch_id}",
     )
     print("Done!")
