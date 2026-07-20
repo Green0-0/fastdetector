@@ -9,8 +9,8 @@ import argparse
 
 from datasets import concatenate_datasets, Dataset
 
-from fastdetector.frontend.config import StatConfig
-from fastdetector.frontend.loader import load_config_pair
+from fastdetector.frontend.toml_config import StatConfig
+from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_readme
 from fastdetector.frontend.readme import build_readme_content

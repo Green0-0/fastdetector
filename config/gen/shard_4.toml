@@ -1,14 +1,15 @@
 num_samples = 50000
-source_column = "collected_subset_original_final_response"
+source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "vllm"
 model_name = "cyankiwi/Ministral-3-8B-Instruct-2512-AWQ-4bit"
+parallelization_type = "data"
 temperature = 0.6
 top_p = 0.9
 top_k = 40
 disable_thinking = false
 presence_penalty = 1.5
 max_model_len = 32000
-max_input_tokens = 15000
+max_input_len = 15000

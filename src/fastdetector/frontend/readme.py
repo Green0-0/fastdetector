@@ -11,7 +11,7 @@ from typing import Dict, Tuple, Any, List
 from datasets import Dataset
 import numpy as np
 
-from fastdetector.frontend.config import StatConfig
+from fastdetector.frontend.toml_config import StatConfig
 from fastdetector.statistics.plotting import (
     get_histogram,
     get_sweeping_classifier_plot,

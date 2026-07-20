@@ -1,6 +1,6 @@
 import argparse
-from fastdetector.frontend.config import FilterConfig
-from fastdetector.frontend.loader import load_config_pair
+from fastdetector.frontend.toml_config import FilterConfig
+from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
 
@@ -28,12 +28,13 @@ def main():
     intermediate_dataset = f"{globals_config.dataset_prefix}-{globals_config.pre_filter_suffix}"
 
     print(f"Running filtering generation pipeline...")
-    # run_pipeline uploads the result and returns the in-memory Dataset.
-    ds = run_pipeline(
-        pipe_config=filter_config,
+    ds, gen_readme = run_pipeline(
         globals_config=globals_config,
+        pipe_config=filter_config.pipeline,
+        prompt_file=filter_config.prompt_file,
+        num_samples=filter_config.num_samples,
+        source_column=filter_config.source_column,
         source_dataset_name=source_dataset,
-        target_dataset_name=intermediate_dataset,
     )
     
     col_a = "original"
@@ -67,7 +68,7 @@ def main():
         q = quantile(ds[col])
         ds = ds.add_column(f"{col}_quantile", q)
 
-    readme_content = f"""
+    readme_content = gen_readme + f"""
 ## Metrics Added (config: default)
 - Deviated lines, words, characters (proportion + raw count)
 - Loose and strict subset checks

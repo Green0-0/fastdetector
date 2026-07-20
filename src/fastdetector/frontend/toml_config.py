@@ -1,7 +1,8 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Any, Optional, List
 
-from fastdetector.frontend.pipeconfig import PipeConfig
+from fastdetector.frontend.engine_config import EngineConfig
+
 
 class GlobalsConfig(BaseModel):
     """Global configuration settings for dataset processing, paths, and naming conventions."""
@@ -24,6 +25,10 @@ class GlobalsConfig(BaseModel):
     save_locally_instead: bool
     cache_dir: str
 
+    # Engine Virtual Environment Paths
+    vllm_venv_path: str = ".vllm"
+    aphrodite_venv_path: str = ".aphrodite"
+
     def resolve_input_dataset(self, suffix: str) -> str:
         """Return the source dataset name for the given suffix, honouring override_dataset_input."""
         if self.override_dataset_input is not None:
@@ -42,10 +47,49 @@ class ConditionConfig(BaseModel):
     operator: str
     value: Any
 
-
-class FilterConfig(PipeConfig):
-    """Configuration for the filtering script (filter.py)."""
     
+class PipeConfig(BaseModel):
+    # Engine
+    engine: EngineConfig
+    model_name: str
+    parallelization_type: str = "data"
+
+    # Sampling parameters.
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    disable_thinking: Optional[bool] = None
+    presence_penalty: Optional[float] = None
+
+    # Aphrodite-specific sampling parameters
+    top_a: Optional[float] = None
+    xtc_probability: Optional[float] = None
+    nsigma: Optional[float] = None
+
+    # Length limits
+    max_model_len: Optional[int] = None
+    max_input_len: Optional[int] = None
+
+    # API settings
+    api_url: Optional[str] = None
+    api_key_env: Optional[str] = None
+
+
+class GenConfig(BaseModel):
+    """Configuration for the generation script (gen.py)."""
+    num_samples: int
+    source_column: str
+    prompt_file: str
+    pipeline: PipeConfig
+
+
+class FilterConfig(BaseModel):
+    """Configuration for the filtering script (filter.py)."""
+    num_samples: int
+    source_column: str
+    prompt_file: str
+    pipeline: PipeConfig
+
     # Number of shards to split the filtered dataset into.
     # None means don't shard (upload as a single 'default' config).
     output_shards: Optional[int] = None
@@ -88,6 +132,7 @@ class StatConfig(BaseModel):
     # Column Mapping
     human_column: str
     ai_column: str
+    parallelization_type: str = "data"
 
     # Basic Similarity Metrics
     jaccards_1: bool

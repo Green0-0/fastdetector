@@ -7,9 +7,10 @@ the source/target dataset names from the prefix+suffix scheme, and calls
 
 import argparse
 
-from fastdetector.frontend.pipeconfig import PipeConfig
-from fastdetector.frontend.loader import load_config_pair
+from fastdetector.frontend.toml_config import GenConfig
+from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
+from fastdetector.utils import upload_dataset, upload_readme
 
 
 def main() -> None:
@@ -20,8 +21,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    globals_config, pipe_config = load_config_pair(
-        args.globals_config, args.gen_config, PipeConfig
+    globals_config, task_config = load_config_pair(
+        args.globals_config, args.gen_config, GenConfig
     )
 
     source_dataset = globals_config.resolve_input_dataset(globals_config.post_filter_suffix)
@@ -30,15 +31,29 @@ def main() -> None:
     print(f"Running generation pipeline...")
     print(f"Source Dataset: {source_dataset}")
     print(f"Target Dataset: {target_dataset}")
-    print(f"Engine: {pipe_config.engine}")
+    print(f"Engine: {task_config.pipeline.engine}")
 
-    run_pipeline(
-        pipe_config=pipe_config,
+    result_ds, readme_content = run_pipeline(
         globals_config=globals_config,
+        pipe_config=task_config.pipeline,
+        prompt_file=task_config.prompt_file,
+        num_samples=task_config.num_samples,
+        source_column=task_config.source_column,
         source_dataset_name=source_dataset,
-        target_dataset_name=target_dataset,
         batch_id=args.batch_id
     )
+
+    config_name = f"shard_{args.batch_id}" if args.batch_id is not None else "default"
+    
+    upload_dataset(
+        dataset=result_ds,
+        dataset_name=target_dataset,
+        save_locally_instead=globals_config.save_locally_instead,
+        cache_dir=globals_config.cache_dir,
+        config_name=config_name
+    )
+    if not globals_config.save_locally_instead:
+        upload_readme(dataset_name=target_dataset, readme_content=readme_content)
 
 
 if __name__ == "__main__":

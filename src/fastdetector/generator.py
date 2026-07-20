@@ -45,35 +45,11 @@ async def _send_request(
             kwargs = {
                 "model": model_name,
                 "messages": messages,
+                **generation_params
             }
-
-            if generation_params.get("is_api_model", False):
-                if generation_params.get("disable_thinking", False):
-                    kwargs["reasoning_effort"] = "none"
-            else:
-                kwargs["temperature"] = generation_params.get("temperature", 1)
-                kwargs["top_p"] = generation_params.get("top_p", 1)
-                kwargs["presence_penalty"] = generation_params.get("presence_penalty", 0)
-
-                extra_body = {}
-                if generation_params.get("disable_thinking", False):
-                    extra_body["chat_template_kwargs"] = {"enable_thinking": False}
-
-                # Aphrodite-specific sampling params. None (the PipeConfig
-                # default) means "not set"; we also skip non-positive values
-                # since 0/negative top_k etc. are not valid for these engines.
-                for key in ["top_k", "top_a", "xtc_probability", "nsigma"]:
-                    val = generation_params.get(key)
-                    if val is not None and val > 0:
-                        extra_body[key] = val
-
-                if extra_body:
-                    kwargs["extra_body"] = extra_body
 
             response = await client.chat.completions.create(**kwargs)
 
-            # Guard against empty choices — some endpoints return no choices
-            # on content-filter rejection or other server-side errors.
             if not response.choices:
                 print(f"Request returned no choices (possibly content-filtered).")
                 return "", 0, 0
@@ -93,7 +69,7 @@ async def _batch_generate_async(
     generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
-) -> tuple[list[str], int, int]:
+) -> tuple[list[str], int, int, int]:
     """Fire requests concurrently with a bounded semaphore.
 
     The AsyncOpenAI client is created here and closed in a finally block so
@@ -103,6 +79,19 @@ async def _batch_generate_async(
     the end. The empty-string responses are kept in the output list at their
     original positions so that the caller (build_dataset) can align them with
     the input samples.
+
+    Args:
+        api_url: The URL of the OpenAI-compatible chat completions endpoint
+                 (e.g. "http://localhost:8000/v1").
+        inputs: A list of conversations, where each conversation is a list of
+            {"role": ..., "content": ...} message dicts.
+        generation_params: Overrides for sampling params.
+        api_key: API key for the endpoint (use "EMPTY" for local vLLM).
+        model_name: Model name for the API call.
+
+    Returns:
+        A tuple of (list of assistant response strings, total prompt tokens,
+        total completion tokens, failed request count). Failed requests appear as empty strings.
     """
     client = AsyncOpenAI(
         base_url=api_url,
@@ -120,8 +109,6 @@ async def _batch_generate_async(
             nonlocal completed, failed_count
             result = await _send_request(client, semaphore, messages, generation_params, model_name=model_name)
             completed += 1
-            # _send_request returns ("", 0, 0) on failure (caught exception
-            # or empty choices).
             if result[0] == "" and result[1] == 0 and result[2] == 0:
                 failed_count += 1
             if completed % 100 == 0 or completed == total:
@@ -143,7 +130,7 @@ async def _batch_generate_async(
             f"These will appear as empty strings in the output."
         )
 
-    return texts, prompt_tokens, completion_tokens
+    return texts, prompt_tokens, completion_tokens, failed_count
 
 
 def batch_generate(
@@ -152,7 +139,7 @@ def batch_generate(
     generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
-) -> tuple[list[str], int, int]:
+) -> tuple[list[str], int, int, int]:
     """Send a batch of OpenAI-compatible chat conversations concurrently.
 
     Uses the async OpenAI client to fire all requests concurrently via
@@ -169,7 +156,7 @@ def batch_generate(
 
     Returns:
         A tuple of (list of assistant response strings, total prompt tokens,
-        total completion tokens). Failed requests appear as empty strings.
+        total completion tokens, failed request count). Failed requests appear as empty strings.
     """
     return asyncio.run(_batch_generate_async(api_url, inputs, generation_params, api_key, model_name))
 
@@ -181,10 +168,17 @@ def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> li
     is False, only the final user message is returned.
 
     {{RESP_N}} tokens in each turn are replaced with the response from turn N.
+
+    Args:
+        prompt: The prompt to build messages for.
+        turn_index: The current turn index.
+        responses: A list of responses from previous turns.
+
+    Returns:
+        A list of message dicts suitable for the OpenAI API.
     """
     messages: list[dict] = []
 
-    # Add few-shot examples if this is the first turn or multiturn is enabled
     if turn_index == 0 or prompt.use_multiturn:
         for ex_user, ex_asst in prompt.examples:
             messages.append({"role": "user", "content": ex_user})
@@ -211,10 +205,9 @@ def build_dataset(
     api_url: str,
     prompts: PromptSet,
     generation_params: dict[str, Any],
-    use_test: bool = False,
     api_key: str = "EMPTY",
     model_name: str = "",
-) -> tuple[dict[str, list[Any]], int, int]:
+) -> tuple[dict[str, list[Any]], int, int, int]:
     """Iteratively build a dataset dict by batching across the prompt dimension.
 
     For each chat turn:
@@ -234,24 +227,24 @@ def build_dataset(
         samples: List of text samples to process.
         api_url: OpenAI-compatible API base URL.
         prompts: PromptSet to draw prompts from.
-        use_test: If True, use test set prompts instead of train set.
         generation_params: Overrides for sampling params.
         api_key: API key for the endpoint.
         model_name: Model name for the API call.
 
     Returns:
-        A tuple of (dataset_columns_dict, total_prompt_tokens, total_completion_tokens).
+        A tuple of (dataset_columns_dict, total_prompt_tokens, total_completion_tokens, total_failed_requests).
         The dict has keys: "original", "prompt", "response_0", "response_1",
         ..., "final_response".
     """
     print(f"Processing {len(samples)} samples...")
 
-    mapped_prompts, prompt_labels = prompts.map(samples, use_test=use_test)
+    mapped_prompts, prompt_labels = prompts.map(samples)
     max_turns = max(len(p.chat_turns) for p in mapped_prompts)
     responses_grouped: list[list[str]] = [[] for _ in samples]
     dataset_columns: dict[str, list] = {"original": samples, "prompt": prompt_labels}
     total_prompt_tokens = 0
     total_completion_tokens = 0
+    total_failed_requests = 0
 
     for turn_idx in range(max_turns):
         print(f"Processing chat turn {turn_idx} / {max_turns - 1}...")
@@ -265,9 +258,10 @@ def build_dataset(
                 batch_inputs.append(messages)
                 active_indices.append(sample_idx)
 
-        batch_responses, p_tokens, c_tokens = batch_generate(api_url, batch_inputs, generation_params, api_key, model_name)
+        batch_responses, p_tokens, c_tokens, f_reqs = batch_generate(api_url, batch_inputs, generation_params, api_key, model_name)
         total_prompt_tokens += p_tokens
         total_completion_tokens += c_tokens
+        total_failed_requests += f_reqs
 
         turn_responses = [""] * len(samples)
         for i, sample_idx in enumerate(active_indices):
@@ -282,4 +276,4 @@ def build_dataset(
 
     print(f"Dataset dict built with {len(samples)} rows and {len(dataset_columns)} columns.")
 
-    return dataset_columns, total_prompt_tokens, total_completion_tokens
+    return dataset_columns, total_prompt_tokens, total_completion_tokens, total_failed_requests

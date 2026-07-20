@@ -1,11 +1,11 @@
 import argparse
 import json
 
-from fastdetector.frontend.config import StatConfig
-from fastdetector.frontend.loader import load_config_pair
+from fastdetector.frontend.toml_config import StatConfig
+from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset
-from fastdetector.engine import Engine
+from fastdetector.frontend.engine_config import EngineConfig as Engine
 from fastdetector.llm_utils import llm_server_context
 
 # APIs
@@ -271,7 +271,7 @@ def compute_token_embedding_metrics(ds, stat_config: StatConfig):
     return ds
 
 
-def compute_llm_metrics(ds, stat_config: StatConfig):
+def compute_llm_metrics(ds, stat_config: StatConfig, globals_config):
     """Launch vLLM servers, fetch logprobs, and compute LLM-based metrics.
 
     Returns (ds, cols_to_remove) where cols_to_remove is the list of
@@ -297,7 +297,9 @@ def compute_llm_metrics(ds, stat_config: StatConfig):
         with llm_server_context(
             engine=Engine.VLLM,
             model_name=checkpoint,
+            venv_path=globals_config.vllm_venv_path,
             port=None,
+            parallelization_type=stat_config.parallelization_type,
             max_logprobs=stat_config.top_logprobs_k,
             gpu_memory_utilization=0.75,
         ) as stat_api_url:
@@ -375,7 +377,7 @@ def main():
     ds = compute_token_embedding_metrics(ds, stat_config)
 
     # --- LLM Metrics (Logprobs) ---
-    ds, llm_cols_to_remove = compute_llm_metrics(ds, stat_config)
+    ds, llm_cols_to_remove = compute_llm_metrics(ds, stat_config, globals_config)
     cols_to_remove.extend(llm_cols_to_remove)
 
     # --- Cleanup intermediate columns ---

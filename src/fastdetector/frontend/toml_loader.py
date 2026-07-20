@@ -1,11 +1,9 @@
-"""Helpers for loading TOML configs and resolving dataset names from the CLI."""
-
 import tomllib
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from fastdetector.frontend.config import GlobalsConfig
+from fastdetector.frontend.toml_config import GlobalsConfig
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -28,7 +26,7 @@ def load_config_pair(
     stage_path: str,
     stage_cls: type[T],
 ) -> tuple[GlobalsConfig, T]:
-    """Load a GlobalsConfig + a stage-specific config from their TOML paths.
+    """Load a GlobalsConfig + a pipeline stage-specific config from their TOML paths.
 
     Args:
         globals_path: Path to globals.toml.

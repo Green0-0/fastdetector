@@ -1,10 +1,11 @@
 num_samples = 50000
-source_column = "collected_subset_original_final_response"
+source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "oai"
-model_name = "gpt-4o"
+model_name = "gpt-4o"+
+parallelization_type = "none"
 temperature = 0.7
 top_p = 1.0
 disable_thinking = false
@@ -12,4 +13,4 @@ presence_penalty = 0.0
 
 api_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
-max_dataset_words = 15000
+max_input_len = 15000

@@ -1,5 +1,6 @@
 human_column = "original"
 ai_column = "final_response"
+parallelization_type = "data"
 
 # True means the metric will be calculated
 # For embeddings/llms, specifying false will skip using the model altogether

@@ -4,8 +4,8 @@ import time
 
 import numpy as np
 
-from fastdetector.frontend.config import EvalConfig
-from fastdetector.frontend.loader import load_config_pair
+from fastdetector.frontend.toml_config import EvalConfig
+from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
 from fastdetector.statistics.statistics_utils import compute_auroc

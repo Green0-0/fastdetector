@@ -7,16 +7,11 @@ from contextlib import contextmanager
 
 import requests
 
-from fastdetector.engine import Engine
+from fastdetector.frontend.engine_config import EngineConfig
 
-# Total startup timeout = HEALTH_CHECK_INTERVALS * HEALTH_CHECK_INTERVAL_SECS.
-# vLLM / Aphrodite can take 5–10 minutes to load a large model on first run
-# (weights download + CUDA kernel compilation), so we allow up to 20 minutes.
 HEALTH_CHECK_INTERVAL_SECS = 2
-HEALTH_CHECK_MAX_INTERVALS = 600  # 600 * 2s = 1200s = 20 minutes
+HEALTH_CHECK_MAX_INTERVALS = 600
 
-# How often (in seconds) to print a "still waiting" progress message during
-# the health-check loop, so the user knows the process isn't hung.
 HEALTH_CHECK_PROGRESS_INTERVAL_SECS = 30
 
 
@@ -27,6 +22,9 @@ def get_free_port() -> int:
     closes the socket. There is an inherent TOCTOU race (another process may
     grab the port between this call and its use), but for local LLM servers
     this is acceptable.
+
+    Returns:
+        An available port number.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
@@ -35,6 +33,9 @@ def get_free_port() -> int:
 
 def get_gpu_count() -> int:
     """Autodetect the number of available GPUs from CUDA_VISIBLE_DEVICES.
+
+    Returns:
+        Number of available GPUs.
 
     Raises:
         RuntimeError: if CUDA_VISIBLE_DEVICES is unset or empty.
@@ -48,23 +49,24 @@ def get_gpu_count() -> int:
     raise RuntimeError("No GPUs found! CUDA_VISIBLE_DEVICES not set.")
 
 
-def _resolve_engine_binary(engine: Engine) -> tuple[str, Engine]:
-    """Resolve the engine binary path and return (bin_path, engine).
+def _resolve_engine_binary(engine: EngineConfig, venv_path: str) -> str:
+    """Resolve the engine binary path and return bin_path.
 
-    Reads the venv path from the engine's venv_env_var property
-    (VLLM_VENV_PATH for vLLM, APHRODITE_VENV_PATH for Aphrodite).
+    Args:
+        engine: The engine to resolve the binary for.
+        venv_path: The path to the virtual environment.
+
+    Returns:
+        The path to the engine binary.
 
     Raises:
-        RuntimeError: if the venv env var is unset or the binary is missing.
+        RuntimeError: if the binary is missing.
     """
-    venv_path = os.environ.get(engine.venv_env_var, engine.venv_default)
     if not venv_path:
         raise RuntimeError(
-            f"{engine.venv_env_var} environment variable is not set. Please set "
-            f"{engine.venv_env_var} to the path of the virtual environment "
-            f"containing the {engine.value} installation."
+            f"venv_path must be provided in the global config for the {engine.value} engine."
         )
-    bin_name = engine.value  # "vllm" or "aphrodite"
+    bin_name = engine.value
     bin_path = os.path.join(venv_path, "bin", bin_name)
 
     if not os.path.isfile(bin_path) or not os.access(bin_path, os.X_OK):
@@ -72,13 +74,15 @@ def _resolve_engine_binary(engine: Engine) -> tuple[str, Engine]:
             f"{engine.value} executable not found or not executable at: {bin_path}"
         )
 
-    return bin_path, engine
+    return bin_path
 
 
 def launch_engine_server(
-    engine: Engine,
+    engine: EngineConfig,
     model_name: str,
     port: int,
+    venv_path: str,
+    parallelization_type: str,
     max_logprobs: int = 10,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
@@ -109,17 +113,17 @@ def launch_engine_server(
     if not engine.is_local_server:
         raise ValueError(
             f"{engine} is not a local-server engine. "
-            f"Only {Engine.VLLM.value} and {Engine.APHRODITE.value} can be launched."
+            f"Only {EngineConfig.VLLM.value} and {EngineConfig.APHRODITE.value} can be launched."
         )
 
     gpu_count = get_gpu_count()
-    bin_path, _ = _resolve_engine_binary(engine)
+    bin_path = _resolve_engine_binary(engine, venv_path)
 
-    cmd_prefix = [bin_path, engine.serve_subcommand, model_name]
+    cmd_prefix = [bin_path, "serve", model_name]
 
     cmd = cmd_prefix + [
         "--port", str(port),
-        "--data-parallel-size", str(gpu_count),
+        f"--{parallelization_type}-parallel-size", str(gpu_count),
         "--max-model-len", str(max_model_len),
         "--max-num-seqs", "256",
         "--max-num-batched-tokens", "2048",
@@ -128,9 +132,6 @@ def launch_engine_server(
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
 
-    # Pick a distinct distributed port for the engine's internal comms
-    # (NCCL / gloo). Retry with a tiny sleep to avoid pegging a CPU core
-    # if get_free_port happens to return the same port as `port`.
     dist_port = port
     while dist_port == port:
         dist_port = get_free_port()
@@ -143,8 +144,6 @@ def launch_engine_server(
     print(f"\nLaunching {engine} server...")
     print(" ".join(cmd))
 
-    # Stream subprocess output to the parent's stdout/stderr so engine logs
-    # are visible during startup and on failure.
     proc = subprocess.Popen(
         cmd,
         env=env,
@@ -192,7 +191,7 @@ def launch_engine_server(
     )
 
 
-def _terminate_proc(proc: subprocess.Popen, engine: Engine, timeout: int = 60) -> None:
+def _terminate_proc(proc: subprocess.Popen, engine: EngineConfig, timeout: int = 60) -> None:
     """Terminate a subprocess gracefully, escalating to kill if needed."""
     proc.terminate()
     try:
@@ -205,8 +204,10 @@ def _terminate_proc(proc: subprocess.Popen, engine: Engine, timeout: int = 60) -
 
 @contextmanager
 def llm_server_context(
-    engine: Engine,
+    engine: EngineConfig,
     model_name: str,
+    venv_path: str,
+    parallelization_type: str,
     port: int | None = None,
     max_logprobs: int = 10,
     gpu_memory_utilization: float = 0.85,
@@ -237,7 +238,7 @@ def llm_server_context(
     if not engine.is_local_server:
         raise ValueError(
             f"{engine} is not a local-server engine. "
-            f"Only {Engine.VLLM.value} and {Engine.APHRODITE.value} can be launched."
+            f"Only {EngineConfig.VLLM.value} and {EngineConfig.APHRODITE.value} can be launched."
         )
 
     if port is None:
@@ -246,8 +247,14 @@ def llm_server_context(
     proc = None
     try:
         proc = launch_engine_server(
-            engine, model_name, port,
-            max_logprobs, gpu_memory_utilization, max_model_len,
+            engine, 
+            model_name, 
+            port,
+            venv_path=venv_path,
+            parallelization_type=parallelization_type,
+            max_logprobs=max_logprobs, 
+            gpu_memory_utilization=gpu_memory_utilization, 
+            max_model_len=max_model_len,
         )
         yield f"http://localhost:{port}/v1"
     finally:

@@ -1,14 +1,15 @@
 num_samples = 50000
-source_column = "collected_subset_original_final_response"
+source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "vllm"
 model_name = "google/gemma-4-E4B-it"
+parallelization_type = "data"
 temperature = 0.7
 top_p = 0.8
 top_k = -1
 disable_thinking = true
 presence_penalty = 1.5
 max_model_len = 32000
-max_input_tokens = 15000
+max_input_len = 15000

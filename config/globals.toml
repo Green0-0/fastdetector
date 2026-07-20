@@ -18,3 +18,7 @@ eval_suffix = "eval"
 
 save_locally_instead = false # Pushes to hf if false
 cache_dir = "/usr/project/xtmp/ccprocessing_cache/" # Change this path for your local setup
+
+# Engine Virtual Environment Paths (Defaults to .vllm and .aphrodite)
+# vllm_venv_path = ".vllm"
+# aphrodite_venv_path = ".aphrodite"
