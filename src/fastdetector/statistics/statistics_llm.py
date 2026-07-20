@@ -176,12 +176,15 @@ def perplexities(token_logprobs: list[list[Optional[float]]]) -> list[float]:
     results = []
     for text_token_lps in token_logprobs:
         if not text_token_lps:
-            results.append(0.0)
+            # Perplexity is undefined for empty input.
+            # Returning 0.0 ("perfect prediction") is misleading;
+            # NaN signals that the value should be excluded from analysis.
+            results.append(float('nan'))
             continue
             
         valid_lps = [lp for lp in text_token_lps if lp is not None]
         if not valid_lps:
-            results.append(0.0)
+            results.append(float('nan'))
             continue
             
         avg_logprob = sum(valid_lps) / len(valid_lps)
@@ -253,10 +256,19 @@ def top_k_outlier_percentages(top_logprobs: list[list[dict[str, float]]], token_
         total_count = 0
         
         for token_lp, top_lps in zip(text_token_lps, text_top_lps):
-            if token_lp is None or top_lps is None or len(top_lps) < k:
+            if token_lp is None or top_lps is None or len(top_lps) == 0:
+                continue
+
+            total_count += 1
+
+            # If fewer than k top logprobs are available, the token's rank
+            # is unknown but it must be outside the top-k (since there aren't
+            # k tokens above it). Count it as an outlier rather than skipping
+            # it, which would bias the percentage downward.
+            if len(top_lps) < k:
+                outlier_count += 1
                 continue
                 
-            total_count += 1
             sorted_lps = sorted(top_lps.values(), reverse=True)
             kth_lp = sorted_lps[k-1]
             if token_lp < kth_lp - 1e-5:
