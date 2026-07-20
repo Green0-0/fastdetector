@@ -1,9 +1,18 @@
+"""CLI entry point: run the LLM generation pipeline.
+
+Loads globals.toml + a gen TOML (e.g. config/gen/shard_0.toml), resolves
+the source/target dataset names from the prefix+suffix scheme, and calls
+:func:`fastdetector.frontend.pipe.run_pipeline`.
+"""
+
 import argparse
+
 from fastdetector.frontend.pipeconfig import PipeConfig
 from fastdetector.frontend.loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
 
-def main():
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run the LLM Generation pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--gen-config", type=str, required=True, help="Path to gen TOML (e.g. config/gen/shard_0.toml)")
@@ -30,6 +39,7 @@ def main():
         target_dataset_name=target_dataset,
         batch_id=args.batch_id
     )
+
 
 if __name__ == "__main__":
     main()

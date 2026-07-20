@@ -1,28 +1,71 @@
+"""Prompt dataclass and PromptSet cursor-based iterator.
+
+A :class:`Prompt` is a single chat-conversation template (one or more user
+turns, plus optional few-shot examples and metadata). A :class:`PromptSet`
+wraps a list of prompts and exposes cursor-based ``next_train`` / ``next_test``
+methods that wrap around, so callers can pull prompts in bulk without
+managing an index.
+
+``{{DOC}}`` placeholders in ``chat_turns`` are substituted with sample text
+by :meth:`PromptSet.map`. ``{{RESP_N}}`` placeholders (substituted by the
+caller in :mod:`fastdetector.generator`) hold the model response from turn N.
+"""
+
 import json
 import random
 from dataclasses import dataclass, field
+from typing import Any
+
 
 @dataclass
 class Prompt:
-    """A single prompt entry consisting of an ordered sequence of chat turns and a multiturn flag."""
+    """A single prompt template consisting of chat turns, multiturn flag, examples, and metadata.
+
+    Attributes:
+        chat_turns: Ordered list of user-message templates. ``{{DOC}}`` is
+            substituted with the sample text by :meth:`PromptSet.map`;
+            ``{{RESP_N}}`` is substituted with the model response from turn
+            N by :mod:`fastdetector.generator`.
+        use_multiturn: If True, all turns are sent as a single multi-turn
+            conversation. If False, only the last turn is sent (the earlier
+            turns are used only for ``{{RESP_N}}`` substitution context).
+        examples: Few-shot examples as ``(user, assistant)`` string pairs.
+        metadata: Free-form metadata dict (e.g. ``{"PROMPT_TYPE": ...}``).
+    """
+
     chat_turns: list[str]
     use_multiturn: bool
     examples: list[tuple[str, str]] = field(default_factory=list)
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
 
 class PromptSet:
-    def __init__(self, prompts: list[Prompt]):
+    """A cursor-based iterator over a list of :class:`Prompt` objects.
+
+    Holds separate train/test lists with independent cursors. The
+    ``next_train`` / ``next_test`` methods return prompts in order, wrapping
+    around when the cursor reaches the end of the list.
+    """
+
+    def __init__(self, prompts: list[Prompt]) -> None:
         self._train = list(prompts)
         self._test: list[Prompt] = []
         self._train_cursor = 0
         self._test_cursor = 0
 
-    def generate_test_split(self, test_fraction: float):
-        """
-        Internally partitions the training set into a new testing set (not duplicated from the training set). Must be called before utilizing a testing set.
+    def generate_test_split(self, test_fraction: float) -> None:
+        """Partition the training set into a new testing set (in-place).
+
+        Moves a fraction of the training prompts into the test set. If a test
+        set already exists, it is merged back into the training set before
+        re-splitting.
 
         Args:
-            test_fraction (float): Fraction of the training set to be used as the testing set.
+            test_fraction: Fraction of the training set to move into the test
+                set. Must be strictly between 0 and 1.
+
+        Raises:
+            ValueError: if ``test_fraction`` is not in (0, 1).
         """
         if not 0.0 < test_fraction < 1.0:
             raise ValueError("test_fraction must be between 0 and 1 (exclusive).")
@@ -35,10 +78,8 @@ class PromptSet:
         self._test = self._train[split_index:]
         self._train = self._train[:split_index]
 
-    def clear_test_set(self):
-        """
-        Clears the test set, adding the prompts back into the training set.
-        """
+    def clear_test_set(self) -> None:
+        """Move all test-set prompts back into the training set and reset cursors."""
         if not self._test or len(self._test) == 0:
             print("There is no test set to clear.")
             return
@@ -47,24 +88,29 @@ class PromptSet:
         self._train_cursor = 0
         self._test_cursor = 0
 
-    def map(self, samples: list[str], use_test: bool = False) -> tuple[list[Prompt], list[dict]]:
-        """
-        Maps one prompt to each of the samples in the list. Pulls prompts
-        from the training or testing set via the internal cursor (wrapping around).
-        Replaces {{DOC}} in all chat turns with the corresponding sample text.
+    def map(self, samples: list[str], use_test: bool = False) -> tuple[list[Prompt], list[dict[str, Any]]]:
+        """Map one prompt to each sample, substituting ``{{DOC}}``.
+
+        Pulls prompts from the training or testing set via the internal cursor
+        (wrapping around). For each sample, returns both the substituted
+        :class:`Prompt` and a dict-of-template-fields for downstream
+        bookkeeping (e.g. storing the prompt metadata in a dataset column).
 
         Args:
             samples: List of sample texts to map prompts onto.
-            use_test: If True, pull prompts from the test set instead of the train set.
+            use_test: If True, pull prompts from the test set instead of the
+                train set.
 
         Returns:
             A tuple of:
-              - A list of Prompt objects with {{DOC}} replaced, one per sample.
-              - A list of dictionaries containing the complete metadata of the original template prompt (before substitution).
+              - A list of :class:`Prompt` objects with ``{{DOC}}`` replaced,
+                one per sample.
+              - A list of dicts containing the complete metadata of the
+                original template prompt (before substitution).
         """
         templates = self.next_test(len(samples)) if use_test else self.next_train(len(samples))
         mapped: list[Prompt] = []
-        prompt_labels: list[dict] = []
+        prompt_labels: list[dict[str, Any]] = []
         for sample, template in zip(samples, templates):
             mapped.append(Prompt(
                 chat_turns=[turn.replace("{{DOC}}", sample) for turn in template.chat_turns],
@@ -72,12 +118,12 @@ class PromptSet:
                 examples=list(template.examples),
                 metadata=dict(template.metadata),
             ))
-            
+
             # NOTE: FOR SOME REASON HF DOESN'T ALLOW EMPTY DICTIONARIES...
             meta = dict(template.metadata)
             if not meta:
                 meta["_dummy"] = True
-                
+
             prompt_labels.append({
                 "chat_turns": template.chat_turns,
                 "use_multiturn": template.use_multiturn,
@@ -87,8 +133,18 @@ class PromptSet:
         return mapped, prompt_labels
 
     def next_train(self, num: int) -> list[Prompt]:
-        """
-        Returns `num` prompts from the training set, advancing an internal cursor. 
+        """Return ``num`` prompts from the training set, advancing the cursor.
+
+        Wraps around to the start of the list when the cursor reaches the end.
+
+        Args:
+            num: Number of prompts to return.
+
+        Returns:
+            A list of ``num`` prompts.
+
+        Raises:
+            RuntimeError: if the training set is empty.
         """
         if not self._train:
             raise RuntimeError("The training set is empty.")
@@ -99,10 +155,21 @@ class PromptSet:
             result.append(self._train[self._train_cursor])
             self._train_cursor += 1
         return result
-    
+
     def next_test(self, num: int) -> list[Prompt]:
-        """
-        Returns `num` prompts from the testing set, advancing an internal cursor. 
+        """Return ``num`` prompts from the testing set, advancing the cursor.
+
+        Wraps around to the start of the list when the cursor reaches the end.
+
+        Args:
+            num: Number of prompts to return.
+
+        Returns:
+            A list of ``num`` prompts.
+
+        Raises:
+            RuntimeError: if the test set is empty. Use :meth:`generate_test_split`
+                to create one.
         """
         if not self._test:
             raise RuntimeError("The testing set is empty. Use generate_test_split() to create one.")
@@ -115,42 +182,49 @@ class PromptSet:
         return result
 
     def get_train(self) -> list[Prompt]:
-        """
-        Returns all of the prompts currently in the training set, without touching the internal train set cursor.
-        """
+        """Return all prompts currently in the training set (without advancing the cursor)."""
         return list(self._train)
-    
+
     def get_test(self) -> list[Prompt]:
-        """
-        Returns all of the prompts currently in the testing set, without touching the internal test set cursor.
-        """
+        """Return all prompts currently in the testing set (without advancing the cursor)."""
         return list(self._test)
-    
-    def reset(self):
-        """
-        Resets the internal cursors for both the training and testing sets.
-        """
+
+    def reset(self) -> None:
+        """Reset both the training and testing cursors to 0."""
         self._train_cursor = 0
         self._test_cursor = 0
 
-    def shuffle(self, seed: int):
-        """
-        Shuffles the training prompts only using a given seed.
+    def shuffle(self, seed: int) -> None:
+        """Shuffle the training prompts in-place using the given seed.
+
+        Resets the training cursor to 0 after shuffling. The test set is not
+        affected.
+
+        Args:
+            seed: PRNG seed for reproducibility.
         """
         rng = random.Random(seed)
         rng.shuffle(self._train)
         self._train_cursor = 0
 
+
 def load_prompts(all_paths: list[str]) -> list[Prompt]:
-    """
-    Load prompts from JSON files. Each file must contain a JSON list of objects
-    with "chat_turns" (list[str]) and "use_multiturn" (bool) fields.
+    """Load prompts from JSON files.
+
+    Each file must contain a JSON list of objects with ``chat_turns``
+    (``list[str]``), ``use_multiturn`` (``bool``), ``examples``
+    (``list[tuple[str, str]]``), and ``metadata`` (``dict``) fields.
 
     Args:
-        all_paths (list[str]): List of JSON file paths to load prompts from.
+        all_paths: List of JSON file paths to load prompts from.
 
     Returns:
-        list[Prompt]: List of prompts.
+        A list of :class:`Prompt` objects, concatenated in the order the paths
+        are given.
+
+    Raises:
+        ValueError: if a path doesn't end with ``.json``, the file content is
+            not a JSON list, or an entry is missing a required key.
     """
     prompts: list[Prompt] = []
 

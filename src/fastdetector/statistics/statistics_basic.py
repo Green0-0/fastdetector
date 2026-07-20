@@ -1,3 +1,5 @@
+"""Basic text-similarity metrics (n-grams, Jaccard, Levenshtein, subset checks, quantiles)."""
+
 import numpy as np
 from collections import Counter
 import Levenshtein

@@ -1,9 +1,10 @@
+"""Embedding-based text similarity metrics (cosine distance, BERTScore, MoverScore)."""
+
 import math
 import numpy as np
 import torch
 import ot
 from collections import Counter
-from typing import Optional
 
 def pairwise_cosdist(embeddings_list_a: list[np.ndarray] | np.ndarray, embeddings_list_b: list[np.ndarray] | np.ndarray) -> list[float]:
     """Compute pairwise cosine similarity between two aligned lists of embeddings.
@@ -67,6 +68,17 @@ def opposite_cossim_all(target_embeddings: list[np.ndarray] | np.ndarray, other_
     return results
 
 def _compute_idf(tokens_lists: list[list[str]]) -> dict[str, float]:
+    """Compute inverse-document-frequency weights for a corpus of tokenized texts.
+
+    Uses the standard smoothed IDF formula: ``log((N + 1) / (df + 1))``
+    where N is the number of documents and df is the document frequency.
+
+    Args:
+        tokens_lists: List of token lists (one per document).
+
+    Returns:
+        Dict mapping each token to its IDF weight.
+    """
     df = Counter()
     for tokens in tokens_lists:
         for token in set(tokens):
@@ -75,6 +87,19 @@ def _compute_idf(tokens_lists: list[list[str]]) -> dict[str, float]:
     return {token: math.log((N + 1) / (count + 1)) for token, count in df.items()}
 
 def _get_idf_weights(tokens: list[str], idf_dict: dict[str, float]) -> np.ndarray:
+    """Look up the IDF weight for each token in *tokens* and L1-normalize.
+
+    Tokens not in *idf_dict* get weight 0. If all weights are near-zero
+    (e.g. none of the tokens appear in the IDF dict), fall back to uniform
+    weights so the caller doesn't divide by zero.
+
+    Args:
+        tokens: List of tokens to look up.
+        idf_dict: Token -> IDF weight mapping (from :func:`_compute_idf`).
+
+    Returns:
+        Normalized weight vector (sums to 1), same length as *tokens*.
+    """
     if not tokens:
         return np.array([])
     w = np.array([idf_dict.get(token, 0.0) for token in tokens])
@@ -83,7 +108,7 @@ def _get_idf_weights(tokens: list[str], idf_dict: dict[str, float]) -> np.ndarra
         w = np.ones(len(tokens))
     return w / w.sum()
 
-def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: Optional[list[list[str]]] = None, edit_tokens_list: Optional[list[list[str]]] = None) -> tuple[list[float], list[float], list[float]]:
+def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: list[list[str]] | None = None, edit_tokens_list: list[list[str]] | None = None) -> tuple[list[float], list[float], list[float]]:
     """Compute BERTScore (Precision, Recall, F1) for aligned lists of token embedding matrices.
     
     Args:
@@ -137,7 +162,7 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
         
     return precisions, recalls, f1s
 
-def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: Optional[list[list[str]]] = None, edit_tokens_list: Optional[list[list[str]]] = None) -> list[float]:
+def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: list[list[str]] | None = None, edit_tokens_list: list[list[str]] | None = None) -> list[float]:
     """Compute MoverScore (Earth Mover's Distance) for aligned lists of token embedding matrices.
     
     Args:

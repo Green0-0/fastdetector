@@ -1,5 +1,14 @@
+"""Async OpenAI-compatible chat completion client for batched generation.
+
+Exposes :func:`batch_generate` (sync wrapper) and :func:`build_dataset`
+which iterates chat turns and scatters responses into per-sample columns.
+"""
+
 import asyncio
+from typing import Any
+
 from openai import AsyncOpenAI
+
 from fastdetector.prompting.prompts import Prompt, PromptSet
 
 MAX_RETRIES = 5
@@ -10,8 +19,8 @@ MAX_CONCURRENT = 256
 async def _send_request(
     client: AsyncOpenAI,
     semaphore: asyncio.Semaphore,
-    messages: list[dict],
-    generation_params: dict,
+    messages: list[dict[str, str]],
+    generation_params: dict[str, Any],
     model_name: str = "",
 ) -> tuple[str, int, int]:
     """Send a single chat completion request.
@@ -77,8 +86,8 @@ async def _send_request(
 
 async def _batch_generate_async(
     api_url: str,
-    inputs: list[list[dict]],
-    generation_params: dict,
+    inputs: list[list[dict[str, str]]],
+    generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
 ) -> tuple[list[str], int, int]:
@@ -104,7 +113,7 @@ async def _batch_generate_async(
     failed_count = 0
 
     try:
-        async def _tracked_request(messages: list[dict]) -> tuple[str, int, int]:
+        async def _tracked_request(messages: list[dict[str, str]]) -> tuple[str, int, int]:
             nonlocal completed, failed_count
             result = await _send_request(client, semaphore, messages, generation_params, model_name=model_name)
             completed += 1
@@ -136,8 +145,8 @@ async def _batch_generate_async(
 
 def batch_generate(
     api_url: str,
-    inputs: list[list[dict]],
-    generation_params: dict,
+    inputs: list[list[dict[str, str]]],
+    generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
 ) -> tuple[list[str], int, int]:
@@ -198,11 +207,11 @@ def build_dataset(
     samples: list[str],
     api_url: str,
     prompts: PromptSet,
-    generation_params: dict,
+    generation_params: dict[str, Any],
     use_test: bool = False,
     api_key: str = "EMPTY",
     model_name: str = "",
-) -> tuple[dict[str, list], int, int]:
+) -> tuple[dict[str, list[Any]], int, int]:
     """Iteratively build a dataset dict by batching across the prompt dimension.
 
     For each chat turn:
