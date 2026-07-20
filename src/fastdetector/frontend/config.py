@@ -25,13 +25,13 @@ class GlobalsConfig(BaseModel):
     cache_dir: str
 
     def resolve_input_dataset(self, suffix: str) -> str:
-        """Return the source dataset name for *suffix*, honouring override_dataset_input."""
+        """Return the source dataset name for the given suffix, honouring override_dataset_input."""
         if self.override_dataset_input is not None:
             return self.override_dataset_input
         return f"{self.dataset_prefix}-{suffix}"
 
     def resolve_output_dataset(self, suffix: str) -> str:
-        """Return the target dataset name for *suffix*, honouring override_dataset_output."""
+        """Return the target dataset name for the given suffix, honouring override_dataset_output."""
         if self.override_dataset_output is not None:
             return self.override_dataset_output
         return f"{self.dataset_prefix}-{suffix}"
@@ -44,14 +44,10 @@ class ConditionConfig(BaseModel):
 
 
 class FilterConfig(PipeConfig):
-    """Configuration for the filtering script (filter.py).
-
-    Extends :class:`PipeConfig` with filter-specific fields. The ``PipeConfig``
-    portion drives ``run_pipeline``; the extras below drive the post-pipeline
-    filtering step.
-    """
-    # Number of shards to split the filtered dataset into. None means don't
-    # shard (upload as a single 'default' config).
+    """Configuration for the filtering script (filter.py)."""
+    
+    # Number of shards to split the filtered dataset into.
+    # None means don't shard (upload as a single 'default' config).
     output_shards: Optional[int] = None
     conditions: List[ConditionConfig] = []
     filter_type: str = "AND"
@@ -71,7 +67,7 @@ class EvalConfig(BaseModel):
     batch_size: int
 
     # Thresholds & Splits.
-    # manual_threshold_* use None to mean "auto-derive from validation sweep".
+    # Set manual_threshold_* to None to auto-derive from validation sweep.
     validation_size: float
     threshold_type_bin: str
     threshold_type_score: str
@@ -79,7 +75,7 @@ class EvalConfig(BaseModel):
     manual_threshold_bin: Optional[float] = None
 
     # Dataset Filtering
-    filter_type: str = "AND"
+    filter_type: str = "OR"
     filter_conditions: List[ConditionConfig] = []
 
     # Distance Metrics for Correlation/Plots
