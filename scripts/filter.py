@@ -2,7 +2,6 @@ import argparse
 from fastdetector.frontend.config import FilterConfig
 from fastdetector.frontend.loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset, upload_readme, apply_filter_conditions
 
 from fastdetector.statistics.statistics_basic import (
@@ -29,15 +28,13 @@ def main():
     intermediate_dataset = f"{globals_config.dataset_prefix}-{globals_config.pre_filter_suffix}"
 
     print(f"Running filtering generation pipeline...")
-    run_pipeline(
+    # run_pipeline uploads the result and returns the in-memory Dataset.
+    ds = run_pipeline(
         gen_config=filter_config,
         globals_config=globals_config,
         source_dataset_name=source_dataset,
-        target_dataset_name=intermediate_dataset
+        target_dataset_name=intermediate_dataset,
     )
-    
-    print("Loading processed dataset to calculate metrics...")
-    ds = load_dataset(intermediate_dataset, split="train", cache_dir=globals_config.cache_dir)
     
     col_a = "original"
     col_b = "final_response"
@@ -71,10 +68,11 @@ def main():
         ds = ds.add_column(f"{col}_quantile", q)
 
     readme_content = f"""
-## Metrics Added
-- Deviated lines, words, characters
+## Metrics Added (config: default)
+- Deviated lines, words, characters (proportion + raw count)
 - Loose and strict subset checks
-- Quantiles
+- Quantiles for deviated_*_proportion columns
+- Total rows: {len(ds)}
 """
     print(f"Uploading updated dataset to {intermediate_dataset}...")
     upload_dataset(
@@ -90,18 +88,13 @@ def main():
             readme_content=readme_content,
             append_readme_source=intermediate_dataset
         )
-        
+
     conditions = filter_config.conditions
     print(f"Filtering dataset with conditions: {conditions}")
     ds_filtered = apply_filter_conditions(ds, conditions, filter_config.filter_type)
-    
-    filtered_readme = f"""
-## Filtering Applied
-- Conditions: {conditions}
-"""
-    
+
     filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
-        
+
     if filter_config.output_shards > 0:
         shard_size = len(ds_filtered) // filter_config.output_shards
         shards_to_upload = []
@@ -111,6 +104,16 @@ def main():
             shards_to_upload.append((ds_filtered.select(range(start, end)), f"shard_{i}"))
     else:
         shards_to_upload = [(ds_filtered, "default")]
+
+    shard_names = [name for _, name in shards_to_upload]
+    filtered_readme = f"""
+## Filtering Applied
+- Conditions: {conditions}
+- Filter type: {filter_config.filter_type}
+- Configs: {shard_names}
+- Rows before filter: {len(ds)}
+- Rows after filter: {len(ds_filtered)}
+"""
 
     for dataset_shard, config_name in shards_to_upload:
         print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(dataset_shard)} samples...")

@@ -19,8 +19,28 @@ def run_pipeline(
     globals_config: GlobalsConfig,
     source_dataset_name: str,
     target_dataset_name: str,
-    batch_id: int | None = None
-):
+    batch_id: int | None = None,
+) -> Dataset:
+    """Run the generation pipeline and upload the result dataset.
+
+    Loads samples from *source_dataset_name*, generates responses via the
+    configured LLM engine, builds a result dataset, uploads it to
+    *target_dataset_name*, and returns the in-memory Dataset so callers
+    (e.g. filter.py) can continue processing without re-loading from disk/Hub.
+
+    Args:
+        gen_config: GenConfig or FilterConfig (both expose .pipeline,
+            .source_column, .num_samples, .prompt_file).
+        globals_config: GlobalsConfig with cache_dir, save_locally_instead, etc.
+        source_dataset_name: Dataset to read samples from.
+        target_dataset_name: Dataset to upload the result to.
+        batch_id: Optional shard index (used for both the source subset_index
+            and the target config_name).
+
+    Returns:
+        The in-memory Dataset that was uploaded. Callers that don't need
+        the in-memory copy can ignore the return value.
+    """
     start_time = time.time()
     pipe_cfg = gen_config.pipeline
 
@@ -166,3 +186,4 @@ def run_pipeline(
     if not globals_config.save_locally_instead:
         upload_readme(dataset_name=target_dataset_name, readme_content=readme_content)
     print("Done!")
+    return result_ds
