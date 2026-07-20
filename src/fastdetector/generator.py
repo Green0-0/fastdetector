@@ -50,6 +50,9 @@ async def _send_request(
                 if generation_params.get("disable_thinking", False):
                     extra_body["chat_template_kwargs"] = {"enable_thinking": False}
 
+                # Aphrodite-specific sampling params. None (the PipeConfig
+                # default) means "not set"; we also skip non-positive values
+                # since 0/negative top_k etc. are not valid for these engines.
                 for key in ["top_k", "top_a", "xtc_probability", "nsigma"]:
                     val = generation_params.get(key)
                     if val is not None and val > 0:

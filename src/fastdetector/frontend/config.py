@@ -7,9 +7,9 @@ class GlobalsConfig(BaseModel):
     """Global configuration settings for dataset processing, paths, and naming conventions."""
 
     # Dataset Overrides (if set, these bypass the prefix/suffix logic).
-    # Empty string means "not set"; use the prefix+suffix scheme instead.
-    override_dataset_input: str = ""
-    override_dataset_output: str = ""
+    # None means "not set"; use the prefix+suffix scheme instead.
+    override_dataset_input: Optional[str] = None
+    override_dataset_output: Optional[str] = None
 
     # Standard Naming Convention (Prefix + Suffix).
     dataset_prefix: str
@@ -26,13 +26,13 @@ class GlobalsConfig(BaseModel):
 
     def resolve_input_dataset(self, suffix: str) -> str:
         """Return the source dataset name for *suffix*, honouring override_dataset_input."""
-        if self.override_dataset_input:
+        if self.override_dataset_input is not None:
             return self.override_dataset_input
         return f"{self.dataset_prefix}-{suffix}"
 
     def resolve_output_dataset(self, suffix: str) -> str:
         """Return the target dataset name for *suffix*, honouring override_dataset_output."""
-        if self.override_dataset_output:
+        if self.override_dataset_output is not None:
             return self.override_dataset_output
         return f"{self.dataset_prefix}-{suffix}"
 
@@ -50,7 +50,9 @@ class FilterConfig(PipeConfig):
     portion drives ``run_pipeline``; the extras below drive the post-pipeline
     filtering step.
     """
-    output_shards: int
+    # Number of shards to split the filtered dataset into. None means don't
+    # shard (upload as a single 'default' config).
+    output_shards: Optional[int] = None
     conditions: List[ConditionConfig] = []
     filter_type: str = "AND"
 
@@ -69,8 +71,7 @@ class EvalConfig(BaseModel):
     batch_size: int
 
     # Thresholds & Splits.
-    # manual_threshold_* use None (not -1.0 sentinel) to mean "auto-derive
-    # from validation sweep".
+    # manual_threshold_* use None to mean "auto-derive from validation sweep".
     validation_size: float
     threshold_type_bin: str
     threshold_type_score: str
