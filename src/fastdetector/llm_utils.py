@@ -1,18 +1,42 @@
 import os
 import socket
 import subprocess
+import sys
 import time
 from contextlib import contextmanager
+
 import requests
 
+# Total startup timeout = HEALTH_CHECK_INTERVALS * HEALTH_CHECK_INTERVAL_SECS.
+# vLLM / Aphrodite can take 5–10 minutes to load a large model on first run
+# (weights download + CUDA kernel compilation), so we allow up to 20 minutes.
+HEALTH_CHECK_INTERVAL_SECS = 2
+HEALTH_CHECK_MAX_INTERVALS = 600  # 600 * 2s = 1200s = 20 minutes
+
+# How often (in seconds) to print a "still waiting" progress message during
+# the health-check loop, so the user knows the process isn't hung.
+HEALTH_CHECK_PROGRESS_INTERVAL_SECS = 30
+
+
 def get_free_port() -> int:
-    """Find and return a free port on localhost."""
+    """Find and return a free port on localhost.
+
+    Uses an ephemeral bind to let the OS assign a free port, then immediately
+    closes the socket. There is an inherent TOCTOU race (another process may
+    grab the port between this call and its use), but for local LLM servers
+    this is acceptable.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
 
+
 def get_gpu_count() -> int:
-    """Autodetect the number of available GPUs from CUDA_VISIBLE_DEVICES."""
+    """Autodetect the number of available GPUs from CUDA_VISIBLE_DEVICES.
+
+    Raises:
+        RuntimeError: if CUDA_VISIBLE_DEVICES is unset or empty.
+    """
     cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
     if cuda_visible is not None:
         devices = [d.strip() for d in cuda_visible.split(",") if d.strip()]
@@ -21,25 +45,79 @@ def get_gpu_count() -> int:
         return len(devices)
     raise RuntimeError("No GPUs found! CUDA_VISIBLE_DEVICES not set.")
 
-def launch_engine_server(engine: str, model_name: str, port: int, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000, ) -> subprocess.Popen:
-    """Launch the LLM server with pipeline parallel size equal to the number of GPUs."""
-    gpu_count = get_gpu_count()
-    
-    if engine.lower() == "vllm":
+
+def _resolve_engine_binary(engine: str) -> tuple[str, str]:
+    """Resolve the engine binary path and return (bin_path, engine_label).
+
+    Reads the venv path from VLLM_VENV_PATH (for vLLM) or APHRODITE_VENV_PATH
+    (for Aphrodite, defaulting to .aphrodite).
+
+    Raises:
+        RuntimeError: if the venv env var is unset or the binary is missing.
+        ValueError: if the engine name is not recognized.
+    """
+    engine_lower = engine.lower()
+    if engine_lower == "vllm":
         venv_path = os.environ.get("VLLM_VENV_PATH")
         if not venv_path:
-            raise RuntimeError("VLLM_VENV_PATH environment variable is not set. Please set VLLM_VENV_PATH to the path of the virtual environment containing the vLLM installation.")
+            raise RuntimeError(
+                "VLLM_VENV_PATH environment variable is not set. Please set "
+                "VLLM_VENV_PATH to the path of the virtual environment "
+                "containing the vLLM installation."
+            )
         bin_path = os.path.join(venv_path, "bin", "vllm")
-        cmd_prefix = [bin_path, "serve", model_name]
-    elif engine.lower() == "aphrodite":
+    elif engine_lower == "aphrodite":
         venv_path = os.environ.get("APHRODITE_VENV_PATH", ".aphrodite")
         bin_path = os.path.join(venv_path, "bin", "aphrodite")
-        cmd_prefix = [bin_path, "run", model_name]
     else:
         raise ValueError(f"Unsupported LLM engine: {engine}")
 
     if not os.path.isfile(bin_path) or not os.access(bin_path, os.X_OK):
-        raise RuntimeError(f"{engine} executable not found or not executable at: {bin_path}")
+        raise RuntimeError(
+            f"{engine} executable not found or not executable at: {bin_path}"
+        )
+
+    return bin_path, engine_lower
+
+
+def launch_engine_server(
+    engine: str,
+    model_name: str,
+    port: int,
+    max_logprobs: int = 10,
+    gpu_memory_utilization: float = 0.85,
+    max_model_len: int = 16000,
+) -> subprocess.Popen:
+    """Launch the LLM server with data-parallel size = GPU count.
+
+    The subprocess's stdout and stderr are streamed to the parent process's
+    stdout/stderr so that engine startup logs (model loading progress, CUDA
+    errors, etc.) are visible. Previously, the subprocess inherited no
+    redirection and its output was lost, making startup failures hard to
+    diagnose.
+
+    Args:
+        engine: "vllm" or "aphrodite".
+        model_name: HuggingFace model ID or local path.
+        port: Port for the OpenAI-compatible API server.
+        max_logprobs: Maximum number of top logprobs the server will return.
+        gpu_memory_utilization: Fraction of GPU memory to use (0–1).
+        max_model_len: Maximum model context length.
+
+    Returns:
+        The subprocess.Popen handle once the server is healthy.
+
+    Raises:
+        RuntimeError: if the server fails to become healthy within the timeout
+            (currently 20 minutes). The subprocess is terminated before raising.
+    """
+    gpu_count = get_gpu_count()
+    bin_path, engine_lower = _resolve_engine_binary(engine)
+
+    if engine_lower == "vllm":
+        cmd_prefix = [bin_path, "serve", model_name]
+    else:  # aphrodite
+        cmd_prefix = [bin_path, "run", model_name]
 
     cmd = cmd_prefix + [
         "--port", str(port),
@@ -52,19 +130,38 @@ def launch_engine_server(engine: str, model_name: str, port: int, max_logprobs: 
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
 
-    while (dist_port := get_free_port()) == port: pass
+    # Pick a distinct distributed port for the engine's internal comms
+    # (NCCL / gloo). Retry with a tiny sleep to avoid pegging a CPU core
+    # if get_free_port happens to return the same port as `port`.
+    dist_port = port
+    while dist_port == port:
+        dist_port = get_free_port()
+        if dist_port == port:
+            time.sleep(0.01)
+
     env = os.environ.copy()
     env["MASTER_PORT"] = str(dist_port)
 
     print(f"\nLaunching {engine} server...")
     print(" ".join(cmd))
 
-    proc = subprocess.Popen(cmd, env=env)
+    # Stream subprocess output to the parent's stdout/stderr so engine logs
+    # are visible during startup and on failure.
+    proc = subprocess.Popen(
+        cmd,
+        env=env,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
 
-    print(f"Waiting for {engine} server to start (this may take a few minutes)...")
+    print(
+        f"Waiting for {engine} server to start "
+        f"(timeout: {HEALTH_CHECK_MAX_INTERVALS * HEALTH_CHECK_INTERVAL_SECS}s)..."
+    )
     health_url = f"http://localhost:{port}/v1/models"
 
-    for _ in range(600):
+    last_progress_print = time.time()
+    for i in range(HEALTH_CHECK_MAX_INTERVALS):
         try:
             r = requests.get(health_url, timeout=2)
             if r.status_code == 200:
@@ -72,39 +169,87 @@ def launch_engine_server(engine: str, model_name: str, port: int, max_logprobs: 
                 return proc
         except Exception:
             pass
-        time.sleep(2)
 
-    print(f"{engine} server failed to start within the timeout. Attempting to shut it down...")
+        now = time.time()
+        if now - last_progress_print >= HEALTH_CHECK_PROGRESS_INTERVAL_SECS:
+            elapsed = i * HEALTH_CHECK_INTERVAL_SECS
+            remaining = (HEALTH_CHECK_MAX_INTERVALS - i) * HEALTH_CHECK_INTERVAL_SECS
+            print(
+                f"  Still waiting for {engine} server... "
+                f"{elapsed}s elapsed, {remaining}s remaining"
+            )
+            last_progress_print = now
+
+        time.sleep(HEALTH_CHECK_INTERVAL_SECS)
+
+    print(
+        f"{engine} server failed to start within the timeout "
+        f"({HEALTH_CHECK_MAX_INTERVALS * HEALTH_CHECK_INTERVAL_SECS}s). "
+        f"Attempting to shut it down..."
+    )
+    _terminate_proc(proc, engine)
+    raise RuntimeError(
+        f"{engine} server failed to start within the timeout. "
+        f"Check the engine logs above for details."
+    )
+
+
+def _terminate_proc(proc: subprocess.Popen, engine: str, timeout: int = 60) -> None:
+    """Terminate a subprocess gracefully, escalating to kill if needed."""
     proc.terminate()
     try:
-        proc.wait(timeout=60)
+        proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         print(f"{engine} server did not terminate, killing it...")
         proc.kill()
         proc.wait()
-    raise RuntimeError(f"{engine} server failed to start within the timeout.")
+
 
 @contextmanager
-def llm_server_context(engine: str, model_name: str, port: int | None = None, max_logprobs: int = 10, gpu_memory_utilization: float = 0.85, max_model_len: int = 16000):
-    """Context manager to launch and clean up an LLM server."""
+def llm_server_context(
+    engine: str,
+    model_name: str,
+    port: int | None = None,
+    max_logprobs: int = 10,
+    gpu_memory_utilization: float = 0.85,
+    max_model_len: int = 16000,
+):
+    """Context manager to launch and clean up an LLM server.
+
+    Launches the engine server on a free port (or *port* if given), yields
+    the API base URL ("http://localhost:{port}/v1"), and terminates the
+    server on context exit (including on exception).
+
+    Args:
+        engine: "vllm" or "aphrodite".
+        model_name: HuggingFace model ID or local path.
+        port: Port for the API server. If None, a free port is chosen.
+        max_logprobs: Maximum top-logprobs the server will return.
+        gpu_memory_utilization: Fraction of GPU memory to use (0–1).
+        max_model_len: Maximum model context length.
+
+    Yields:
+        The API base URL string.
+
+    Raises:
+        ValueError: if the engine is not "vllm" or "aphrodite".
+        RuntimeError: if the server fails to start within the timeout.
+    """
     if port is None:
         port = get_free_port()
 
     proc = None
     try:
-        if engine.lower() in ["vllm", "aphrodite"]:
-            proc = launch_engine_server(engine, model_name, port, max_logprobs, gpu_memory_utilization, max_model_len)
+        if engine.lower() in ("vllm", "aphrodite"):
+            proc = launch_engine_server(
+                engine, model_name, port,
+                max_logprobs, gpu_memory_utilization, max_model_len,
+            )
         else:
             raise ValueError(f"Unsupported LLM engine: {engine}")
         yield f"http://localhost:{port}/v1"
     finally:
         if proc is not None:
             print(f"Shutting down {engine} server...")
-            proc.terminate()
-            try:
-                proc.wait(timeout=60)
-            except subprocess.TimeoutExpired:
-                print(f"{engine} server did not terminate, killing it...")
-                proc.kill()
-                proc.wait()
+            _terminate_proc(proc, engine)
             print(f"{engine} server shutdown complete.")
