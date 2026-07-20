@@ -16,10 +16,6 @@ gen_suffix = "rewritten"
 stat_suffix = "stat"
 eval_suffix = "eval"
 
-# Optional HF datasets cache directory. Omit (or set to null) to use the HF
-# default cache (~/.cache/huggingface/datasets).
-# cache_dir = "/usr/project/xtmp/ccprocessing_cache/"
-
 # Engine Virtual Environment Paths (Defaults to .vllm and .aphrodite)
 # vllm_venv_path = ".vllm"
 # aphrodite_venv_path = ".aphrodite"

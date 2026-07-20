@@ -1,10 +1,6 @@
 # External scripts do NOT respect globals.toml, make sure you specifiy the dataset path
 dataset_path = ""
 
-# Optional HF datasets cache directory. Omit (or set to null) to use the HF
-# default cache (~/.cache/huggingface/datasets).
-# cache_dir = "/usr/project/xtmp/ccprocessing_cache/"
-
 metadata_columns = ["prompt", "generator_model"]
 
 base_model = "FacebookAI/roberta-large"
