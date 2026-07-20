@@ -1,7 +1,8 @@
-# If this is specified, the dataset will be loaded/written directly with this name
-# and the prefixes/suffixes specified below will be ignored.
-override_dataset_input = ""
-override_dataset_output = ""
+# Optional: if set, the dataset will be loaded/written directly with this name
+# and the prefixes/suffixes specified below will be ignored. Omit (or set to
+# null) to use the prefix+suffix scheme.
+# override_dataset_input = ""
+# override_dataset_output = ""
 
 # For convenience in running the pipeline, it is recommended to follow a
 # strict prefix-suffix dataset naming convention

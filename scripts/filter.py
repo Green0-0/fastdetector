@@ -95,7 +95,7 @@ def main():
 
     filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
 
-    if filter_config.output_shards > 0:
+    if filter_config.output_shards is not None:
         shard_size = len(ds_filtered) // filter_config.output_shards
         shards_to_upload = []
         for i in range(filter_config.output_shards):

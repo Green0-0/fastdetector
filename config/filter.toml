@@ -2,9 +2,9 @@ num_samples = 400000
 source_column = "trafilatura_text"
 prompt_file = "prompts/filter_contiguous_subset.json"
 
-# The dataset will be split into subsets 'shard_1', 'shard_2', etc.  
-# -1 means no splitting.
-output_shards = -1
+# Optional: split the filtered dataset into N shards named 'shard_0',
+# 'shard_1', etc. Omit (or set to null) to upload as a single 'default' config.
+# output_shards = 4
 filter_type = "AND"
 
 [[conditions]]
