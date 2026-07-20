@@ -16,8 +16,9 @@ gen_suffix = "rewritten"
 stat_suffix = "stat"
 eval_suffix = "eval"
 
-save_locally_instead = false # Pushes to hf if false
-cache_dir = "/usr/project/xtmp/ccprocessing_cache/" # Change this path for your local setup
+# Optional HF datasets cache directory. Omit (or set to null) to use the HF
+# default cache (~/.cache/huggingface/datasets).
+# cache_dir = "/usr/project/xtmp/ccprocessing_cache/"
 
 # Engine Virtual Environment Paths (Defaults to .vllm and .aphrodite)
 # vllm_venv_path = ".vllm"
