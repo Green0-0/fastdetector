@@ -28,3 +28,5 @@ slurm-*.out
 build/
 dist/
 *.egg-info/
+.pr*-body.md
+.venv-refactor/

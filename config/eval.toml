@@ -10,8 +10,8 @@ batch_size = 24
 validation_size = 0.1
 threshold_type_bin = "f1"
 threshold_type_score = "fpr0.5"
-manual_threshold_score = -1.0
-manual_threshold_bin = -1.0
+# manual_threshold_score / manual_threshold_bin: omit (or set to null) to auto-derive
+# from the validation sweep; set to a float to force a manual threshold.
 
 # If the distance is below the lower bound, the row will be dropped
 filter_type = "AND"

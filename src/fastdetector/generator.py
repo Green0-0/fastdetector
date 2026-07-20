@@ -34,8 +34,9 @@ async def _send_request(
                     extra_body["chat_template_kwargs"] = {"enable_thinking": False}
                 
                 for key in ["top_k", "top_a", "xtc_probability", "nsigma"]:
-                    if key in generation_params and generation_params[key] > 0:
-                        extra_body[key] = generation_params[key]
+                    val = generation_params.get(key)
+                    if val is not None and val > 0:
+                        extra_body[key] = val
                 
                 if extra_body:
                     kwargs["extra_body"] = extra_body
