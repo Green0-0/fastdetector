@@ -1,13 +1,14 @@
 from typing import Dict, Optional
 
 from huggingface_hub import HfApi, hf_hub_download
-from datasets import Dataset, load_dataset, get_dataset_config_names
+from datasets import Dataset
+from datasets import load_dataset as _hf_load_dataset
+from datasets import get_dataset_config_names
 
 
 def load_dataset(
     dataset_name: str,
     split: str = "train",
-    cache_dir: Optional[str] = None,
     subset_index: Optional[int] = 0,
 ) -> Dataset:
     """Load a dataset from the Hugging Face Hub, resolving a shard by index.
@@ -15,15 +16,13 @@ def load_dataset(
     When ``subset_index`` is not ``None`` the dataset's configs are listed and
     the config at position ``subset_index`` is loaded. This preserves the
     sharding/subset-access behavior used throughout the pipeline (each shard
-    is uploaded as a separate config named ``shard_<i>``).
+    is uploaded as a separate HF config named ``shard_<i>``).
 
     Args:
         dataset_name: HF Hub dataset repo ID (e.g. "G-reen/cc-2021-rewritten").
         split: Dataset split (default "train").
-        cache_dir: Optional HF datasets cache directory. If ``None`` the HF
-            default cache is used.
-        subset_index: Index into the dataset's config list. If ``None`` the
-            default config is loaded without shard resolution.
+        subset_index: Index into the dataset's config list (default 0). If
+            ``None``, the default config is loaded without shard resolution.
 
     Returns:
         The loaded Dataset.
@@ -52,30 +51,8 @@ def load_dataset(
 
     print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
     if config_name:
-        return load_dataset(
-            dataset_name, name=config_name, split=split, cache_dir=cache_dir
-        )
-    return load_dataset(dataset_name, split=split, cache_dir=cache_dir)
-
-
-def upload_dataset(
-    dataset: Dataset,
-    dataset_name: str,
-    config_name: str = "default",
-) -> None:
-    """Push a dataset to the Hugging Face Hub under the given config name.
-
-    Args:
-        dataset: The dataset to upload.
-        dataset_name: The HF Hub dataset repo to push to.
-        config_name: The configuration (shard) name to push under. Defaults to
-            ``"default"``. Use ``shard_<i>`` to write a specific shard.
-    """
-    print(
-        f"Pushing dataset to '{dataset_name}' (config '{config_name}') with "
-        f"{len(dataset)} rows and {len(dataset.column_names)} columns..."
-    )
-    dataset.push_to_hub(dataset_name, config_name=config_name)
+        return _hf_load_dataset(dataset_name, name=config_name, split=split)
+    return _hf_load_dataset(dataset_name, split=split)
 
 
 def upload_readme(
