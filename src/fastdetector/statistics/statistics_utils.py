@@ -1,27 +1,7 @@
-"""Numeric metric helpers for dataset statistics.
-
-Plotting functions are re-exported from :mod:`fastdetector.statistics.plotting`
-for backward compatibility.
-"""
+"""Numeric metric helpers for dataset statistics."""
 
 from sklearn.metrics import roc_auc_score
 import numpy as np
-
-# Re-export plotting functions for backward compatibility.
-from fastdetector.statistics.plotting import (  # noqa: F401
-    get_histogram,
-    get_sweeping_classifier_plot,
-    get_confusion_matrix,
-    get_scatterplot,
-)
-
-__all__ = [
-    "compute_auroc",
-    "get_histogram",
-    "get_sweeping_classifier_plot",
-    "get_confusion_matrix",
-    "get_scatterplot",
-]
 
 
 def compute_auroc(
