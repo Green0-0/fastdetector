@@ -177,11 +177,8 @@ def compute_editlens_scores(
 ):
     """Run EditLens inference on a list of texts.
 
-    Replaces the previous HF ``Trainer.predict`` approach with a plain
-    ``torch.no_grad()`` DataLoader loop. This avoids the unnecessary
-    ``TrainingArguments`` / ``Trainer`` machinery (including the hardcoded
-    ``output_dir="/tmp/editlens_inference"``) and gives us direct control
-    over the inference loop.
+    Uses a plain ``torch.no_grad()`` DataLoader loop for direct control over
+    inference.
 
     Args:
         texts: List of input strings.
@@ -189,7 +186,7 @@ def compute_editlens_scores(
         tokenizer: The matching tokenizer.
         is_qlora: Whether the model is a QLoRA adapter. Used to reduce the
             batch size for QLoRA (4-bit quantization uses more memory per
-            sample). Kept as a parameter for interface compatibility.
+            sample).
         n_buckets: Number of classification buckets.
         max_length: Max tokenization length.
         batch_size: Inference batch size (ignored if is_qlora, which uses 4).

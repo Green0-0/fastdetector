@@ -1,8 +1,8 @@
 """Build README markdown and charts for stat datasets.
 
-Split out of the original build_readme_content monolith into focused
-functions, each returning a markdown chunk and contributing to the charts
-dict. The main entry point build_readme_content orchestrates them.
+The main entry point ``build_readme_content`` orchestrates focused
+``_build_*`` helpers, each returning a markdown chunk and contributing to
+the charts dict.
 """
 
 import itertools
@@ -111,11 +111,6 @@ def _collect_column_lists(config: StatConfig) -> dict:
 
 def _build_text_analysis(ds: Dataset, text_columns: List[str]) -> str:
     """Build the "Text Analysis" markdown section (n-gram comparison).
-
-    Note: the loop variables (col_a, col_b) are intentionally local to this
-    function and do NOT shadow the outer config.human_column / config.ai_column
-    — this was a bug in the original code where the loop in
-    build_readme_content rebound col_a/col_b from the outer scope.
     """
     md = ""
     if not text_columns:
@@ -196,9 +191,6 @@ def _build_summary_statistics(ds: Dataset, columns: List[str]) -> str:
 
 def _build_pearson_correlations(ds: Dataset, columns: List[str]) -> str:
     """Build the "Pearson Correlation Coefficients" markdown section.
-
-    Note: the loop variables (col_a, col_b) are intentionally local and do
-    NOT shadow any outer scope (this was a bug in the original code).
     """
     if not columns:
         return ""

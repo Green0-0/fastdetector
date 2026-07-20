@@ -1,7 +1,5 @@
 """Soft n-gram distance scoring via phrase-level embedding similarity.
 
-Split out of statistics_api.py for modularity.
-
 Soft n-gram distance is a fuzzy alternative to Jaccard distance: instead of
 requiring exact n-gram matches, it counts an n-gram in the edited text as
 "matched" if any n-gram in the source text has cosine similarity >= threshold

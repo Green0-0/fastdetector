@@ -1,7 +1,5 @@
 """Sentence-level and token-level embedding generation via HuggingFace models.
 
-Split out of statistics_api.py for modularity.
-
 - batch_gen_embeddings: sentence-level embeddings via SentenceTransformer
 - generate_token_embeddings_pairs: token-level embeddings via AutoModel,
   yielded in chunks to avoid OOM
@@ -86,8 +84,8 @@ def batch_cross_encoder(
         model_name: HuggingFace model identifier.
         batch_size: Batch size for inference.
         as_distance: If True, negate the scores so they behave like distances
-            (lower = more similar). This is the default for compatibility with
-            distance-based metrics downstream.
+            (lower = more similar), matching the convention of the other
+            ``pairwise_*`` metrics.
 
     Returns:
         List of cross-encoder scores (negated if as_distance=True).

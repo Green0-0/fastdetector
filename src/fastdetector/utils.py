@@ -148,10 +148,7 @@ def _save_dataset_locally(
       old or the new dataset, never a half-written state).
 
     Uses a plain ``tempfile.mkdtemp`` for the backup (instead of
-    ``TemporaryDirectory``) so we control cleanup explicitly. The old code
-    used ``TemporaryDirectory`` for the save target and then called
-    ``os.mkdir(tmp_dir)`` after ``os.replace`` to prevent the context manager
-    cleanup from erroring on the moved-away directory — that was a hack.
+    ``TemporaryDirectory``) so we control cleanup explicitly.
     """
     os.makedirs(cache_dir, exist_ok=True)
     safe_name = dataset_name.replace('/', '_')

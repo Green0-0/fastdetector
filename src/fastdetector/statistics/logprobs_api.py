@@ -1,8 +1,7 @@
 """Fetch token logprobs from a vLLM / OpenAI-compatible completions endpoint.
 
-Split out of statistics_api.py for modularity. The logprobs-fetching logic
-is independent of the embedding / cross-encoder / soft-ngram logic and has
-its own async concurrency concerns.
+The logprobs-fetching logic is independent of the embedding / cross-encoder /
+soft-ngram logic and has its own async concurrency concerns.
 """
 
 import asyncio
