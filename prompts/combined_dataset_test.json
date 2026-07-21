@@ -169,7 +169,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -327,7 +327,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -432,7 +432,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -704,7 +704,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -777,7 +777,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -944,7 +944,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -1050,7 +1050,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -1495,7 +1495,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -1727,7 +1727,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -1738,7 +1738,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -2600,7 +2600,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -2820,7 +2820,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -3447,7 +3447,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -3640,7 +3640,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -3715,7 +3715,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -3916,7 +3916,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -3937,7 +3937,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -3959,7 +3959,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4150,7 +4150,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4182,7 +4182,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4332,7 +4332,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4458,7 +4458,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4719,7 +4719,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4783,7 +4783,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -4869,7 +4869,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5077,7 +5077,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5370,7 +5370,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5413,7 +5413,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5444,7 +5444,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5551,7 +5551,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5626,7 +5626,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5677,7 +5677,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5781,7 +5781,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5886,7 +5886,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -5897,7 +5897,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -6679,7 +6679,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -6761,7 +6761,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -6995,7 +6995,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -7067,7 +7067,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -7204,7 +7204,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -7215,7 +7215,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -7297,7 +7297,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -7360,7 +7360,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -8210,7 +8210,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -8303,7 +8303,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -8377,7 +8377,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -8681,7 +8681,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9141,7 +9141,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9443,7 +9443,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9465,7 +9465,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9486,7 +9486,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9547,7 +9547,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9601,7 +9601,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9685,7 +9685,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9758,7 +9758,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9862,7 +9862,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9904,7 +9904,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9977,7 +9977,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -9999,7 +9999,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10063,7 +10063,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10250,7 +10250,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10545,7 +10545,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10588,7 +10588,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10630,7 +10630,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10911,7 +10911,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -10984,7 +10984,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -11510,7 +11510,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -11584,7 +11584,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -11636,7 +11636,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -11815,7 +11815,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -11985,7 +11985,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12163,7 +12163,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12185,7 +12185,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12269,7 +12269,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12573,7 +12573,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12731,7 +12731,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12795,7 +12795,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -12921,7 +12921,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -13111,7 +13111,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -13194,7 +13194,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -13447,7 +13447,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14211,7 +14211,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14349,7 +14349,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14562,7 +14562,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14807,7 +14807,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14893,7 +14893,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14945,7 +14945,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -14967,7 +14967,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15030,7 +15030,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15284,7 +15284,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15485,7 +15485,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15610,7 +15610,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15673,7 +15673,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15684,7 +15684,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15746,7 +15746,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15870,7 +15870,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -15881,7 +15881,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -16015,7 +16015,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -16140,7 +16140,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -16215,7 +16215,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -16477,7 +16477,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -16593,7 +16593,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -16905,7 +16905,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -17185,7 +17185,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -17404,7 +17404,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18153,7 +18153,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18227,7 +18227,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18281,7 +18281,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18448,7 +18448,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18657,7 +18657,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18690,7 +18690,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18744,7 +18744,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -18827,7 +18827,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -19009,7 +19009,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -19030,7 +19030,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -19209,7 +19209,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -19323,7 +19323,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -19472,7 +19472,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -19547,7 +19547,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -20049,7 +20049,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -20071,7 +20071,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -20194,7 +20194,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -20205,7 +20205,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -20580,7 +20580,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
@@ -20843,7 +20843,7 @@
     },
     {
         "chat_turns": [
-            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
+            "{{DOC}}\nFormulate a set of strict, absolute constraints regarding format, word count, vocabulary restrictions, and syntax rules that, if followed perfectly by an AI, would result in generating a text nearly identical to this one. Note that your response should be formatted as a prompt that would be sent to an AI requesting it to generate something, not just a list of rules.\nDo not output anything besides what you were requested to write, and do not output any extra commentary.",
             "{{RESP_0}}\nOutput only the generated text with no extra commentary."
         ],
         "use_multiturn": false,
