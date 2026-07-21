@@ -153,13 +153,13 @@ def make_llm_metrics_processor(
                 if stat_config.perplexity:
                     result[f"{col}_perplexity{suffix}"] = perplexities(token_lps)
                 if stat_config.entropy:
-                    result[f"{col}_entropy{suffix}"] = entropies_approx(top_lp)
+                    result[f"{col}_entropy{suffix}"] = entropies_approx(top_lp, vocab_size=stat_config.llm_vocab_size)
                 if stat_config.topp_outlier:
                     result[f"{col}_topp_outlier{suffix}"] = top_p_outlier_percentages(top_lp, token_lps, 0.95)
                 if stat_config.topk_outlier:
                     result[f"{col}_topk_outlier{suffix}"] = top_k_outlier_percentages(top_lp, token_lps, 50)
                 if stat_config.fastdetectgpt_score:
-                    result[f"{col}_fastdetectgpt{suffix}"] = fastdetectgpt_scores_approx(token_lps, top_lp)
+                    result[f"{col}_fastdetectgpt{suffix}"] = fastdetectgpt_scores_approx(token_lps, top_lp, vocab_size=stat_config.llm_vocab_size)
 
         if stat_config.binoculars_score and len(llm_checkpoints) >= 2:
             s1 = col_suffixes[0] if len(col_suffixes) > 0 else "_model_0"

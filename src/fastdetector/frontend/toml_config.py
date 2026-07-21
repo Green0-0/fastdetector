@@ -166,3 +166,11 @@ class StatConfig(BaseModel):
     llm_checkpoints: List[str]
     col_suffixes: List[str]
     top_logprobs_k: int
+
+    # Vocabulary size of the LLM serving logprobs. Used by the tail-mass
+    # heuristic in ``entropies_approx`` and ``fastdetectgpt_scores_approx``
+    # to estimate the entropy / second-moment contribution of the
+    # probability mass outside the top-N logprobs. ``None`` falls back to
+    # a concentrated-tail lower bound that systematically underestimates
+    # both (see ``_tail_moments`` in statistics_llm.py).
+    llm_vocab_size: Optional[int] = None

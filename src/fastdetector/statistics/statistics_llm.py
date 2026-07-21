@@ -3,12 +3,97 @@
 import math
 import numpy as np
 
-def entropies_approx(top_logprobs: list[list[dict[str, float]]]) -> list[float]:
-    """Approximate mean next-token entropy for each text using top-N logprobs and a tail-mass heuristic.
-    
+# Default assumption for the size of the vocabulary outside the top-N
+# logprobs returned by the server. Used by the tail-mass heuristic in
+# ``entropies_approx`` / ``fastdetectgpt_scores_approx`` to estimate the
+# entropy (and second moment) contribution of the tail.
+#
+# This is intentionally a conservative default — most modern LLMs have
+# vocabularies in the 30k-130k range (Llama-3: 128k, Qwen-2.5: 152k,
+# GPT-2: 50k). The heuristic's bias scales with ``log(V - N)``, so
+# choosing a value in the middle of the typical range keeps the bias
+# small across models. Callers can override via the ``vocab_size``
+# parameter to ``entropies_approx`` / ``fastdetectgpt_scores_approx``
+# if they know the exact vocabulary size of the model serving logprobs.
+DEFAULT_VOCAB_SIZE = 128000
+
+
+def _tail_moments(p: np.ndarray, vocab_size: int | None) -> tuple[float, float, float]:
+    """Estimate the tail's contribution to H, E[(log p)^2], and mass.
+
+    Given the top-N probabilities ``p`` (sum <= 1), estimate the tail
+    mass ``M = 1 - sum(p)`` and its contributions to:
+
+    - the entropy ``H_tail = -sum_{v in tail} p(v) log p(v)``
+    - the second moment ``E_tail[(log p)^2] = sum_{v in tail} p(v) (log p(v))^2``
+
+    Two approximations are supported:
+
+    - **Uniform-tail** (``vocab_size`` provided): assume the tail mass
+      ``M`` is distributed uniformly over ``V - N`` tokens, where
+      ``V = vocab_size`` and ``N = len(p)``. This is the
+      maximum-entropy tail distribution and therefore an **upper bound**
+      on the true tail entropy / second moment. It is the standard
+      choice when a vocab size is available (e.g. the FastDetectGPT
+      reference implementation uses it).
+    - **Concentrated-tail** (``vocab_size=None``, the previous default):
+      assume the tail mass is split into ``K = M / p_bound`` categories
+      each with probability ``p_bound = min(p_min, M)``, where ``p_min``
+      is the smallest top-N probability. This is a different specific
+      assumption — it is neither an upper nor a lower bound in general.
+      For typical LLMs with large vocabularies (V ≈ 30k-130k) and
+      top-N=100, ``K`` is usually much smaller than ``V - N``, so this
+      heuristic **underestimates** the tail entropy / second moment
+      (it assumes fewer tail categories than actually exist). However,
+      when ``p_min`` is very small (peaky top-N distributions), ``K``
+      can exceed ``V - N`` and the heuristic **overestimates** instead.
+
+    Returns:
+        Tuple of ``(h_tail, e2_tail, M)``.
+    """
+    Z = float(np.sum(p))
+    M = max(0.0, 1.0 - Z)
+    if M <= 0.0:
+        return 0.0, 0.0, 0.0
+
+    if vocab_size is not None:
+        n_top = len(p)
+        v_tail = max(1, vocab_size - n_top)
+        # Uniform tail: each tail token has probability M / v_tail.
+        # log(M / v_tail) = log(M) - log(v_tail)
+        # H_tail = -v_tail * (M/v_tail) * log(M/v_tail) = -M * log(M/v_tail)
+        # E2_tail = v_tail * (M/v_tail) * (log(M/v_tail))^2 = M * (log(M/v_tail))^2
+        log_p_tail = math.log(M / v_tail + 1e-12)
+        h_tail = -M * log_p_tail
+        e2_tail = M * (log_p_tail ** 2)
+        return h_tail, e2_tail, M
+
+    # Concentrated-tail heuristic (original behaviour).
+    p_min = float(np.min(p)) if len(p) > 0 else 0.0
+    p_bound = min(p_min, M)
+    log_p_tail = math.log(p_bound + 1e-12)
+    h_tail = -M * log_p_tail
+    e2_tail = M * (log_p_tail ** 2)
+    return h_tail, e2_tail, M
+
+
+def entropies_approx(
+    top_logprobs: list[list[dict[str, float]]],
+    vocab_size: int | None = None,
+) -> list[float]:
+    """Approximate mean next-token entropy for each text using top-N logprobs.
+
     Args:
         top_logprobs: For each text, a list of dictionaries mapping top tokens to their logprobs.
-        
+        vocab_size: Optional vocabulary size of the model that produced the
+            logprobs. When provided, the tail-mass contribution is estimated
+            assuming a uniform distribution over the ``vocab_size - N`` tail
+            tokens (a standard maximum-entropy bound). When ``None``, a
+            concentrated-tail lower bound is used instead — this is the
+            historical default but systematically underestimates the entropy
+            for typical LLM vocabularies (30k-130k). Pass ``vocab_size`` if
+            you know it.
+
     Returns:
         List of approximated entropy values.
     """
@@ -17,47 +102,47 @@ def entropies_approx(top_logprobs: list[list[dict[str, float]]]) -> list[float]:
         if not text_top_lps:
             results.append(0.0)
             continue
-            
+
         entropies = []
         for top_lps in text_top_lps:
             if top_lps is not None and len(top_lps) > 0:
                 p = np.array([math.exp(lp) for lp in top_lps.values()])
                 h_top = -np.sum(p * np.log(p + 1e-12))
-                
-                Z = np.sum(p)
-                M = max(0.0, 1.0 - Z)
-                
-                if M > 0:
-                    p_min = np.min(p)
-                    p_bound = min(p_min, M)
-                    h_tail = -M * math.log(p_bound + 1e-12)
-                else:
-                    h_tail = 0.0
+                h_tail, _, _ = _tail_moments(p, vocab_size)
                 entropies.append(h_top + h_tail)
-                
+
         results.append(float(np.mean(entropies)) if entropies else 0.0)
     return results
 
-def fastdetectgpt_scores_approx(token_logprobs: list[list[float | None]], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
+def fastdetectgpt_scores_approx(
+    token_logprobs: list[list[float | None]],
+    top_logprobs: list[list[dict[str, float]]],
+    vocab_size: int | None = None,
+) -> list[float]:
     """Approximate FastDetectGPT score for each text using top-N logprobs.
-    
+
     Computes the conditional probability curvature as defined in the
     Fast-DetectGPT paper (Bao et al., ICLR 2024), Eq. 3:
         d(x) = (log p(x|x) - mu_tilde) / sigma_tilde
-    
+
     Using the analytical solution from Appendix B:
         d(x) = (sum_j [log p(x_j|x_{<j}) - mu_j]) / sqrt(sum_j sigma_j^2)
              = (total_lp - total_expected_lp) / sqrt(total_variance)
-    
+
     This is the z-score of the total conditional log-probability, NOT the
     mean of per-position z-scores. The paper treats the passage as a single
     point and computes the curvature at that point. This matches the official
     implementation at github.com/baoguangsheng/fast-detect-gpt.
-    
+
     Args:
         token_logprobs: Logprobs of the actual tokens.
         top_logprobs: For each text, a list of dictionaries mapping top tokens to their logprobs.
-        
+        vocab_size: Optional vocabulary size for the tail-mass heuristic.
+            See :func:`entropies_approx` for details. When ``None``, the
+            variance (and therefore the z-score denominator) is
+            systematically underestimated, inflating the magnitude of the
+            score. Pass ``vocab_size`` for unbiased estimation.
+
     Returns:
         List of approximated FastDetectGPT scores.
     """
@@ -66,51 +151,40 @@ def fastdetectgpt_scores_approx(token_logprobs: list[list[float | None]], top_lo
         if not text_token_lps or not text_top_lps:
             results.append(0.0)
             continue
-            
+
         total_lp = 0.0
         total_expected_lp = 0.0
         total_variance = 0.0
         valid_tokens = 0
-        
+
         for lp, top_lps in zip(text_token_lps, text_top_lps):
             if lp is None or top_lps is None or len(top_lps) == 0:
                 continue
-                
+
             p = np.array([math.exp(v) for v in top_lps.values()])
             log_p = np.log(p + 1e-12)
-            
+
             h_top = -np.sum(p * log_p)
             var_top = np.sum(p * (log_p ** 2))
-            
-            Z = np.sum(p)
-            M = max(0.0, 1.0 - Z)
-            
-            if M > 0:
-                p_min = np.min(p)
-                p_bound = min(p_min, M)
-                log_p_tail = math.log(p_bound + 1e-12)
-                h_tail = -M * log_p_tail
-                var_tail = M * (log_p_tail ** 2)
-            else:
-                h_tail = 0.0
-                var_tail = 0.0
-                
+
+            h_tail, e2_tail, _ = _tail_moments(p, vocab_size)
+
             expected_lp = -(h_top + h_tail)
-            expected_lp_sq = var_top + var_tail
-            
+            expected_lp_sq = var_top + e2_tail
+
             variance = max(0.0, expected_lp_sq - (expected_lp ** 2))
-            
+
             total_lp += lp
             total_expected_lp += expected_lp
             total_variance += variance
             valid_tokens += 1
-            
+
         if valid_tokens > 0 and total_variance > 1e-6:
             sequence_score = (total_lp - total_expected_lp) / math.sqrt(total_variance)
             results.append(sequence_score)
         else:
             results.append(0.0)
-            
+
     return results
 
 def binoculars_scores_approx(token_logprobs_m1: list[list[float | None]], 
