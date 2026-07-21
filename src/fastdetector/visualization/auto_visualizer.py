@@ -327,7 +327,10 @@ class ClassifierThresholdStatWrapper(_Wrapper):
         if self._sweep_data is None:
             raise RuntimeError("Sweep data not available; _resolve was not called.")
         thresholds, per_dataset_accs, agg_accs = self._sweep_data
-        labels = [c for c in self._column_names] if self._autoclass_column is None else ["Negative", "Positive"]
+        if self._autoclass_column is None:
+            labels = list(self._column_names)
+        else:
+            labels = ["Negative", "Positive"]
         return get_sweep_plot(
             thresholds,
             per_dataset_accs,
@@ -802,6 +805,7 @@ class AutoVisualizer:
         rows: List[dict],
         columns: List[dict],
         emoji_config: Optional[dict] = None,
+        row_header: str = "Name",
     ) -> None:
         """Register a markdown table under a template ID.
 
@@ -830,6 +834,8 @@ class AutoVisualizer:
                   from ranking (the rows are still rendered, just without
                   emoji markers). Useful for "Overall" rows where ranking
                   is semantically meaningless.
+            row_header: Label for the first column (which lists row names).
+                Defaults to ``"Name"``.
         """
         if not rows:
             raise ValueError(f"specify_table('{id}'): rows list is empty.")
@@ -840,6 +846,7 @@ class AutoVisualizer:
             "rows": rows,
             "columns": columns,
             "emoji_config": emoji_config,
+            "row_header": row_header,
         }
 
     # ------------------------------------------------------------------
@@ -1057,13 +1064,14 @@ class AutoVisualizer:
         rows = spec["rows"]
         columns = spec["columns"]
         emoji_config = spec.get("emoji_config")
+        row_header = spec.get("row_header", "Name")
 
         # --- Apply emoji markers to row names ---
         emojis = self._compute_row_emojis(rows, emoji_config)
         row_names = [emojis[r["name"]] + r["name"] for r in rows]
 
         # --- Build table ---
-        header = "| Subset | " + " | ".join(c["header"] for c in columns) + " |\n"
+        header = f"| {row_header} | " + " | ".join(c["header"] for c in columns) + " |\n"
         sep = "|---|" + "|".join(["---" for _ in columns]) + "|\n"
 
         lines = []
@@ -1145,7 +1153,7 @@ class AutoVisualizer:
                     f"Make sure it was registered via bind_* / specify_*."
                 )
 
-            id_type = id_types.get(id_str, "scalar")
+            id_type = id_types[id_str]
             value = values_dict.get(id_str)
 
             if id_type == "plot":

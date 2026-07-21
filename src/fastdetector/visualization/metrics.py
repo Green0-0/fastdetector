@@ -35,6 +35,23 @@ def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
     return arr > threshold
 
 
+def _prf(tp: int, fp: int, tn: int, fn: int) -> tuple[float, float, float, float, float]:
+    """Compute precision, recall, f1, fpr, tnr from confusion counts.
+
+    Returns ``(precision, recall, f1, fpr, tnr)``. Zero-division safe:
+    returns 0.0 for any rate whose denominator is 0.
+    """
+    actual_pos = tp + fn
+    pred_pos = tp + fp
+    actual_neg = tn + fp
+    precision = tp / pred_pos if pred_pos > 0 else 0.0
+    recall = tp / actual_pos if actual_pos > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    fpr = fp / actual_neg if actual_neg > 0 else 0.0
+    tnr = tn / actual_neg if actual_neg > 0 else 0.0
+    return precision, recall, f1, fpr, tnr
+
+
 def compute_threshold_sweep(
     arrays: Sequence[np.ndarray],
     labels: Sequence[bool],
@@ -71,7 +88,7 @@ def compute_threshold_sweep(
         min_val, max_val = min_val - pad, max_val + pad
 
     thresholds = np.linspace(min_val, max_val, n_thresholds)
-    total_len = sum(len(a) for a in arrays)
+    total_len = len(all_data)
 
     per_dataset_accs: list[list[float]] = []
     for arr, is_pos in zip(arrays, labels):
@@ -105,14 +122,7 @@ def compute_threshold_sweep(
                 total_tn += np.sum(~preds)
 
         acc = (total_tp + total_tn) / total_len if total_len > 0 else 0
-        actual_pos = total_tp + total_fn
-        pred_pos = total_tp + total_fp
-        actual_neg = total_tn + total_fp
-
-        precision = total_tp / pred_pos if pred_pos > 0 else 0
-        recall = total_tp / actual_pos if actual_pos > 0 else 0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-        fpr = total_fp / actual_neg if actual_neg > 0 else 0
+        _, _, f1, fpr, _ = _prf(total_tp, total_fp, total_tn, total_fn)
 
         agg_accs.append(acc)
         agg_f1s.append(f1)
@@ -197,18 +207,9 @@ def compute_classifier_metrics(
     FN = int(np.sum(actual_arr & ~predicted_arr))
 
     total = TP + TN + FP + FN
-    actual_pos = TP + FN
-    pred_pos = TP + FP
-    actual_neg = TN + FP
-
+    precision, recall, f1, fpr, tnr = _prf(TP, FP, TN, FN)
     acc = (TP + TN) / total if total > 0 else 0.0
-    precision = TP / pred_pos if pred_pos > 0 else 0.0
-    recall = TP / actual_pos if actual_pos > 0 else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    tpr = recall
-    fnr = FN / actual_pos if actual_pos > 0 else 0.0
-    fpr = FP / actual_neg if actual_neg > 0 else 0.0
-    tnr = TN / actual_neg if actual_neg > 0 else 0.0
+    fnr = FN / (TP + FN) if (TP + FN) > 0 else 0.0
 
     try:
         auroc = compute_auroc(np.array(y_true), np.array(y_scores))
@@ -219,7 +220,7 @@ def compute_classifier_metrics(
         "acc": acc,
         "f1": f1,
         "auroc": auroc,
-        "tpr": tpr,
+        "tpr": recall,
         "fnr": fnr,
         "fpr": fpr,
         "tnr": tnr,

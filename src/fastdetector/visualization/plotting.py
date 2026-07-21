@@ -10,7 +10,7 @@ import io
 import matplotlib.pyplot as plt
 import numpy as np
 
-from fastdetector.visualization.metrics import compute_threshold_sweep
+from fastdetector.visualization.metrics import _prf
 
 
 def _save_fig_to_png() -> bytes:
@@ -138,18 +138,11 @@ def format_confusion_matrix(
     Returns:
         Markdown-formatted confusion matrix string.
     """
+    _, _, f1, fpr, tnr = _prf(tp, fp, tn, fn)
     actual_pos = tp + fn
-    pred_pos = tp + fp
     actual_neg = tn + fp
-
-    precision = tp / pred_pos if pred_pos > 0 else 0
-    recall = tp / actual_pos if actual_pos > 0 else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-
     tpr = tp / actual_pos if actual_pos > 0 else 0
     fnr = fn / actual_pos if actual_pos > 0 else 0
-    fpr = fp / actual_neg if actual_neg > 0 else 0
-    tnr = tn / actual_neg if actual_neg > 0 else 0
 
     md = f"### {title} (F1: {f1:.4f})\n"
     md += "| | Predicted Positive | Predicted Negative |\n"
