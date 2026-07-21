@@ -70,13 +70,32 @@ def upload_readme(
         append_readme_source: If set, download the README from this dataset
             and prepend it to *readme_content*.
     """
+    def _extract_yaml(text: str):
+        if text.startswith("---"):
+            idx = text.find("\n---", 3)
+            if idx != -1:
+                idx += 4 # length of \n---
+                return text[:idx] + "\n", text[idx:].lstrip()
+        return "", text
+
+    dataset_yaml = ""
+    try:
+        print(f"Checking for existing YAML config on '{dataset_name}'...")
+        curr_readme_path = hf_hub_download(repo_id=dataset_name, filename="README.md", repo_type="dataset")
+        with open(curr_readme_path, "r", encoding="utf-8") as f:
+            curr_text = f.read()
+            dataset_yaml, _ = _extract_yaml(curr_text)
+    except Exception as e:
+        print(f"Notice: No existing README or YAML config found on '{dataset_name}' ({e}).")
+
     prev_readme = ""
     if append_readme_source:
         try:
             print(f"Downloading README.md from '{append_readme_source}' to append new README content...")
             readme_path = hf_hub_download(repo_id=append_readme_source, filename="README.md", repo_type="dataset")
             with open(readme_path, "r", encoding="utf-8") as f:
-                prev_readme = f.read()
+                prev_text = f.read()
+                _, prev_readme = _extract_yaml(prev_text)
         except Exception as e:
             print(
                 f"Warning: Could not download README.md from "
@@ -88,9 +107,9 @@ def upload_readme(
             prev_readme += "\n"
         if not prev_readme.endswith("\n\n"):
             prev_readme += "\n"
-        combined_readme = prev_readme + readme_content
+        combined_readme = dataset_yaml + prev_readme + readme_content
     else:
-        combined_readme = readme_content
+        combined_readme = dataset_yaml + readme_content
 
     if files is None:
         files = {}
