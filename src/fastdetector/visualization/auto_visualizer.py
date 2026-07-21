@@ -859,13 +859,25 @@ class AutoVisualizer:
             A tuple of ``(readme, charts, values_dict)``:
 
             - ``readme``: The substituted markdown string.
-            - ``charts``: ``{filename: png_bytes}`` for all registered plots.
+            - ``charts``: ``{filename: png_bytes}`` for all plots referenced
+              in the template. Plots that are registered via
+              ``specify_histogram`` / ``specify_scatterplot`` but never
+              referenced by ``{{ID}}`` in *readme_template* are skipped
+              (not rendered, not uploaded).
             - ``values_dict``: ``{id: value}`` for all registered IDs (scalars
               as floats, plots as filenames, markdown as strings).
 
         Raises:
             ValueError: If any ``{{ID}}`` in the template is unresolved.
         """
+        # Phase 0: Collect template IDs actually referenced in the readme.
+        # Plot/pearson/table specs whose IDs are not in this set are skipped
+        # during rendering — they would be orphan PNGs/sections uploaded to
+        # the Hub but never linked from the README. Scalar stats are still
+        # collected (Phase 7) regardless of template reference, because
+        # scripts use values_dict to build summary_stats.json.
+        referenced_ids = self._referenced_ids(readme_template)
+
         # Phase 1: Resolve static thresholds (just constants, but register them).
         for w in self._static_wrappers:
             w._resolve(self)
@@ -880,32 +892,40 @@ class AutoVisualizer:
                 continue
             w._resolve(self)
 
-        # Phase 4: Render plots and collect chart bytes.
+        # Phase 4: Render plots referenced in the template.
         charts: Dict[str, bytes] = {}
         values_dict: Dict[str, Any] = {}
 
         for tid, spec in self._plot_specs.items():
+            if tid not in referenced_ids:
+                continue
             png = self._render_plot(spec)
             filename = f"{tid}.png"
             charts[filename] = png
             values_dict[tid] = filename
 
-        # Phase 4b: Render sweep plots from threshold wrappers.
+        # Phase 4b: Render sweep plots referenced in the template.
         for w in self._threshold_wrappers:
             if "sweep_plot" in w._stat_ids:
                 tid = w._stat_ids["sweep_plot"]
+                if tid not in referenced_ids:
+                    continue
                 png = w._render_sweep_plot()
                 filename = f"{tid}.png"
                 charts[filename] = png
                 values_dict[tid] = filename
 
-        # Phase 5: Render pearson sections.
+        # Phase 5: Render pearson sections referenced in the template.
         for tid, spec in self._pearson_specs.items():
+            if tid not in referenced_ids:
+                continue
             md = self._render_pearson(spec)
             values_dict[tid] = md
 
-        # Phase 6: Render tables.
+        # Phase 6: Render tables referenced in the template.
         for tid, spec in self._table_specs.items():
+            if tid not in referenced_ids:
+                continue
             md = self._render_table(spec)
             values_dict[tid] = md
 
@@ -1082,6 +1102,20 @@ class AutoVisualizer:
     # ------------------------------------------------------------------
     # Template substitution
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _referenced_ids(template: str) -> set:
+        """Return the set of template IDs referenced in *template*.
+
+        ``{{ID}}`` and ``{{ID:format}}`` are both recognized; the format
+        spec is stripped. Whitespace around the ID is stripped.
+        """
+        refs = set()
+        for m in _TEMPLATE_PATTERN.findall(template):
+            id_str = m.strip().split(":", 1)[0].strip()
+            if id_str:
+                refs.add(id_str)
+        return refs
 
     def _substitute(
         self, template: str, values_dict: Dict[str, Any]
