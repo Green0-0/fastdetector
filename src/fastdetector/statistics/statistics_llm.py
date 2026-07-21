@@ -216,12 +216,15 @@ def perplexities(token_logprobs: list[list[float | None]]) -> list[float]:
     results = []
     for text_token_lps in token_logprobs:
         if not text_token_lps:
-            results.append(0.0)
+            # Perplexity is undefined for empty input.
+            # Returning 0.0 ("perfect prediction") is misleading;
+            # NaN signals that the value should be excluded from analysis.
+            results.append(float('nan'))
             continue
             
         valid_lps = [lp for lp in text_token_lps if lp is not None]
         if not valid_lps:
-            results.append(0.0)
+            results.append(float('nan'))
             continue
             
         avg_logprob = sum(valid_lps) / len(valid_lps)
