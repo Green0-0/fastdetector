@@ -433,3 +433,186 @@ def test_format_spec_percent():
     readme, _, _ = viz.apply("{{M:.2%}}")
     # .2% format multiplies by 100 and adds %, e.g. "30.12%"
     assert "%" in readme
+
+
+# ---------------------------------------------------------------------------
+# Pass-5 review: additional coverage
+# ---------------------------------------------------------------------------
+
+def test_get_table_row_emojis_returns_markers():
+    """get_table_row_emojis should return the same markers the table renders."""
+    ds = _make_ds(n=300)
+    viz = AutoVisualizer(ds, val_split=0.2)
+    viz.bind_classifier_threshold(
+        ["human_score", "ai_score"], [False, True], _overall_mask,
+        "accuracy", name="clf",
+    ).specify_stats(threshold_value="T")
+
+    def mask_high(ds):
+        return np.array(ds["ai_score"]) > 0.85
+
+    def mask_low(ds):
+        return np.array(ds["ai_score"]) <= 0.5
+
+    rows = []
+    for name, mask in [("High", mask_high), ("Low", mask_low)]:
+        cw = viz.bind_classifier_stat(
+            ["human_score", "ai_score"], [False, True], mask,
+            threshold_id="T", name=name,
+        )
+        cw.specify_stats(acc=f"{name.upper()}_ACC")
+        rows.append({"name": name, "cells": [cw]})
+
+    viz.specify_table(
+        "TBL", rows,
+        [{"header": "Acc", "wrapper_idx": 0, "stat": "acc"}],
+        emoji_config={"mode": "single", "wrapper_idx": 0, "stat": "acc"},
+    )
+    viz.apply("{{TBL}}")
+
+    emojis = viz.get_table_row_emojis("TBL")
+    assert set(emojis.keys()) == {"High", "Low"}
+    assert emojis["High"] == "✔️ "
+    assert emojis["Low"] == "❗ "
+
+
+def test_get_table_row_emojis_unknown_table_returns_empty():
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    assert viz.get_table_row_emojis("NONEXISTENT") == {}
+
+
+def test_table_pruning_unreferenced_not_rendered():
+    """Tables registered but not in the template should not be rendered."""
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    w = viz.bind_stat("human_score", _overall_mask, name="x")
+    w.specify_stats(mean="M")
+    viz.specify_table(
+        "UNUSED_TABLE",
+        [{"name": "row", "cells": [w]}],
+        [{"header": "Mean", "wrapper_idx": 0, "stat": "mean"}],
+    )
+    readme, _, values = viz.apply("# Report\nnothing here\n")
+    assert "UNUSED_TABLE" not in values
+    assert "Mean" not in readme
+
+
+def test_pearson_pruning_unreferenced_not_rendered():
+    """Pearson sections registered but not in the template should not be rendered."""
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    w1 = viz.bind_stat("human_score", _overall_mask, name="x")
+    w2 = viz.bind_stat("ai_score", _overall_mask, name="y")
+    viz.specify_pearson("UNUSED_PEARSON", [w1, w2])
+    _, _, values = viz.apply("# Report\nnothing here\n")
+    assert "UNUSED_PEARSON" not in values
+
+
+def test_pearson_pruning_referenced_is_rendered():
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    w1 = viz.bind_stat("human_score", _overall_mask, name="x")
+    w2 = viz.bind_stat("ai_score", _overall_mask, name="y")
+    viz.specify_pearson("USED_PEARSON", [w1, w2])
+    _, _, values = viz.apply("{{USED_PEARSON}}")
+    assert "USED_PEARSON" in values
+    assert "x vs y" in values["USED_PEARSON"]
+
+
+def test_table_composite_cell_happy_path():
+    """When both stat and stat_2 are present, the composite format is used."""
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    w = viz.bind_stat("human_score", _overall_mask, name="row1")
+    w.specify_stats(mean="ROW1_MEAN", std="ROW1_STD")
+
+    rows = [{"name": "row1", "cells": [w]}]
+    cols = [{"header": "Mean ± Std", "wrapper_idx": 0, "stat": "mean",
+             "stat_2": "std"}]
+    viz.specify_table("TBL", rows, cols)
+    _, _, values = viz.apply("{{TBL}}")
+    md = values["TBL"]
+    # Should contain ± since both mean and std are present.
+    lines = md.strip().split("\n")
+    data_line = next(l for l in lines if "row1" in l)
+    cell = data_line.split("|")[2].strip()
+    assert "±" in cell, f"expected composite cell with ±, got: {cell!r}"
+
+
+def test_specify_table_empty_rows_raises():
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    with pytest.raises(ValueError, match="rows list is empty"):
+        viz.specify_table("T", [], [{"header": "X", "wrapper_idx": 0, "stat": "mean"}])
+
+
+def test_specify_table_empty_columns_raises():
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    w = viz.bind_stat("human_score", _overall_mask)
+    with pytest.raises(ValueError, match="columns list is empty"):
+        viz.specify_table("T", [{"name": "r", "cells": [w]}], [])
+
+
+def test_specify_pearson_too_few_wrappers_raises():
+    ds = _make_ds()
+    viz = AutoVisualizer(ds, val_split=None)
+    w = viz.bind_stat("human_score", _overall_mask)
+    with pytest.raises(ValueError, match="need at least 2 wrappers"):
+        viz.specify_pearson("P", [w])
+
+
+def test_emoji_bounds_check_missing_wrapper_idx():
+    """If emoji_config['wrapper_idx'] exceeds row's cells, no IndexError —
+    the row is excluded from ranking (matches _render_table's '-' fallback)."""
+    ds = _make_ds(n=300)
+    viz = AutoVisualizer(ds, val_split=0.2)
+    viz.bind_classifier_threshold(
+        ["human_score", "ai_score"], [False, True], _overall_mask,
+        "accuracy", name="clf",
+    ).specify_stats(threshold_value="T")
+
+    # Row 'Short' has only 1 cell, but emoji_config ranks by wrapper_idx=1.
+    cw1 = viz.bind_classifier_stat(
+        ["human_score", "ai_score"], [False, True], _overall_mask,
+        threshold_id="T", name="Short",
+    )
+    cw1.specify_stats(acc="SHORT_ACC")
+    rows = [{"name": "Short", "cells": [cw1]}]
+
+    # This should not crash — Short is excluded from ranking.
+    viz.specify_table(
+        "TBL", rows,
+        [{"header": "Acc", "wrapper_idx": 0, "stat": "acc"}],
+        emoji_config={"mode": "single", "wrapper_idx": 1, "stat": "acc"},
+    )
+    _, _, values = viz.apply("{{TBL}}")
+    md = values["TBL"]
+    # Short row should render without emoji (excluded from ranking).
+    assert "| Short |" in md
+
+
+def test_classifier_stat_accepts_TP_FP_TN_FN():
+    """TP/FP/TN/FN are documented and accessible via specify_stats."""
+    ds = _make_ds(n=200)
+    viz = AutoVisualizer(ds, val_split=0.2)
+    viz.bind_classifier_threshold(
+        ["human_score", "ai_score"], [False, True], _overall_mask,
+        "accuracy", name="clf",
+    ).specify_stats(threshold_value="T")
+
+    cw = viz.bind_classifier_stat(
+        ["human_score", "ai_score"], [False, True], _overall_mask,
+        threshold_id="T", name="clf",
+    )
+    cw.specify_stats(acc="ACC", TP="TP", FP="FP", TN="TN", FN="FN")
+    _, _, values = viz.apply("{{ACC}} {{TP}} {{FP}} {{TN}} {{FN}}")
+    assert values["TP"] >= 0
+    assert values["FP"] >= 0
+    assert values["TN"] >= 0
+    assert values["FN"] >= 0
+    # Test split is 80% of 200 = 160 rows. compute_classifier_metrics counts
+    # both human and ai columns, so TP+FP+TN+FN = 320 (160 human + 160 ai).
+    total = values["TP"] + values["FN"] + values["FP"] + values["TN"]
+    assert total == 320, f"expected 320 (160 human + 160 ai), got {total}"
