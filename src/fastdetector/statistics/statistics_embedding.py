@@ -134,9 +134,12 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
             edit = torch.from_numpy(edit)
             
         if src.ndim != 2 or edit.ndim != 2 or src.shape[0] == 0 or edit.shape[0] == 0:
-            precisions.append(1.0)
-            recalls.append(1.0)
-            f1s.append(1.0)
+            # Empty text(s): no tokens to match → zero similarity → distance = 1.0
+            # Previously returned (1.0, 1.0, 1.0) which after the 1-x transform
+            # became (0.0, 0.0, 0.0), implying maximum similarity for empty texts.
+            precisions.append(0.0)
+            recalls.append(0.0)
+            f1s.append(0.0)
             continue
             
         sim_matrix = torch.mm(edit, src.t())  # M x NN
