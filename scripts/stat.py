@@ -155,9 +155,9 @@ def make_llm_metrics_processor(
                 if stat_config.entropy:
                     result[f"{col}_entropy{suffix}"] = entropies_approx(top_lp, vocab_size=stat_config.llm_vocab_size)
                 if stat_config.topp_outlier:
-                    result[f"{col}_topp_outlier{suffix}"] = top_p_outlier_percentages(top_lp, token_lps, 0.95)
+                    result[f"{col}_topp_outlier{suffix}"] = top_p_outlier_percentages(top_lp, token_lps, stat_config.topp_threshold)
                 if stat_config.topk_outlier:
-                    result[f"{col}_topk_outlier{suffix}"] = top_k_outlier_percentages(top_lp, token_lps, 50)
+                    result[f"{col}_topk_outlier{suffix}"] = top_k_outlier_percentages(top_lp, token_lps, stat_config.topk_threshold)
                 if stat_config.fastdetectgpt_score:
                     result[f"{col}_fastdetectgpt{suffix}"] = fastdetectgpt_scores_approx(token_lps, top_lp, vocab_size=stat_config.llm_vocab_size)
 
@@ -286,6 +286,23 @@ def compute_llm_metrics(ds, stat_config: StatConfig, globals_config):
     ])
     if not need_llm:
         return ds, []
+
+    # Fail fast on mis-configured outlier thresholds. The top-k metric
+    # needs at least ``topk_threshold`` top logprobs at every position;
+    # otherwise the k-th largest logprob is undefined and the metric
+    # would silently return NaN for every text. The top-p threshold must
+    # be in (0, 1] for the cumulative-mass logic to make sense.
+    if stat_config.topk_outlier and stat_config.topk_threshold > stat_config.top_logprobs_k:
+        raise ValueError(
+            f"topk_threshold ({stat_config.topk_threshold}) is greater than "
+            f"top_logprobs_k ({stat_config.top_logprobs_k}). The top-k outlier "
+            f"metric needs at least topk_threshold top logprobs per position. "
+            f"Either lower topk_threshold or raise top_logprobs_k in the stat config."
+        )
+    if stat_config.topp_outlier and not (0 < stat_config.topp_threshold <= 1):
+        raise ValueError(
+            f"topp_threshold must be in (0, 1], got {stat_config.topp_threshold}."
+        )
 
     cols_to_remove = []
 

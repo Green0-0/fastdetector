@@ -151,6 +151,13 @@ class StatConfig(BaseModel):
     fastdetectgpt_score: bool
     reranker_score: bool
 
+    # Thresholds for the outlier metrics. ``topk_threshold`` must be
+    # ``<= top_logprobs_k`` or the metric is undefined for every position
+    # (the k-th largest logprob cannot be computed) and the metric will
+    # return NaN for every text.
+    topp_threshold: float = 0.95
+    topk_threshold: int = 50
+
     # Runtime & Optimization Flags
     threshold_type: str
     remove_columns_afterwards: bool
