@@ -18,8 +18,7 @@ from fastdetector.statistics.plotting import (
     get_confusion_matrix,
     get_scatterplot,
 )
-from fastdetector.statistics.statistics_basic import global_ngram_analysis, pairwise_jaccards
-
+from fastdetector.statistics.statistics_basic import pairwise_jaccards
 
 def _collect_column_lists(config: StatConfig) -> dict:
     """Determine which columns to use for summary stats, histograms, etc.
@@ -90,18 +89,11 @@ def _collect_column_lists(config: StatConfig) -> dict:
             if config.fastdetectgpt_score:
                 summary_stat_columns.extend([f"{col_a}_fastdetectgpt{suffix}", f"{col_b}_fastdetectgpt{suffix}"])
                 histogram_columns.append(f"{col_a}_fastdetectgpt{suffix}/{col_b}_fastdetectgpt{suffix}")
-                # FastDetectGPT assigns HIGHER scores to AI text (positive conditional
-                # probability curvature). The classifier uses "score > threshold → positive",
-                # so AI (col_b) must be the positive class for the direction to be correct.
                 classifier_columns.append(f"{col_b}_fastdetectgpt{suffix}:true/{col_a}_fastdetectgpt{suffix}:false")
 
         if config.binoculars_score and len(config.llm_checkpoints) >= 2:
             summary_stat_columns.extend([f"{col_a}_binoculars", f"{col_b}_binoculars"])
             histogram_columns.append(f"{col_a}_binoculars/{col_b}_binoculars")
-            # Binoculars (log(PPL_performer) / X-PPL(observer, performer)):
-            # AI text has LOWER scores (B < threshold), human text has B ≈ 1 or higher.
-            # The classifier uses "score > threshold → positive", so human (col_a)
-            # is the positive class (higher score = more likely human).
             classifier_columns.append(f"{col_a}_binoculars:true/{col_b}_binoculars:false")
 
     if pairwise_correlations and len(pairwise_correlations) > 1:
@@ -115,65 +107,6 @@ def _collect_column_lists(config: StatConfig) -> dict:
         "pairwise_correlations": pairwise_correlations,
     }
 
-
-def _build_text_analysis(ds: Dataset, text_columns: List[str]) -> str:
-    """Build the "Text Analysis" markdown section (n-gram comparison).
-    """
-    md = ""
-    if not text_columns:
-        return md
-
-    for col_a, col_b in itertools.combinations(text_columns, 2):
-        if col_a not in ds.column_names or col_b not in ds.column_names:
-            print(f"Warning: {col_a} or {col_b} not in dataset. Skipping text analysis.")
-            continue
-
-        md += f"## Text Analysis: {col_a} vs {col_b}\n"
-        texts_a = ds[col_a]
-        texts_b = ds[col_b]
-
-        md += "### N-gram Analysis (Top 10)\n"
-        for n in [1, 2, 3]:
-            ngrams_a = global_ngram_analysis(texts_a, n)
-            ngrams_b = global_ngram_analysis(texts_b, n)
-
-            all_keys = set(ngrams_a.keys()).union(set(ngrams_b.keys()))
-            changes_shared = []
-            changes_exclusive = []
-            for k in all_keys:
-                val_a = ngrams_a.get(k, 0)
-                val_b = ngrams_b.get(k, 0)
-                diff = val_b - val_a
-                if val_a > 0 and val_b > 0:
-                    prop_change = diff / val_a
-                    changes_shared.append((k, diff, prop_change, val_a, val_b))
-                else:
-                    changes_exclusive.append((k, diff, val_a, val_b))
-
-            top5_shared = sorted(changes_shared, key=lambda x: (abs(x[2]), abs(x[1])), reverse=True)[:5]
-            top5_exclusive = sorted(changes_exclusive, key=lambda x: abs(x[1]), reverse=True)[:5]
-
-            md += f"\n#### n={n}\n"
-            md += f"**Shared N-grams (Top 5 by Proportion Change):**\n"
-            if not top5_shared:
-                md += "- None\n"
-            for k, diff, prop_change, val_a, val_b in top5_shared:
-                md += f"- '{k}': {diff:+d} ({prop_change:+.2%})\n"
-
-            md += f"\n**Exclusive N-grams (Top 5 by Frequency):**\n"
-            if not top5_exclusive:
-                md += "- None\n"
-            for k, diff, val_a, val_b in top5_exclusive:
-                md += f"- '{k}': {diff:+d} ({col_b}: {val_b}, {col_a}: {val_a})\n"
-
-        global_jaccard = pairwise_jaccards(
-            [" ".join([str(t) for t in texts_a if t])],
-            [" ".join([str(t) for t in texts_b if t])],
-            1,
-        )[0]
-        md += f"\n### Global Jaccard (n=1)\n{global_jaccard:.4f}\n\n"
-
-    return md
 
 
 def _build_summary_statistics(ds: Dataset, columns: List[str]) -> str:
@@ -392,7 +325,6 @@ def build_readme_content(ds: Dataset, config: StatConfig) -> Tuple[str, Dict[str
     charts: Dict[str, Any] = {}
 
     md = "# FastDetector Dataset Metrics\n\n"
-    md += _build_text_analysis(ds, text_columns)
     md += _build_summary_statistics(ds, column_lists["summary_stat_columns"])
     md += _build_pearson_correlations(ds, column_lists["pairwise_correlations"])
     md += _build_classifier_section(ds, column_lists["classifier_columns"], config.threshold_type, charts)
