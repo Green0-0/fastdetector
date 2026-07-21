@@ -3,6 +3,15 @@
 Loads globals.toml + stat.toml, concatenates ``--total-shards`` shards of
 the stat-suffixed dataset, configures an :class:`AutoVisualizer` with the
 metrics enabled in the stat config, and uploads the README + charts to the Hub.
+
+Note on threshold sweeping: stat_readme creates ``AutoVisualizer(ds,
+val_split=None)`` and passes ``split="test"`` to ``bind_classifier_threshold``.
+This means thresholds are swept AND evaluated on the full dataset (no
+holdout) — which matches the pre-PR behavior of
+``frontend/readme.py::_build_classifier_section``. The AutoVisualizer's
+"no wrapper ever sees the full unsplit dataset" design principle applies
+to the eval pathway (which uses a real val split); stat_readme intentionally
+opts out because the stat pipeline has no separate validation set.
 """
 
 import argparse
@@ -122,25 +131,45 @@ def _classifier_setups(config: StatConfig) -> list[tuple[str, list[str], list[bo
     return setups
 
 
+def _safe_name(name: str) -> str:
+    """Sanitize a classifier name into a template-ID-safe prefix.
+
+    Replaces all non-alphanumeric characters with underscores, collapses
+    consecutive underscores, strips leading/trailing underscores, and
+    uppercases. This is the same sanitizer used to register the IDs in
+    ``_build_readme`` — keep them in sync so the template references match.
+    """
+    raw = re.sub(r"[^a-zA-Z0-9]", "_", name)
+    return re.sub(r"_+", "_", raw).strip("_").upper()
+
+
 # ---------------------------------------------------------------------------
 # README template builder
 # ---------------------------------------------------------------------------
 
 def _build_template(
-    stat_wrappers: list[tuple[str, str]],  # (column, stat_id_prefix)
-    classifier_thresholds: list[tuple[str, str, str]],  # (name, threshold_id, sweep_plot_id)
-    classifier_stats: list[tuple[str, str, str]],  # (name, threshold_id, stat_id_prefix)
+    has_summary_table: bool,
+    classifier_specs: list[dict],  # {name, threshold_id, sweep_id, opt_acc_id, cm_id}
     histogram_ids: list[str],
     scatterplot_ids: list[str],
     correlation_id: str,
 ) -> str:
-    """Build the readme template string with {{ID}} placeholders."""
+    """Build the readme template string with ``{{ID}}`` placeholders.
+
+    All IDs (``threshold_id``, ``sweep_id``, ``opt_acc_id``, ``cm_id``) are
+    passed in already-sanitized from ``_build_readme`` so the template and
+    the binding site use exactly the same string. This avoids the previous
+    bug where ``_build_template`` re-derived ``cm_id`` with a weaker
+    sanitizer that diverged for names containing ``(``, ``)``, ``:``, or
+    consecutive underscores.
+    """
     lines: list[str] = []
     lines.append("# FastDetector Dataset Metrics\n")
 
     # --- Summary Statistics table ---
-    lines.append("## Summary Statistics\n")
-    lines.append("{{SUMMARY_STATS_TABLE}}\n")
+    if has_summary_table:
+        lines.append("## Summary Statistics\n")
+        lines.append("{{SUMMARY_STATS_TABLE}}\n")
 
     # --- Pearson Correlations ---
     if correlation_id:
@@ -148,22 +177,23 @@ def _build_template(
         lines.append(f"{{{{{correlation_id}}}}}\n")
 
     # --- Classifier sections ---
-    if classifier_thresholds:
+    if classifier_specs:
         lines.append("## Classifier Optimal Thresholds\n")
-        for name, threshold_id, sweep_id in classifier_thresholds:
-            lines.append(f"- **{name}**: Threshold {{{{{threshold_id}}}}} "
-                         f"(Accuracy {{{{{sweep_id.replace('SWEEP', 'OPT_ACC')}}}}})\n")
+        for spec in classifier_specs:
+            lines.append(
+                f"- **{spec['name']}**: Threshold {{{{{spec['threshold_id']}}}}} "
+                f"(Accuracy {{{{{spec['opt_acc_id']}}}}})\n"
+            )
         lines.append("")
 
         lines.append("## Confusion Matrices\n")
-        for name, threshold_id, _ in classifier_thresholds:
-            cm_id = f"{name.upper().replace(' ', '_').replace('-', '_')}_CM"
-            lines.append(f"{{{{{cm_id}}}}}\n")
+        for spec in classifier_specs:
+            lines.append(f"{{{{{spec['cm_id']}}}}}\n")
         lines.append("")
 
         lines.append("## Classifier Sweep Plots\n")
-        for name, _, sweep_id in classifier_thresholds:
-            lines.append(f"{{{{{sweep_id}}}}}\n")
+        for spec in classifier_specs:
+            lines.append(f"{{{{{spec['sweep_id']}}}}}\n")
         lines.append("")
 
     # --- Histograms ---
@@ -226,11 +256,14 @@ def main() -> None:
 
 def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
     """Configure an AutoVisualizer and produce the readme + charts."""
+    # val_split=None: stat_readme has no separate validation set, so
+    # bind_classifier_threshold below passes split="test" intentionally —
+    # the sweep runs on the full dataset. This matches the pre-PR behavior
+    # of frontend/readme.py::_build_classifier_section.
     viz = AutoVisualizer(ds, val_split=None)
 
     # --- Bind univariate stats for summary table ---
     metric_cols = _metric_columns(config)
-    summary_wrappers: list[tuple[str, object]] = []  # (column, wrapper)
     stat_rows = []
     stat_columns = [
         {"header": "Mean", "wrapper_idx": 0, "stat": "mean"},
@@ -244,7 +277,7 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
             print(f"Warning: column '{col}' not found in dataset. Skipping.")
             continue
         w = viz.bind_stat(col, _overall_mask, name=col)
-        safe = col.upper().replace(" ", "_")
+        safe = _safe_name(col)
         w.specify_stats(
             mean=f"{safe}_MEAN",
             std=f"{safe}_STD",
@@ -252,40 +285,40 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
             min=f"{safe}_MIN",
         )
         stat_rows.append({"name": col, "cells": [w]})
-        summary_wrappers.append((col, w))
 
-    if stat_rows:
+    has_summary_table = bool(stat_rows)
+    if has_summary_table:
         viz.specify_table("SUMMARY_STATS_TABLE", stat_rows, stat_columns)
 
     # --- Bind pearson correlations for distance metrics ---
-    correlation_cols = []
     correlation_wrappers = []
     for col in ["pairwise_cosdist", "pairwise_bertscore_f1", "pairwise_moverscore",
                 "pairwise_cross_encoder", "pairwise_softngram"]:
         if col in ds.column_names:
             w = viz.bind_stat(col, _overall_mask, name=col)
-            correlation_cols.append(col)
             correlation_wrappers.append(w)
 
-    if len(correlation_wrappers) >= 2:
-        viz.specify_pearson("CORRELATIONS", correlation_wrappers,
+    correlation_id = "CORRELATIONS" if len(correlation_wrappers) >= 2 else ""
+    if correlation_id:
+        viz.specify_pearson(correlation_id, correlation_wrappers,
                             title="Pearson Correlation Coefficients")
 
     # --- Bind classifier thresholds + stats ---
-    classifier_setups = _classifier_setups(config)
-    classifier_thresholds = []  # (name, threshold_id, sweep_id)
-    histogram_ids = []
+    # Each spec carries the full set of IDs (threshold, sweep, opt_acc, cm)
+    # so _build_template doesn't need to re-derive them with a divergent
+    # sanitizer. The previous code re-derived cm_id and opt_acc_id from
+    # `name` with a weaker sanitizer, which crashed for any name containing
+    # `(`, `)`, `:`, or consecutive underscores.
+    classifier_specs: list[dict] = []
+    histogram_ids: list[str] = []
 
-    for name, columns, classes, flip in classifier_setups:
-        # Skip if any required column is missing from the dataset
+    for name, columns, classes, flip in _classifier_setups(config):
         missing = [c for c in columns if c not in ds.column_names]
         if missing:
             print(f"Warning: columns {missing} not found for classifier '{name}'. Skipping.")
             continue
 
-        safe = name.upper().replace(" ", "_").replace("-", "_").replace("(", "_").replace(")", "").replace(":", "_")
-        safe = re.sub(r"_+", "_", safe).strip("_")
-
+        safe = _safe_name(name)
         threshold_id = f"{safe}_THRESH"
         sweep_id = f"{safe}_SWEEP"
         opt_acc_id = f"{safe}_OPT_ACC"
@@ -298,7 +331,7 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
             threshold_type=config.threshold_type,
             flip_class=flip,
             name=name,
-            split="test",  # stat_readme uses no val split; sweep on full dataset
+            split="test",  # see val_split note above
         )
         tw.specify_stats(
             threshold_value=threshold_id,
@@ -315,7 +348,13 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
         )
         cw.specify_stats(confusion_matrix=cm_id)
 
-        classifier_thresholds.append((name, threshold_id, sweep_id))
+        classifier_specs.append({
+            "name": name,
+            "threshold_id": threshold_id,
+            "sweep_id": sweep_id,
+            "opt_acc_id": opt_acc_id,
+            "cm_id": cm_id,
+        })
 
         # Histogram for the classifier scores
         hist_wrappers = []
@@ -329,12 +368,11 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
         histogram_ids.append(hist_id)
 
     # --- Scatterplots: distance metrics vs each other ---
-    scatterplot_ids = []
+    scatterplot_ids: list[str] = []
     if len(correlation_wrappers) > 1:
-        for i in range(1, len(correlation_wrappers)):
-            x_w = correlation_wrappers[0]
-            y_w = correlation_wrappers[i]
-            sid = f"SCATTER_{y_w.name.upper().replace(' ', '_')}_VS_{x_w.name.upper().replace(' ', '_')}"
+        x_w = correlation_wrappers[0]
+        for y_w in correlation_wrappers[1:]:
+            sid = f"SCATTER_{_safe_name(y_w.name)}_VS_{_safe_name(x_w.name)}"
             viz.specify_scatterplot(
                 sid, x_w, [y_w],
                 xlabel=x_w.name, ylabel="Value",
@@ -345,16 +383,15 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
 
     # --- Build template ---
     template = _build_template(
-        stat_wrappers=[(col, w) for col, w in summary_wrappers],
-        classifier_thresholds=classifier_thresholds,
-        classifier_stats=[],
+        has_summary_table=has_summary_table,
+        classifier_specs=classifier_specs,
         histogram_ids=histogram_ids,
         scatterplot_ids=scatterplot_ids,
-        correlation_id="CORRELATIONS" if len(correlation_wrappers) >= 2 else "",
+        correlation_id=correlation_id,
     )
 
     # --- Apply ---
-    readme, charts, values = viz.apply(template)
+    readme, charts, _ = viz.apply(template)
     return readme, charts
 
 
