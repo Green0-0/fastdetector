@@ -9,7 +9,6 @@ the README + charts + summary_stats.json to the Hub.
 import argparse
 import json
 import re
-import time
 
 import numpy as np
 from datasets import Dataset
@@ -135,6 +134,10 @@ def _safe_name(name: str) -> str:
     return collapsed.upper()
 
 
+# ---------------------------------------------------------------------------
+# README builder
+# ---------------------------------------------------------------------------
+
 class Subset:
     """A named subset of the dataset, defined by a mask function."""
     def __init__(self, name: str, mask_fn):
@@ -142,18 +145,6 @@ class Subset:
         self.mask_fn = mask_fn
         self.safe = _safe_name(name)
 
-
-class ClassifierStatEntry:
-    """Helper: tracks a subset + its classifier wrapper + kind (score/bin)."""
-    def __init__(self, subset: Subset, wrapper, kind: str):
-        self.subset = subset
-        self.wrapper = wrapper
-        self.kind = kind
-
-
-# ---------------------------------------------------------------------------
-# README builder
-# ---------------------------------------------------------------------------
 
 def _build_readme(
     result_ds: Dataset,
@@ -242,8 +233,10 @@ def _build_readme(
         )
 
     # --- Bind classifier stats per subset ---
-    score_cls: list[ClassifierStatEntry] = []
-    bin_cls: list[ClassifierStatEntry] = []
+    # Track {subset -> wrapper} so the summary/all-stats tables can look
+    # up the score/bin wrapper for each subset without scanning.
+    score_by_subset: dict[Subset, object] = {}
+    bin_by_subset: dict[Subset, object] = {}
 
     for sub in subsets:
         s_score = viz.bind_classifier_stat(
@@ -261,7 +254,7 @@ def _build_readme(
             fnr=f"{sub.safe}_SCORE_FNR",
             confusion_matrix=f"{sub.safe}_SCORE_CM",
         )
-        score_cls.append(ClassifierStatEntry(sub, s_score, "score"))
+        score_by_subset[sub] = s_score
 
         s_bin = viz.bind_classifier_stat(
             column_names=bin_columns,
@@ -278,7 +271,7 @@ def _build_readme(
             fnr=f"{sub.safe}_BIN_FNR",
             confusion_matrix=f"{sub.safe}_BIN_CM",
         )
-        bin_cls.append(ClassifierStatEntry(sub, s_bin, "bin"))
+        bin_by_subset[sub] = s_bin
 
     # --- Bind AI score as stat for correlations + scatterplots ---
     dist_wrappers = []
@@ -319,31 +312,25 @@ def _build_readme(
     }
 
     summary_subsets = [subsets[0]] + prompt_subsets + model_subsets
-    summary_rows = []
-    # Build a quick lookup so we don't scan score_cls/bin_cls per subset.
-    score_by_subset = {e.subset: e.wrapper for e in score_cls}
-    bin_by_subset = {e.subset: e.wrapper for e in bin_cls}
-    for sub in summary_subsets:
-        summary_rows.append({
-            "name": sub.name,
-            "cells": [bin_by_subset[sub], score_by_subset[sub]],
-        })
+    summary_rows = [
+        {"name": sub.name, "cells": [bin_by_subset[sub], score_by_subset[sub]]}
+        for sub in summary_subsets
+    ]
 
     viz.specify_table(
         "SUMMARY_TABLE",
         summary_rows,
         summary_columns,
         emoji_config=summary_emoji,
+        row_header="Subset",
     )
 
     # --- All-statistics table (cross-product) ---
     if crossproduct_subsets:
-        all_rows = []
-        for sub in crossproduct_subsets:
-            all_rows.append({
-                "name": sub.name,
-                "cells": [bin_by_subset[sub], score_by_subset[sub]],
-            })
+        all_rows = [
+            {"name": sub.name, "cells": [bin_by_subset[sub], score_by_subset[sub]]}
+            for sub in crossproduct_subsets
+        ]
         viz.specify_table(
             "ALL_STATS_TABLE",
             all_rows,
@@ -354,13 +341,13 @@ def _build_readme(
                 "wrapper_idx": 1,
                 "stat": "acc",
             },
+            row_header="Subset",
         )
 
     # --- Per-subset histograms and scatterplots ---
     # Cross-product subsets get only a table row in "All Statistics"; their
     # histograms/scatterplots are not generated (matching the old behavior).
-    plot_subsets = [subsets[0]] + prompt_subsets + model_subsets
-    for sub in plot_subsets:
+    for sub in summary_subsets:
         h_w = viz.bind_stat("human_editlens_score", sub.mask_fn, name=f"{sub.name} Human")
         a_w = viz.bind_stat("ai_editlens_score", sub.mask_fn, name=f"{sub.name} AI")
         viz.specify_histogram(
@@ -377,10 +364,7 @@ def _build_readme(
             title=f"EditLens Bins: {sub.name}",
         )
 
-        # Scatterplot: AI score vs each distance metric (per-subset).
-        # dw.name is the column name (set above as `m`); use it directly
-        # instead of re-indexing eval_config.distance_metrics, which would
-        # crash if any configured metric is missing from the dataset.
+        # Scatterplot: AI score vs each distance metric.
         if dist_wrappers:
             for dw in dist_wrappers:
                 dw_sub = viz.bind_stat(dw.name, sub.mask_fn, name=dw.name)
@@ -396,13 +380,16 @@ def _build_readme(
                 )
 
     # --- Build template ---
+    if "editlens_model" in result_ds.column_names:
+        unique_editlens_models = sorted(set(result_ds["editlens_model"]))
+    else:
+        unique_editlens_models = ["Unknown"]
+
     template = _build_template(
         eval_config=eval_config,
-        subsets=subsets,
-        plot_subsets=plot_subsets,
+        subsets=summary_subsets,
         unique_mg_strs=unique_mg_strs,
-        unique_editlens_models=sorted(set(result_ds["editlens_model"]))
-        if "editlens_model" in result_ds.column_names else ["Unknown"],
+        unique_editlens_models=unique_editlens_models,
         skip_val=skip_val,
         has_prompts=has_prompts,
         has_model_genconfig=has_model_genconfig,
@@ -439,7 +426,6 @@ def _build_readme(
 def _build_template(
     eval_config: EvalConfig,
     subsets: list[Subset],
-    plot_subsets: list[Subset],
     unique_mg_strs: list,
     unique_editlens_models: list,
     skip_val: bool,
@@ -495,7 +481,7 @@ def _build_template(
 
     # --- Per-subset plots (Overall + per-prompt + per-model, no cross-product) ---
     lines.append("## Summary Plots\n")
-    for sub in plot_subsets:
+    for sub in subsets:
         lines.append(f"### {sub.name}\n")
         lines.append(f"{{{{{sub.safe}_SCORE_CM}}}}")
         lines.append(f"{{{{{sub.safe}_BIN_CM}}}}\n")
@@ -520,7 +506,6 @@ def _build_template(
 # ---------------------------------------------------------------------------
 
 def main():
-    start_time = time.time()
     parser = argparse.ArgumentParser(description="Run EditLens inference and generate README metrics.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--eval-config", type=str, default="config/eval.toml")
@@ -641,38 +626,36 @@ def _compute_subset_corrs(
     """Compute Pearson correlations between AI scores/bins and distance metrics.
 
     Mirrors the old ``compute_metrics(... )["corrs"]`` field: for each
-    distance metric, the correlation with ``ai_editlens_score`` (returned in
-    the first dict) and with ``ai_editlens_bucket`` (second dict).
+    distance metric, the correlation with ``ai_editlens_score`` (first dict)
+    and with ``ai_editlens_bucket`` (second dict).
 
     NaN is returned when there are fewer than 2 rows or the metric column is
-    missing/length-mismatched.
+    missing/length-mismatched/non-numeric.
     """
     mask = mask_fn(result_ds)
     n = int(np.sum(mask))
-    score_corrs: dict = {}
-    bin_corrs: dict = {}
+
+    nan_pair = ({m: float("nan") for m in distance_metrics},
+                {m: float("nan") for m in distance_metrics})
     if n < 2:
-        for m in distance_metrics:
-            score_corrs[m] = float("nan")
-            bin_corrs[m] = float("nan")
-        return score_corrs, bin_corrs
+        return nan_pair
 
     a_scores = np.array(result_ds["ai_editlens_score"], dtype=float)[mask]
     a_bins = np.array(result_ds["ai_editlens_bucket"], dtype=float)[mask]
+
+    score_corrs: dict = {}
+    bin_corrs: dict = {}
     for m in distance_metrics:
         if m not in result_ds.column_names:
-            score_corrs[m] = float("nan")
-            bin_corrs[m] = float("nan")
+            score_corrs[m] = bin_corrs[m] = float("nan")
             continue
         try:
             dist_arr = np.array(result_ds[m], dtype=float)[mask]
         except (ValueError, TypeError):
-            score_corrs[m] = float("nan")
-            bin_corrs[m] = float("nan")
+            score_corrs[m] = bin_corrs[m] = float("nan")
             continue
         if len(dist_arr) != n:
-            score_corrs[m] = float("nan")
-            bin_corrs[m] = float("nan")
+            score_corrs[m] = bin_corrs[m] = float("nan")
             continue
         try:
             score_corrs[m] = float(np.corrcoef(a_scores, dist_arr)[0, 1])
@@ -709,12 +692,12 @@ def _build_summary_stats(
     def _get(subset_safe: str, kind: str, stat: str):
         return values.get(f"{subset_safe}_{kind}_{stat.upper()}")
 
-    # Pull emoji markers from the rendered tables ( Overall + prompts +
-    # models are in SUMMARY_TABLE; cross-product is in ALL_STATS_TABLE ).
+    # Emoji markers differ: summary table rows get markers from
+    # SUMMARY_TABLE; cross-product rows get markers from ALL_STATS_TABLE.
     summary_emojis = viz.get_table_row_emojis("SUMMARY_TABLE")
     all_stats_emojis = viz.get_table_row_emojis("ALL_STATS_TABLE")
 
-    def _subset_entry(sub: "Subset"):
+    def _entry(sub: "Subset", emoji: str) -> dict:
         score_corrs, bin_corrs = _compute_subset_corrs(
             result_ds, sub.mask_fn, distance_metrics
         )
@@ -735,37 +718,15 @@ def _build_summary_stats(
                 "fnr": _get(sub.safe, "BIN", "FNR"),
                 "corrs": bin_corrs,
             },
-            "emoji": summary_emojis.get(sub.name, ""),
+            "emoji": emoji,
         }
 
-    def _crossproduct_entry(sub: "Subset"):
-        score_corrs, bin_corrs = _compute_subset_corrs(
-            result_ds, sub.mask_fn, distance_metrics
-        )
-        return {
-            "score": {
-                "acc": _get(sub.safe, "SCORE", "ACC"),
-                "f1": _get(sub.safe, "SCORE", "F1"),
-                "auroc": _get(sub.safe, "SCORE", "AUROC"),
-                "tpr": _get(sub.safe, "SCORE", "TPR"),
-                "fnr": _get(sub.safe, "SCORE", "FNR"),
-                "corrs": score_corrs,
-            },
-            "bin": {
-                "acc": _get(sub.safe, "BIN", "ACC"),
-                "f1": _get(sub.safe, "BIN", "F1"),
-                "auroc": _get(sub.safe, "BIN", "AUROC"),
-                "tpr": _get(sub.safe, "BIN", "TPR"),
-                "fnr": _get(sub.safe, "BIN", "FNR"),
-                "corrs": bin_corrs,
-            },
-            "emoji": all_stats_emojis.get(sub.name, ""),
-        }
+    # Build a name -> Subset lookup for summary_subsets to avoid O(n^2) scans.
+    summary_by_name = {s.name: s for s in summary_subsets}
 
-    # Look up Subset objects by name for clean iteration.
-    overall_sub = next(s for s in subsets if s.name == "Overall")
+    overall_sub = summary_by_name.get("Overall", subsets[0])
     summary = {
-        "overall": _subset_entry(overall_sub),
+        "overall": _entry(overall_sub, summary_emojis.get("Overall", "")),
         "prompts": {},
         "models": {},
         "splits": {},
@@ -773,18 +734,18 @@ def _build_summary_stats(
 
     if has_prompts:
         for p in unique_prompts:
-            name = f"Prompt: {p}"
-            sub = next(s for s in summary_subsets if s.name == name)
-            summary["prompts"][p] = _subset_entry(sub)
+            sub = summary_by_name[f"Prompt: {p}"]
+            summary["prompts"][p] = _entry(sub, summary_emojis.get(sub.name, ""))
 
     if has_model_genconfig:
         for mg in unique_mg_strs:
-            name = f"Model: {mg}"
-            sub = next(s for s in summary_subsets if s.name == name)
-            summary["models"][mg] = _subset_entry(sub)
+            sub = summary_by_name[f"Model: {mg}"]
+            summary["models"][mg] = _entry(sub, summary_emojis.get(sub.name, ""))
 
     for sub in crossproduct_subsets:
-        summary["splits"][sub.name] = _crossproduct_entry(sub)
+        summary["splits"][sub.name] = _entry(
+            sub, all_stats_emojis.get(sub.name, "")
+        )
 
     return summary
 

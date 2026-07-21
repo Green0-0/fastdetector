@@ -288,7 +288,10 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
 
     has_summary_table = bool(stat_rows)
     if has_summary_table:
-        viz.specify_table("SUMMARY_STATS_TABLE", stat_rows, stat_columns)
+        viz.specify_table(
+            "SUMMARY_STATS_TABLE", stat_rows, stat_columns,
+            row_header="Metric",
+        )
 
     # --- Bind pearson correlations for distance metrics ---
     correlation_wrappers = []
