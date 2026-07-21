@@ -481,7 +481,14 @@ class AutoVisualizer:
             )
 
         col_data = ds[column]
-        arr = np.array(col_data, dtype=float)[mask]
+        try:
+            arr = np.array(col_data, dtype=float)[mask]
+        except (ValueError, TypeError) as e:
+            raise ValueError(
+                f"Column '{column}' could not be converted to float for "
+                f"split '{split}'. AutoVisualizer only handles numeric "
+                f"columns. Original error: {e}"
+            ) from e
 
         self._extract_cache[cache_key] = arr
         return arr
@@ -1004,11 +1011,14 @@ class AutoVisualizer:
                 stat_2 = col.get("stat_2")
                 if stat_2 is not None:
                     val2 = wrapper._values.get(stat_2)
-                    fmt = col.get("format", "{value:.4f} ± {value_2:.4f}")
                     if val2 is not None:
+                        fmt = col.get("format", "{value:.4f} ± {value_2:.4f}")
                         cells.append(fmt.format(value=val, value_2=val2))
                     else:
-                        cells.append(col.get("format", "{value:.4f}").format(value=val))
+                        # Hardcoded fallback: the composite format string
+                        # would crash with KeyError on {value_2} if val2 is
+                        # missing, so use a simple single-value format.
+                        cells.append(f"{val:.4f}")
                 else:
                     fmt = col.get("format", "{value:.4f}")
                     cells.append(fmt.format(value=val))
@@ -1054,10 +1064,21 @@ class AutoVisualizer:
             if id_type == "plot":
                 return f"![{id_str}]({id_str}.png)"
             elif id_type == "markdown":
-                return str(value) if value is not None else ""
+                if value is None:
+                    raise ValueError(
+                        f"Template ID '{id_str}' is registered as markdown but "
+                        f"was not computed. This usually means the spec was "
+                        f"registered but unreachable from the template; either "
+                        f"reference it or remove the specify_* call."
+                    )
+                return str(value)
             else:  # scalar
                 if value is None:
-                    return ""
+                    raise ValueError(
+                        f"Template ID '{id_str}' is registered as a scalar but "
+                        f"was not computed. Check that the wrapper's _resolve "
+                        f"actually populates this stat."
+                    )
                 if fmt:
                     return format(value, fmt)
                 if isinstance(value, float):

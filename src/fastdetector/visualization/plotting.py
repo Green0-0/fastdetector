@@ -122,50 +122,6 @@ def get_sweep_plot(
     return _save_fig_to_png()
 
 
-def get_confusion_matrix_plot(
-    tp: int,
-    fp: int,
-    tn: int,
-    fn: int,
-    title: str,
-    figsize: tuple[int, int] = (5, 4),
-) -> bytes:
-    """Render a confusion matrix heatmap as PNG bytes.
-
-    Args:
-        tp, fp, tn, fn: Confusion matrix counts.
-        title: Plot title.
-        figsize: Figure size.
-
-    Returns:
-        Plot as PNG bytes.
-    """
-    cm = np.array([[tp, fn], [fp, tn]])
-
-    plt.figure(figsize=figsize)
-    im = plt.imshow(cm, interpolation="nearest", cmap=plt.cm.Blues)
-    plt.colorbar(im)
-
-    classes = ["Positive", "Negative"]
-    tick_marks = [0, 1]
-    plt.xticks(tick_marks, classes)
-    plt.yticks(tick_marks, classes)
-
-    threshold_val = cm.max() / 2.0
-    for i in range(2):
-        for j in range(2):
-            plt.text(j, i, format(cm[i, j], "d"),
-                     horizontalalignment="center",
-                     color="white" if cm[i, j] > threshold_val else "black")
-
-    plt.ylabel("Actual")
-    plt.xlabel("Predicted")
-    plt.title(title)
-    plt.tight_layout()
-
-    return _save_fig_to_png()
-
-
 def format_confusion_matrix(
     tp: int,
     fp: int,
