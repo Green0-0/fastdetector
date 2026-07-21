@@ -497,6 +497,7 @@ dependencies = [
     { name = "datasets" },
     { name = "emoji" },
     { name = "huggingface-hub" },
+    { name = "langdetect" },
     { name = "levenshtein" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -518,6 +519,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.8.5" },
     { name = "emoji", specifier = ">=2.15.0" },
     { name = "huggingface-hub", specifier = ">=1.14.0" },
+    { name = "langdetect", specifier = ">=1.0.9" },
     { name = "levenshtein", specifier = ">=0.25.0" },
     { name = "matplotlib" },
     { name = "numpy", specifier = ">=1.26.0" },
@@ -961,6 +963,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/06/7399a607f434119c6e1fdc8ec89a8d51ccccadf3341dee4ead6bd14caaf5/kiwisolver-1.5.0-graalpy312-graalpy250_312_native-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c31c13da98624f957b0fb1b5bae5383b2333c2c3f6793d9825dd5ce79b525cb7", size = 194295, upload-time = "2026-03-09T13:15:38.22Z" },
     { url = "https://files.pythonhosted.org/packages/b5/91/53255615acd2a1eaca307ede3c90eb550bae9c94581f8c00081b6b1c8f44/kiwisolver-1.5.0-graalpy312-graalpy250_312_native-win_amd64.whl", hash = "sha256:1f1489f769582498610e015a8ef2d36f28f505ab3096d0e16b4858a9ec214f57", size = 75987, upload-time = "2026-03-09T13:15:39.65Z" },
 ]
+
+[[package]]
+name = "langdetect"
+version = "1.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/72/a3add0e4eec4eb9e2569554f7c70f4a3c27712f40e3284d483e88094cc0e/langdetect-1.0.9.tar.gz", hash = "sha256:cbc1fef89f8d062739774bd51eda3da3274006b3661d199c2655f6b3f6d605a0", size = 981474, upload-time = "2021-05-07T07:54:13.562Z" }
 
 [[package]]
 name = "levenshtein"

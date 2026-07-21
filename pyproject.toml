@@ -26,4 +26,5 @@ dependencies = [
     "peft>=0.19.1",
     "bitsandbytes>=0.49.2",
     "pydantic>=2.13.4",
+    "langdetect>=1.0.9",
 ]

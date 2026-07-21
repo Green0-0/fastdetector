@@ -91,6 +91,9 @@ class FilterConfig(BaseModel):
     output_shards: Optional[int] = None
     conditions: List[ConditionConfig] = []
     filter_type: str = "AND"
+    
+    # Langdetect threshold (0 to 1). If set, filter out rows where English prob < threshold.
+    langdetect_threshold: Optional[float] = None
 
 
 class EvalConfig(BaseModel):

@@ -1,4 +1,7 @@
 import argparse
+import os
+from langdetect import detect_langs
+from langdetect.lang_detect_exception import LangDetectException
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
@@ -84,6 +87,24 @@ def main():
     print(f"Filtering dataset with conditions: {conditions}")
     ds_filtered = apply_filter_conditions(ds, conditions, filter_config.filter_type)
 
+    if filter_config.langdetect_threshold is not None:
+        def is_highly_english(example):
+            text = example.get("collected_subset", "")
+            if not text or not text.strip():
+                return False
+            try:
+                langs = detect_langs(text)
+                for lang in langs:
+                    if lang.lang == 'en' and lang.prob >= filter_config.langdetect_threshold:
+                        return True
+                return False
+            except LangDetectException:
+                return False
+                
+        print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
+        num_proc = min(32, os.cpu_count() or 1)
+        ds_filtered = ds_filtered.filter(is_highly_english, num_proc=num_proc)
+
     filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
 
     if filter_config.output_shards is not None:
@@ -101,6 +122,7 @@ def main():
 ## Filtering Applied
 - Conditions: {conditions}
 - Filter type: {filter_config.filter_type}
+- Langdetect Threshold: {filter_config.langdetect_threshold}
 - Configs: {shard_names}
 - Rows before filter: {len(ds)}
 - Rows after filter: {len(ds_filtered)}
