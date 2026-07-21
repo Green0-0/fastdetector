@@ -17,17 +17,17 @@ threshold_type_score = "fpr_0_5pct"
 filter_type = "AND"
 
 [[filter_conditions]]
-column = "pairwise_cosdist_original_final_response"
+column = "pairwise_cosdist"
 operator = ">="
 value = 0.03
 
 [[filter_conditions]]
-column = "pairwise_softngram_original_final_response"
+column = "pairwise_softngram"
 operator = ">="
 value = 0.06
 
 # Distance metrics to plot in README
 distance_metrics = [
-    "pairwise_cosdist_original_final_response",
-    "pairwise_softngram_original_final_response"
+    "pairwise_cosdist",
+    "pairwise_softngram"
 ]

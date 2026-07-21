@@ -1,31 +1,32 @@
+"""CLI entry point: run EditLens inference and generate evaluation README.
+
+Loads a stat-suffix dataset, runs EditLens inference to produce score/bucket
+columns, configures an :class:`AutoVisualizer` with per-subset classifier
+bindings (overall / per-prompt-type / per-model / cross-product), and uploads
+the README + charts + summary_stats.json to the Hub.
+"""
+
 import argparse
 import json
-import time
+import re
 
 import numpy as np
+from datasets import Dataset
 
 from fastdetector.frontend.toml_config import EvalConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard
-from fastdetector.utils import upload_readme, apply_filter_conditions
-from fastdetector.statistics.statistics_utils import compute_auroc
-from fastdetector.statistics.plotting import (
-    get_histogram,
-    get_sweeping_classifier_plot,
-    get_confusion_matrix,
-    get_scatterplot,
-)
+from fastdetector.utils import load_dataset_auto_shard, upload_readme, apply_filter_conditions
 from fastdetector.modeling.editlens import (
     infer_n_buckets,
     get_model_and_tokenizer,
     compute_editlens_scores,
 )
+from fastdetector.visualization import AutoVisualizer
 
 
 # ---------------------------------------------------------------------------
-# Module-scope helpers
+# JSON encoder
 # ---------------------------------------------------------------------------
-
 
 class NumpyEncoder(json.JSONEncoder):
     """JSON encoder that handles numpy scalar/array types."""
@@ -40,166 +41,12 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def compute_metrics(h_vals, a_vals, threshold, dist_metrics_dict, flip_inequality=False):
-    """Compute classification metrics for human vs AI score distributions.
-
-    Treats values > threshold (or <= threshold if flip_inequality) as
-    "predicted AI". Human values are negatives; AI values are positives.
-
-    Args:
-        h_vals: Score array for human texts (negatives).
-        a_vals: Score array for AI texts (positives).
-        threshold: Classification threshold.
-        dist_metrics_dict: Optional dict of distance-metric arrays (same length
-            as a_vals) for correlation computation.
-        flip_inequality: If True, classify values <= threshold as positive.
-
-    Returns:
-        Dict with keys: acc, f1, auroc, tpr, fnr, corrs.
-    """
-    h_preds = (h_vals > threshold) if not flip_inequality else (h_vals <= threshold)
-    a_preds = (a_vals > threshold) if not flip_inequality else (a_vals <= threshold)
-
-    TP = np.sum(a_preds == True)
-    FN = np.sum(a_preds == False)
-    FP = np.sum(h_preds == True)
-    TN = np.sum(h_preds == False)
-
-    total = len(h_vals) + len(a_vals)
-    acc = (TP + TN) / total if total > 0 else 0
-    actual_pos = TP + FN
-    pred_pos = TP + FP
-
-    precision = TP / pred_pos if pred_pos > 0 else 0
-    recall = TP / actual_pos if actual_pos > 0 else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-    tpr = recall
-    fnr = FN / actual_pos if actual_pos > 0 else 0
-
-    y_true = np.concatenate([np.zeros(len(h_vals)), np.ones(len(a_vals))])
-    y_scores = np.concatenate([h_vals, a_vals])
-    try:
-        auroc = compute_auroc(y_true, y_scores)
-    except Exception:
-        auroc = float('nan')
-
-    corrs = {}
-    for name, dist_vals in dist_metrics_dict.items():
-        if len(a_vals) > 1 and len(dist_vals) == len(a_vals):
-            c = np.corrcoef(a_vals, dist_vals)[0, 1]
-            corrs[name] = c
-        else:
-            corrs[name] = float('nan')
-
-    return {"acc": acc, "f1": f1, "auroc": auroc, "tpr": tpr, "fnr": fnr, "corrs": corrs}
-
-
-def format_metrics(m, is_bin):
-    """Format a metrics dict as a single-line string for README output."""
-    corrs_str = " / ".join([f"{k}: {v:.4f}" for k, v in m["corrs"].items()])
-    if not corrs_str:
-        corrs_str = "N/A"
-    return (
-        f"Accuracy: {m['acc']:.4f} / F1: {m['f1']:.4f} / AUROC: {m['auroc']:.4f} / "
-        f"TPR: {m['tpr']:.4f} / FNR: {m['fnr']:.4f} / Correlations: {corrs_str}"
-    )
-
-
-def get_stats_for_mask(
-    mask_test,
-    test_h_scores,
-    test_a_scores,
-    test_h_bins,
-    test_a_bins,
-    test_idx,
-    dist_dict,
-    opt_t_score,
-    opt_t_bin,
-):
-    """Compute score + bin metrics for the subset of test rows matching mask_test.
-
-    Args:
-        mask_test: Boolean mask over the test split.
-        test_h_scores, test_a_scores: Score arrays for the test split.
-        test_h_bins, test_a_bins: Bin arrays for the test split.
-        test_idx: Index array mapping test split positions back to the full
-            dataset (needed to index into dist_dict which is over the full
-            dataset).
-        dist_dict: Dict of distance-metric arrays over the full dataset.
-        opt_t_score, opt_t_bin: Classification thresholds.
-
-    Returns:
-        Tuple of (score_metrics, bin_metrics).
-    """
-    sub_h_scores = test_h_scores[mask_test]
-    sub_a_scores = test_a_scores[mask_test]
-    sub_h_bins = test_h_bins[mask_test]
-    sub_a_bins = test_a_bins[mask_test]
-    sub_dist = {k: v[test_idx][mask_test] for k, v in dist_dict.items()}
-
-    score_m = compute_metrics(sub_h_scores, sub_a_scores, opt_t_score, sub_dist)
-    bin_m = compute_metrics(sub_h_bins, sub_a_bins, opt_t_bin, sub_dist)
-    return score_m, bin_m
-
-
-def add_emojis(stats_list, m_key="acc", top_bottom_pct=None):
-    """Add best/worst emoji markers to a list of (name, metrics) tuples.
-
-    If top_bottom_pct is None: marks the single best (✔️) and single worst (❗)
-    entry by the m_key metric.
-
-    If top_bottom_pct is a float in (0, 1): marks the top and bottom p% of
-    entries. E.g. top_bottom_pct=0.1 marks the top 10% as best and bottom 10%
-    as worst.
-
-    Returns a new list of (emoji, name, (score_m, bin_m)) tuples.
-    """
-    if not stats_list:
-        return []
-
-    accs = [m[0][m_key] for _, m in stats_list]
-
-    if top_bottom_pct is None:
-        best_indices = {int(np.argmax(accs))}
-        worst_indices = {int(np.argmin(accs))}
-    else:
-        n_top = max(1, int(len(stats_list) * top_bottom_pct))
-        sorted_indices = np.argsort(accs)
-        worst_indices = set(sorted_indices[:n_top].tolist())
-        best_indices = set(sorted_indices[-n_top:].tolist())
-
-    res = []
-    for i, (name, m) in enumerate(stats_list):
-        emoji_str = "✔️ " if i in best_indices else ("❗ " if i in worst_indices else "")
-        res.append((emoji_str, name, m))
-    return res
-
-
-def md_entry(emoji, header, sm, bm):
-    """Format a single stats entry as a markdown list item."""
-    return (
-        f"- {emoji}**{header}**\n"
-        f"    - (bin): {format_metrics(bm, True)}\n"
-        f"    - (score): {format_metrics(sm, False)}\n"
-    )
-
+# ---------------------------------------------------------------------------
+# Metadata extraction helpers (eval-specific, kept from the old eval.py)
+# ---------------------------------------------------------------------------
 
 def _parse_genparams(val):
-    """Parse the generation_params value for a single dataset row.
-
-    pipe.py writes ``generation_params`` as ``json.dumps(generation_params)``
-    (a JSON-encoded string). When the dataset round-trips through parquet,
-    the value may already be a dict (parquet auto-deserializes JSON columns).
-
-    Args:
-        val: Either a JSON string or a dict.
-
-    Returns:
-        The parsed dict, or ``None`` if *val* is falsy.
-
-    Raises:
-        json.JSONDecodeError: if *val* is a string that isn't valid JSON.
-    """
+    """Parse the generation_params value for a single dataset row."""
     if isinstance(val, dict):
         return val
     if not val:
@@ -208,25 +55,7 @@ def _parse_genparams(val):
 
 
 def extract_prompt_types(result_ds, prompt_col):
-    """Extract the PROMPT_TYPE metadata field from the prompt column.
-
-    Each prompt is a dict shaped like ``{"chat_turns": ..., "metadata": {...}}``
-    as produced by ``PromptSet.map`` in ``fastdetector.prompting.prompts``.
-    Rows whose prompt is empty or whose ``metadata`` lacks ``PROMPT_TYPE``
-    default to ``"Unknown"``.
-
-    Args:
-        result_ds: The dataset produced by stat.py.
-        prompt_col: Name of the prompt column. May be ``None`` or refer to a
-            column that doesn't exist in *result_ds*; in that case the function
-            returns ``(array_of_"Unknown", False)`` so the caller can skip
-            the per-prompt-type breakdown.
-
-    Returns:
-        A tuple ``(prompt_types, has_prompts)`` where ``prompt_types`` is a
-        numpy array of strings (one per row) and ``has_prompts`` is True iff
-        the prompt column was found.
-    """
+    """Extract the PROMPT_TYPE metadata field from the prompt column."""
     if not (prompt_col and prompt_col in result_ds.column_names):
         return np.array(["Unknown"] * len(result_ds)), False
 
@@ -240,27 +69,7 @@ def extract_prompt_types(result_ds, prompt_col):
 
 
 def extract_model_genconfig(result_ds, model_col):
-    """Extract a "model_name (Temp: X)" string per row.
-
-    Pulls the model name from *model_col* and the temperature from the
-    ``generation_params`` column (JSON-encoded). Both columns are written by
-    ``pipe.py`` together, so a dataset that has only one is inconsistent and
-    raises ``ValueError``.
-
-    Args:
-        result_ds: The dataset produced by stat.py.
-        model_col: Name of the column holding the model name (e.g.
-            ``"generator_model"``).
-
-    Returns:
-        A tuple ``(mg_str_np, has_model_genconfig)`` where ``mg_str_np`` is a
-        numpy array of strings (one per row) and ``has_model_genconfig`` is
-        True iff both columns were present.
-
-    Raises:
-        ValueError: if exactly one of ``model_col`` and ``generation_params``
-            is present in *result_ds*.
-    """
+    """Extract a "model_name (Temp: X)" string per row."""
     has_model_col = model_col in result_ds.column_names
     has_genparams = "generation_params" in result_ds.column_names
     if not has_model_col and not has_genparams:
@@ -286,69 +95,430 @@ def extract_model_genconfig(result_ds, model_col):
     return np.array(parsed), True
 
 
-def generate_plots_for_mask(
-    mask_all,
-    name_suffix,
-    h_scores,
-    a_scores,
-    h_bins,
-    a_bins,
-    dist_dict,
-    opt_t_score,
-    opt_t_bin,
-    charts,
-):
-    """Generate confusion matrices, histograms, and scatterplots for a subset.
+# ---------------------------------------------------------------------------
+# Mask function builders
+# ---------------------------------------------------------------------------
 
-    Returns a markdown string with the embedded plot references.
+def _overall_mask(ds: Dataset) -> np.ndarray:
+    return np.ones(len(ds), dtype=bool)
+
+
+def _column_equals_mask(column: str, value: str):
+    """Return a mask_fn that selects rows where ``column == value``."""
+    def mask_fn(ds: Dataset) -> np.ndarray:
+        return np.array(ds[column]) == value
+    return mask_fn
+
+
+def _column_and_mask(col1: str, val1: str, col2: str, val2: str):
+    """Return a mask_fn that selects rows where both conditions hold."""
+    def mask_fn(ds: Dataset) -> np.ndarray:
+        return (np.array(ds[col1]) == val1) & (np.array(ds[col2]) == val2)
+    return mask_fn
+
+
+# ---------------------------------------------------------------------------
+# Subset definition
+# ---------------------------------------------------------------------------
+
+def _safe_name(name: str) -> str:
+    """Convert a subset name to a safe, uppercase template-ID prefix.
+
+    Replaces all non-alphanumeric characters with underscores, collapses
+    consecutive underscores, strips leading/trailing underscores, and uppercases.
+    E.g. "Overall" -> "OVERALL", "Prompt: rewrite" -> "PROMPT_REWRITE",
+    "model_a (Temp: 0.7)" -> "MODEL_A_TEMP_0_7".
     """
-    h_s = h_scores[mask_all]
-    a_s = a_scores[mask_all]
-    h_b = h_bins[mask_all]
-    a_b = a_bins[mask_all]
-    sub_dist = {k: v[mask_all] for k, v in dist_dict.items()}
+    raw = re.sub(r"[^a-zA-Z0-9]", "_", name)
+    collapsed = re.sub(r"_+", "_", raw).strip("_")
+    return collapsed.upper()
 
-    p_md = f"### {name_suffix}\n"
 
-    cm_score = get_confusion_matrix([h_s, a_s], [False, True], False, opt_t_score, f"CM Scores ({name_suffix})")
-    cm_bin = get_confusion_matrix([h_b, a_b], [False, True], False, opt_t_bin, f"CM Bins ({name_suffix})")
-    p_md += cm_score + "\n" + cm_bin + "\n"
+# ---------------------------------------------------------------------------
+# README builder
+# ---------------------------------------------------------------------------
 
-    safe_suffix = name_suffix.replace(' ', '_').replace('/', '_')
+class Subset:
+    """A named subset of the dataset, defined by a mask function."""
+    def __init__(self, name: str, mask_fn):
+        self.name = name
+        self.mask_fn = mask_fn
+        self.safe = _safe_name(name)
 
-    h_name = f"hist_scores_{safe_suffix}.png"
-    charts[h_name] = get_histogram([h_s, a_s], ["Human", "AI"], f"Scores ({name_suffix})")
-    p_md += f"![{h_name}]({h_name})\n"
 
-    hb_name = f"hist_bins_{safe_suffix}.png"
-    charts[hb_name] = get_histogram([h_b, a_b], ["Human", "AI"], f"Bins ({name_suffix})")
-    p_md += f"![{hb_name}]({hb_name})\n"
-
-    if sub_dist:
-        y_data = list(sub_dist.values())
-        labels = list(sub_dist.keys())
-        s_name = f"scatter_{safe_suffix}.png"
-        charts[s_name] = get_scatterplot(
-            [a_s] * len(y_data), y_data, labels,
-            f"AI Scores vs Dist ({name_suffix})",
-            "AI Score", "Dist",
-            point_alpha=0.01, rolling_mean_window=100,
+def _build_readme(
+    result_ds: Dataset,
+    eval_config: EvalConfig,
+    has_prompts: bool,
+    has_model_genconfig: bool,
+    unique_prompts: list,
+    unique_mg_strs: list,
+) -> tuple[str, dict, dict]:
+    """Configure an AutoVisualizer and produce the eval readme + charts."""
+    # Manual thresholds must be both-set or both-unset. Setting only one
+    # would silently ignore it (skip_val=False → both get swept on val).
+    has_manual_score = eval_config.manual_threshold_score is not None
+    has_manual_bin = eval_config.manual_threshold_bin is not None
+    if has_manual_score != has_manual_bin:
+        raise ValueError(
+            f"manual_threshold_score and manual_threshold_bin must be both "
+            f"set or both unset. Got "
+            f"manual_threshold_score={eval_config.manual_threshold_score!r}, "
+            f"manual_threshold_bin={eval_config.manual_threshold_bin!r}. "
+            f"Setting only one would silently ignore it (the other would "
+            f"be swept on the val split, but skip_val requires both)."
         )
-        p_md += f"![{s_name}]({s_name})\n"
+    skip_val = has_manual_score and has_manual_bin
 
-    return p_md
+    viz = AutoVisualizer(
+        result_ds,
+        val_split=None if skip_val else eval_config.validation_size,
+    )
+
+    # --- Define subsets ---
+    # Build overall + per-prompt + per-model + cross-product subsets. Track
+    # them separately so the summary table can pick up exactly the
+    # non-cross-product ones without scanning by name.
+    subsets: list[Subset] = [Subset("Overall", _overall_mask)]
+    prompt_subsets: list[Subset] = []
+    model_subsets: list[Subset] = []
+    crossproduct_subsets: list[Subset] = []
+
+    if has_prompts:
+        for p in unique_prompts:
+            s = Subset(f"Prompt: {p}", _column_equals_mask("prompt_type", p))
+            subsets.append(s)
+            prompt_subsets.append(s)
+    if has_model_genconfig:
+        for mg in unique_mg_strs:
+            s = Subset(f"Model: {mg}", _column_equals_mask("model_genconfig", mg))
+            subsets.append(s)
+            model_subsets.append(s)
+    if has_prompts and has_model_genconfig:
+        for p in unique_prompts:
+            for mg in unique_mg_strs:
+                s = Subset(
+                    f"{p} / {mg}",
+                    _column_and_mask("prompt_type", p, "model_genconfig", mg),
+                )
+                subsets.append(s)
+                crossproduct_subsets.append(s)
+
+    # --- Bind thresholds ---
+    score_columns = ["human_editlens_score", "ai_editlens_score"]
+    bin_columns = ["human_editlens_bucket", "ai_editlens_bucket"]
+    classes = [False, True]  # human = negative, ai = positive
+
+    if skip_val:
+        score_tw = viz.bind_static_threshold(eval_config.manual_threshold_score)
+        score_tw.specify_stats(threshold_value="SCORE_THRESH")
+
+        bin_tw = viz.bind_static_threshold(eval_config.manual_threshold_bin)
+        bin_tw.specify_stats(threshold_value="BIN_THRESH")
+    else:
+        score_tw = viz.bind_classifier_threshold(
+            column_names=score_columns,
+            column_classes=classes,
+            mask_fn=_overall_mask,
+            threshold_type=eval_config.threshold_type_score,
+            name="EditLens Score",
+        )
+        score_tw.specify_stats(
+            threshold_value="SCORE_THRESH",
+            sweep_plot="SCORE_SWEEP",
+            optimal_acc="SCORE_OPT_ACC",
+        )
+
+        bin_tw = viz.bind_classifier_threshold(
+            column_names=bin_columns,
+            column_classes=classes,
+            mask_fn=_overall_mask,
+            threshold_type=eval_config.threshold_type_bin,
+            name="EditLens Bin",
+        )
+        bin_tw.specify_stats(
+            threshold_value="BIN_THRESH",
+            sweep_plot="BIN_SWEEP",
+            optimal_acc="BIN_OPT_ACC",
+        )
+
+    # --- Bind classifier stats per subset ---
+    # Track {subset -> wrapper} so the summary/all-stats tables can look
+    # up the score/bin wrapper for each subset without scanning.
+    score_by_subset: dict[Subset, object] = {}
+    bin_by_subset: dict[Subset, object] = {}
+
+    for sub in subsets:
+        s_score = viz.bind_classifier_stat(
+            column_names=score_columns,
+            column_classes=classes,
+            mask_fn=sub.mask_fn,
+            threshold_id="SCORE_THRESH",
+            name=f"{sub.name} (Score)",
+        )
+        s_score.specify_stats(
+            acc=f"{sub.safe}_SCORE_ACC",
+            f1=f"{sub.safe}_SCORE_F1",
+            auroc=f"{sub.safe}_SCORE_AUROC",
+            tpr=f"{sub.safe}_SCORE_TPR",
+            fnr=f"{sub.safe}_SCORE_FNR",
+            confusion_matrix=f"{sub.safe}_SCORE_CM",
+        )
+        score_by_subset[sub] = s_score
+
+        s_bin = viz.bind_classifier_stat(
+            column_names=bin_columns,
+            column_classes=classes,
+            mask_fn=sub.mask_fn,
+            threshold_id="BIN_THRESH",
+            name=f"{sub.name} (Bin)",
+        )
+        s_bin.specify_stats(
+            acc=f"{sub.safe}_BIN_ACC",
+            f1=f"{sub.safe}_BIN_F1",
+            auroc=f"{sub.safe}_BIN_AUROC",
+            tpr=f"{sub.safe}_BIN_TPR",
+            fnr=f"{sub.safe}_BIN_FNR",
+            confusion_matrix=f"{sub.safe}_BIN_CM",
+        )
+        bin_by_subset[sub] = s_bin
+
+    # --- Bind AI score as stat for correlations + scatterplots ---
+    dist_wrappers = []
+    for m in eval_config.distance_metrics:
+        if m in result_ds.column_names:
+            w = viz.bind_stat(m, _overall_mask, name=m)
+            dist_wrappers.append(w)
+
+    ai_score_wrapper = viz.bind_stat("ai_editlens_score", _overall_mask, name="AI EditLens Score")
+
+    # --- Pearson correlations: AI score vs distance metrics (overall) ---
+    if dist_wrappers:
+        viz.specify_pearson(
+            "CORRELATIONS",
+            [ai_score_wrapper] + dist_wrappers,
+            title="Correlations: AI Score vs Distance Metrics",
+        )
+
+    # --- Summary table (Overall + per-prompt + per-model, no cross-product) ---
+    summary_columns = [
+        {"header": "Bin Acc", "wrapper_idx": 0, "stat": "acc"},
+        {"header": "Bin F1", "wrapper_idx": 0, "stat": "f1"},
+        {"header": "Bin AUROC", "wrapper_idx": 0, "stat": "auroc"},
+        {"header": "Score Acc", "wrapper_idx": 1, "stat": "acc"},
+        {"header": "Score F1", "wrapper_idx": 1, "stat": "f1"},
+        {"header": "Score AUROC", "wrapper_idx": 1, "stat": "auroc"},
+    ]
+    # cells = [bin_wrapper, score_wrapper] -> wrapper_idx 1 = score accuracy.
+    # Old code ranked by score-model accuracy (m[0] in the old (score_m, bin_m)
+    # tuple), so wrapper_idx=1 preserves that behavior. Overall is excluded
+    # from ranking because "easiest/hardest split" doesn't apply to the
+    # aggregate row.
+    summary_emoji = {
+        "mode": "single",
+        "wrapper_idx": 1,
+        "stat": "acc",
+        "skip_names": {"Overall"},
+    }
+
+    summary_subsets = [subsets[0]] + prompt_subsets + model_subsets
+    summary_rows = [
+        {"name": sub.name, "cells": [bin_by_subset[sub], score_by_subset[sub]]}
+        for sub in summary_subsets
+    ]
+
+    viz.specify_table(
+        "SUMMARY_TABLE",
+        summary_rows,
+        summary_columns,
+        emoji_config=summary_emoji,
+        row_header="Subset",
+    )
+
+    # --- All-statistics table (cross-product) ---
+    if crossproduct_subsets:
+        all_rows = [
+            {"name": sub.name, "cells": [bin_by_subset[sub], score_by_subset[sub]]}
+            for sub in crossproduct_subsets
+        ]
+        viz.specify_table(
+            "ALL_STATS_TABLE",
+            all_rows,
+            summary_columns,
+            emoji_config={
+                "mode": "pct",
+                "pct": 0.1,
+                "wrapper_idx": 1,
+                "stat": "acc",
+            },
+            row_header="Subset",
+        )
+
+    # --- Per-subset histograms and scatterplots ---
+    # Cross-product subsets get only a table row in "All Statistics"; their
+    # histograms/scatterplots are not generated (matching the old behavior).
+    for sub in summary_subsets:
+        h_w = viz.bind_stat("human_editlens_score", sub.mask_fn, name=f"{sub.name} Human")
+        a_w = viz.bind_stat("ai_editlens_score", sub.mask_fn, name=f"{sub.name} AI")
+        viz.specify_histogram(
+            f"{sub.safe}_SCORE_HIST",
+            [h_w, a_w],
+            title=f"EditLens Scores: {sub.name}",
+        )
+
+        hb_w = viz.bind_stat("human_editlens_bucket", sub.mask_fn, name=f"{sub.name} Human")
+        ab_w = viz.bind_stat("ai_editlens_bucket", sub.mask_fn, name=f"{sub.name} AI")
+        viz.specify_histogram(
+            f"{sub.safe}_BIN_HIST",
+            [hb_w, ab_w],
+            title=f"EditLens Bins: {sub.name}",
+        )
+
+        # Scatterplot: AI score vs each distance metric.
+        if dist_wrappers:
+            for dw in dist_wrappers:
+                dw_sub = viz.bind_stat(dw.name, sub.mask_fn, name=dw.name)
+                viz.specify_scatterplot(
+                    f"{sub.safe}_SCATTER_{dw.name.upper()}",
+                    a_w,
+                    [dw_sub],
+                    xlabel="AI Score",
+                    ylabel=dw.name,
+                    point_alpha=0.01,
+                    rolling_mean_window=100,
+                    title=f"{sub.name}: AI Score vs {dw.name}",
+                )
+
+    # --- Build template ---
+    if "editlens_model" in result_ds.column_names:
+        unique_editlens_models = sorted(set(result_ds["editlens_model"]))
+    else:
+        unique_editlens_models = ["Unknown"]
+
+    template = _build_template(
+        eval_config=eval_config,
+        summary_subsets=summary_subsets,
+        unique_mg_strs=unique_mg_strs,
+        unique_editlens_models=unique_editlens_models,
+        skip_val=skip_val,
+        has_prompts=has_prompts,
+        has_model_genconfig=has_model_genconfig,
+        crossproduct_subsets=crossproduct_subsets,
+        dist_wrappers=dist_wrappers,
+    )
+
+    # --- Apply ---
+    readme, charts, values = viz.apply(template)
+
+    # --- Build summary_stats.json (restores corrs + emoji for backward
+    # compat with compare_summary.py) ---
+    summary_stats = _build_summary_stats(
+        values=values,
+        result_ds=result_ds,
+        viz=viz,
+        subsets=subsets,
+        summary_subsets=summary_subsets,
+        crossproduct_subsets=crossproduct_subsets,
+        unique_prompts=unique_prompts,
+        unique_mg_strs=unique_mg_strs,
+        has_prompts=has_prompts,
+        has_model_genconfig=has_model_genconfig,
+        distance_metrics=eval_config.distance_metrics,
+    )
+
+    return readme, charts, summary_stats
+
+
+# ---------------------------------------------------------------------------
+# Template builder
+# ---------------------------------------------------------------------------
+
+def _build_template(
+    eval_config: EvalConfig,
+    summary_subsets: list[Subset],
+    unique_mg_strs: list,
+    unique_editlens_models: list,
+    skip_val: bool,
+    has_prompts: bool,
+    has_model_genconfig: bool,
+    crossproduct_subsets: list,
+    dist_wrappers: list,
+) -> str:
+    """Build the readme template string with {{ID}} placeholders."""
+    lines: list[str] = []
+    lines.append("# Fastdetector Editlens Metrics\n")
+
+    # --- Summary header ---
+    lines.append("## Summary Stats\n")
+    models_list_str = ", ".join(unique_mg_strs) if unique_mg_strs else "Unknown"
+    editlens_list_str = ", ".join(unique_editlens_models)
+    lines.append(f"**Models list:** {models_list_str}\n")
+    lines.append(f"**Editlens Models list:** {editlens_list_str}\n")
+
+    lines.append("{{SUMMARY_TABLE}}\n")
+
+    if skip_val:
+        lines.append(
+            f"Thresholds used for classifiers: manual "
+            f"{{{{SCORE_THRESH}}}} threshold for scores and manual "
+            f"{{{{BIN_THRESH}}}} threshold for bins.\n"
+        )
+    else:
+        lines.append(
+            f"Thresholds used were attained by sweeping over a small validation "
+            f"set split from the data. Used {eval_config.threshold_type_score} "
+            f"threshold for scores and {eval_config.threshold_type_bin} "
+            f"threshold for bins.\n"
+        )
+    lines.append(
+        "Note: ❗ means this was the hardest split by accuracy, and "
+        "✔️ means this was the easiest split by accuracy.\n"
+    )
+
+    # --- Validation sweep plots ---
+    # Use template IDs ({{SCORE_SWEEP}} / {{BIN_SWEEP}}) instead of hardcoded
+    # PNG refs so that misconfiguration fails loudly at apply() time instead
+    # of producing a silently broken image link.
+    if not skip_val:
+        lines.append("## Validation Threshold Sweeps\n")
+        lines.append("{{SCORE_SWEEP}}\n")
+        lines.append("{{BIN_SWEEP}}\n")
+
+    # --- Correlations ---
+    if dist_wrappers:
+        lines.append("## Correlations\n")
+        lines.append("{{CORRELATIONS}}\n")
+
+    # --- Per-subset plots (Overall + per-prompt + per-model, no cross-product) ---
+    lines.append("## Summary Plots\n")
+    for sub in summary_subsets:
+        lines.append(f"### {sub.name}\n")
+        lines.append(f"{{{{{sub.safe}_SCORE_CM}}}}")
+        lines.append(f"{{{{{sub.safe}_BIN_CM}}}}\n")
+        lines.append(f"{{{{{sub.safe}_SCORE_HIST}}}}")
+        lines.append(f"{{{{{sub.safe}_BIN_HIST}}}}\n")
+        if dist_wrappers:
+            for dw in dist_wrappers:
+                sid = f"{sub.safe}_SCATTER_{dw.name.upper()}"
+                lines.append(f"{{{{{sid}}}}}")
+            lines.append("")
+
+    # --- All statistics (cross-product table only) ---
+    if crossproduct_subsets:
+        lines.append("## All Statistics\n")
+        lines.append("{{ALL_STATS_TABLE}}\n")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Main entrypoint
 # ---------------------------------------------------------------------------
 
-
 def main():
-    start_time = time.time()
     parser = argparse.ArgumentParser(description="Run EditLens inference and generate README metrics.")
-    parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
-    parser.add_argument("--eval-config", type=str, default="config/eval.toml", help="Path to eval.toml")
+    parser.add_argument("--globals-config", type=str, default="config/globals.toml")
+    parser.add_argument("--eval-config", type=str, default="config/eval.toml")
     args = parser.parse_args()
 
     globals_config, eval_config = load_config_pair(
@@ -380,7 +550,9 @@ def main():
     n_buckets = infer_n_buckets(eval_config.checkpoint)
     print(f"Inferred n_buckets={n_buckets}")
 
-    model, tokenizer, is_qlora = get_model_and_tokenizer(eval_config.checkpoint, eval_config.base_model, n_buckets)
+    model, tokenizer, is_qlora = get_model_and_tokenizer(
+        eval_config.checkpoint, eval_config.base_model, n_buckets
+    )
 
     print("Computing EditLens scores for Human texts...")
     human_buckets, human_scores = compute_editlens_scores(
@@ -412,196 +584,38 @@ def main():
 
     print("\nInference complete. Calculating README metrics...")
 
-    h_scores = np.array(result_ds["human_editlens_score"])
-    a_scores = np.array(result_ds["ai_editlens_score"])
-    h_bins = np.array(result_ds["human_editlens_bucket"])
-    a_bins = np.array(result_ds["ai_editlens_bucket"])
-
+    # --- Extract metadata for per-subset breakdowns ---
     prompt_types, has_prompts = extract_prompt_types(result_ds, eval_config.prompt_metadata_column)
     unique_prompts = sorted(set(prompt_types.tolist())) if has_prompts else []
 
     mg_str_np, has_model_genconfig = extract_model_genconfig(result_ds, eval_config.model_metadata_column)
     unique_mg_strs = sorted(set(mg_str_np.tolist())) if has_model_genconfig else []
 
-    dist_dict = {}
-    for m in eval_config.distance_metrics:
-        if m in result_ds.column_names:
-            dist_dict[m] = np.array(result_ds[m])
+    # Add metadata as columns so mask functions can reference them
+    if has_prompts:
+        result_ds = result_ds.add_column("prompt_type", prompt_types.tolist())
+    if has_model_genconfig:
+        result_ds = result_ds.add_column("model_genconfig", mg_str_np.tolist())
 
-    # --- Validation / test split ---
-    np.random.seed(42)
-    indices = np.arange(len(result_ds))
-    np.random.shuffle(indices)
-
-    skip_val = (
-        eval_config.manual_threshold_score is not None
-        and eval_config.manual_threshold_bin is not None
-    )
-    if skip_val:
-        val_size = 0
-    else:
-        val_size = max(1, int(len(result_ds) * eval_config.validation_size))
-
-    val_idx = indices[:val_size]
-    test_idx = indices[val_size:]
-
-    val_h_scores, val_a_scores = h_scores[val_idx], a_scores[val_idx]
-    val_h_bins, val_a_bins = h_bins[val_idx], a_bins[val_idx]
-
-    test_h_scores, test_a_scores = h_scores[test_idx], a_scores[test_idx]
-    test_h_bins, test_a_bins = h_bins[test_idx], a_bins[test_idx]
-
-    charts = {}
-
-    # --- Threshold sweep on validation set ---
-    if not skip_val and val_size > 0:
-        charts["val_sweep_scores.png"], opt_t_score_dict, _ = get_sweeping_classifier_plot(
-            [val_h_scores, val_a_scores], [False, True], False, True, ["Human", "AI"], "Val Sweep: Scores"
-        )
-        charts["val_sweep_bins.png"], opt_t_bin_dict, _ = get_sweeping_classifier_plot(
-            [val_h_bins, val_a_bins], [False, True], False, True, ["Human", "AI"], "Val Sweep: Bins"
-        )
-    else:
-        opt_t_score_dict = {}
-        opt_t_bin_dict = {}
-
-    if eval_config.manual_threshold_score is not None:
-        opt_t_score = eval_config.manual_threshold_score
-    else:
-        opt_t_score = opt_t_score_dict.get(eval_config.threshold_type_score, 0.5)
-
-    if eval_config.manual_threshold_bin is not None:
-        opt_t_bin = eval_config.manual_threshold_bin
-    else:
-        opt_t_bin = opt_t_bin_dict.get(eval_config.threshold_type_bin, 0.5)
-
-    # --- Compute per-split stats ---
-    overall_m = get_stats_for_mask(
-        np.ones(len(test_idx), dtype=bool),
-        test_h_scores, test_a_scores, test_h_bins, test_a_bins,
-        test_idx, dist_dict, opt_t_score, opt_t_bin,
+    # --- Build README + summary_stats via AutoVisualizer ---
+    readme_content, charts, summary_stats = _build_readme(
+        result_ds, eval_config,
+        has_prompts, has_model_genconfig,
+        unique_prompts, unique_mg_strs,
     )
 
-    prompt_stats = []
-    for p in unique_prompts:
-        mask = prompt_types[test_idx] == p
-        if np.any(mask):
-            prompt_stats.append((p, get_stats_for_mask(
-                mask, test_h_scores, test_a_scores, test_h_bins, test_a_bins,
-                test_idx, dist_dict, opt_t_score, opt_t_bin,
-            )))
-    prompt_stats = add_emojis(prompt_stats)
+    charts["summary_stats.json"] = json.dumps(
+        summary_stats, indent=2, cls=NumpyEncoder
+    ).encode("utf-8")
 
-    mg_stats = []
-    for mg in unique_mg_strs:
-        mask = mg_str_np[test_idx] == mg
-        if np.any(mask):
-            mg_stats.append((mg, get_stats_for_mask(
-                mask, test_h_scores, test_a_scores, test_h_bins, test_a_bins,
-                test_idx, dist_dict, opt_t_score, opt_t_bin,
-            )))
-    mg_stats = add_emojis(mg_stats)
-
-    all_stats = []
-    for p in unique_prompts:
-        for mg in unique_mg_strs:
-            mask = (prompt_types[test_idx] == p) & (mg_str_np[test_idx] == mg)
-            if np.any(mask):
-                all_stats.append((f"{p} / {mg}", get_stats_for_mask(
-                    mask, test_h_scores, test_a_scores, test_h_bins, test_a_bins,
-                    test_idx, dist_dict, opt_t_score, opt_t_bin,
-                )))
-    all_stats = add_emojis(all_stats, top_bottom_pct=0.1)
-
-    # --- Build README markdown ---
-    md = "# Fastdetector Editlens Metrics\n\n## Summary Stats\n"
-
-    models_list_str = ", ".join(unique_mg_strs) if unique_mg_strs else "Unknown"
-    unique_editlens_models = (
-        sorted(set(result_ds["editlens_model"]))
-        if "editlens_model" in result_ds.column_names
-        else ["Unknown"]
-    )
-    editlens_list_str = ", ".join(unique_editlens_models)
-
-    md += f"**Models list:** {models_list_str}\n"
-    md += f"**Editlens Models list:** {editlens_list_str}\n\n"
-
-    md += md_entry("", "Overall", overall_m[0], overall_m[1])
-
-    for emoji, name, (sm, bm) in prompt_stats:
-        md += md_entry(emoji, name, sm, bm)
-
-    for emoji, name, (sm, bm) in mg_stats:
-        md += md_entry(emoji, name, sm, bm)
-
-    md += (
-        f"\nNote: ❗ means this was the hardest split by accuracy, and "
-        f"✔️ means this was the easiest split by accuracy. "
-    )
-    if skip_val:
-        md += (
-            f"Thresholds used for classifiers: manual {opt_t_score} threshold "
-            f"for scores and manual {opt_t_bin} threshold for bins.\n\n"
-        )
-    else:
-        md += (
-            f"Thresholds used were attained by sweeping over a small validation "
-            f"set split from the data. Used {eval_config.threshold_type_score} "
-            f"threshold for scores and {eval_config.threshold_type_bin} threshold "
-            f"for bins.\n\n"
-        )
-
-    md += "## Validation Threshold\n"
-    md += f"Validation rows = {len(val_idx)} / Total rows = {len(result_ds)}\n\n"
-    if not skip_val and val_size > 0:
-        md += "![Val Sweep Scores](val_sweep_scores.png)\n"
-        md += "![Val Sweep Bins](val_sweep_bins.png)\n\n"
-    else:
-        md += "Validation sweep was skipped because thresholds were manually provided or val size was 0.\n\n"
-
-    md += "## Summary plots\n"
-
-    md += generate_plots_for_mask(
-        np.ones(len(result_ds), dtype=bool), "Overall",
-        h_scores, a_scores, h_bins, a_bins, dist_dict,
-        opt_t_score, opt_t_bin, charts,
-    )
-    for p in unique_prompts:
-        if np.any(prompt_types == p):
-            md += generate_plots_for_mask(
-                prompt_types == p, str(p),
-                h_scores, a_scores, h_bins, a_bins, dist_dict,
-                opt_t_score, opt_t_bin, charts,
-            )
-    for mg in unique_mg_strs:
-        if np.any(mg_str_np == mg):
-            md += generate_plots_for_mask(
-                mg_str_np == mg, str(mg),
-                h_scores, a_scores, h_bins, a_bins, dist_dict,
-                opt_t_score, opt_t_bin, charts,
-            )
-
-    md += "\n## All Statistics\n"
-    for emoji, name, (sm, bm) in all_stats:
-        md += md_entry(emoji, name, sm, bm)
-
-    # --- Build summary_stats.json ---
-    summary_stats = {
-        "overall": {"score": overall_m[0], "bin": overall_m[1]},
-        "prompts": {},
-        "models": {},
-        "splits": {},
-    }
-
-    for emoji_str, name, (sm, bm) in prompt_stats:
-        summary_stats["prompts"][name] = {"score": sm, "bin": bm, "emoji": emoji_str}
-    for emoji_str, name, (sm, bm) in mg_stats:
-        summary_stats["models"][name] = {"score": sm, "bin": bm, "emoji": emoji_str}
-    for emoji_str, name, (sm, bm) in all_stats:
-        summary_stats["splits"][name] = {"score": sm, "bin": bm, "emoji": emoji_str}
-
-    charts["summary_stats.json"] = json.dumps(summary_stats, indent=2, cls=NumpyEncoder).encode('utf-8')
+    # --- Drop helper columns added for AutoVisualizer mask functions ---
+    # These are derived metadata that shouldn't appear in the published
+    # dataset (the original eval.py kept them as standalone numpy arrays,
+    # never as columns).
+    helper_cols = [c for c in ("prompt_type", "model_genconfig")
+                   if c in result_ds.column_names]
+    if helper_cols:
+        result_ds = result_ds.remove_columns(helper_cols)
 
     # --- Upload ---
     print("Uploading dataset...")
@@ -609,9 +623,150 @@ def main():
     upload_readme(
         dataset_name=target_dataset,
         files=charts,
-        readme_content=md,
+        readme_content=readme_content,
     )
     print("Done!")
+
+
+def _compute_subset_corrs(
+    result_ds: Dataset,
+    mask_fn,
+    distance_metrics: list,
+) -> tuple[dict, dict]:
+    """Compute Pearson correlations between AI scores/bins and distance metrics.
+
+    Mirrors the old ``compute_metrics(... )["corrs"]`` field: for each
+    distance metric, the correlation with ``ai_editlens_score`` (first dict)
+    and with ``ai_editlens_bucket`` (second dict).
+
+    Note: correlations are computed on the full dataset (via ``mask_fn`` on
+    ``result_ds``), while the classifier metrics in ``summary_stats.json``
+    are computed on AutoVisualizer's internal test split. This mirrors the
+    pre-PR behavior — the old ``compute_metrics`` also ran on the full
+    dataset via ``get_stats_for_mask`` with the full-dataset mask. The two
+    are slightly inconsistent (corrs see more data than the metrics they
+    sit next to), but changing it would be a behavior change beyond this
+    PR's scope.
+
+    NaN is returned when there are fewer than 2 rows or the metric column is
+    missing/length-mismatched/non-numeric.
+    """
+    mask = mask_fn(result_ds)
+    n = int(np.sum(mask))
+
+    nan_pair = ({m: float("nan") for m in distance_metrics},
+                {m: float("nan") for m in distance_metrics})
+    if n < 2:
+        return nan_pair
+
+    a_scores = np.array(result_ds["ai_editlens_score"], dtype=float)[mask]
+    a_bins = np.array(result_ds["ai_editlens_bucket"], dtype=float)[mask]
+
+    score_corrs: dict = {}
+    bin_corrs: dict = {}
+    for m in distance_metrics:
+        if m not in result_ds.column_names:
+            score_corrs[m] = bin_corrs[m] = float("nan")
+            continue
+        try:
+            dist_arr = np.array(result_ds[m], dtype=float)[mask]
+        except (ValueError, TypeError):
+            score_corrs[m] = bin_corrs[m] = float("nan")
+            continue
+        if len(dist_arr) != n:
+            score_corrs[m] = bin_corrs[m] = float("nan")
+            continue
+        try:
+            score_corrs[m] = float(np.corrcoef(a_scores, dist_arr)[0, 1])
+        except Exception:
+            score_corrs[m] = float("nan")
+        try:
+            bin_corrs[m] = float(np.corrcoef(a_bins, dist_arr)[0, 1])
+        except Exception:
+            bin_corrs[m] = float("nan")
+    return score_corrs, bin_corrs
+
+
+def _build_summary_stats(
+    values: dict,
+    result_ds: Dataset,
+    viz: AutoVisualizer,
+    subsets: list,
+    summary_subsets: list,
+    crossproduct_subsets: list,
+    unique_prompts: list,
+    unique_mg_strs: list,
+    has_prompts: bool,
+    has_model_genconfig: bool,
+    distance_metrics: list,
+) -> dict:
+    """Build the summary_stats.json structure.
+
+    Restores the ``corrs`` and ``emoji`` fields dropped during the
+    AutoVisualizer port so that ``compare_summary.py`` keeps working without
+    modification: each subset entry is shaped
+    ``{"score": {..., "corrs": {...}}, "bin": {..., "corrs": {...}}, "emoji": "✔️ "}``
+    matching the original ``scripts/eval.py`` output.
+    """
+    def _get(subset_safe: str, kind: str, stat: str):
+        return values.get(f"{subset_safe}_{kind}_{stat.upper()}")
+
+    # Emoji markers differ: summary table rows get markers from
+    # SUMMARY_TABLE; cross-product rows get markers from ALL_STATS_TABLE.
+    summary_emojis = viz.get_table_row_emojis("SUMMARY_TABLE")
+    all_stats_emojis = viz.get_table_row_emojis("ALL_STATS_TABLE")
+
+    def _entry(sub: "Subset", emoji: str) -> dict:
+        score_corrs, bin_corrs = _compute_subset_corrs(
+            result_ds, sub.mask_fn, distance_metrics
+        )
+        return {
+            "score": {
+                "acc": _get(sub.safe, "SCORE", "ACC"),
+                "f1": _get(sub.safe, "SCORE", "F1"),
+                "auroc": _get(sub.safe, "SCORE", "AUROC"),
+                "tpr": _get(sub.safe, "SCORE", "TPR"),
+                "fnr": _get(sub.safe, "SCORE", "FNR"),
+                "corrs": score_corrs,
+            },
+            "bin": {
+                "acc": _get(sub.safe, "BIN", "ACC"),
+                "f1": _get(sub.safe, "BIN", "F1"),
+                "auroc": _get(sub.safe, "BIN", "AUROC"),
+                "tpr": _get(sub.safe, "BIN", "TPR"),
+                "fnr": _get(sub.safe, "BIN", "FNR"),
+                "corrs": bin_corrs,
+            },
+            "emoji": emoji,
+        }
+
+    # Build a name -> Subset lookup for summary_subsets to avoid O(n^2) scans.
+    summary_by_name = {s.name: s for s in summary_subsets}
+
+    overall_sub = summary_by_name.get("Overall", subsets[0])
+    summary = {
+        "overall": _entry(overall_sub, summary_emojis.get("Overall", "")),
+        "prompts": {},
+        "models": {},
+        "splits": {},
+    }
+
+    if has_prompts:
+        for p in unique_prompts:
+            sub = summary_by_name[f"Prompt: {p}"]
+            summary["prompts"][p] = _entry(sub, summary_emojis.get(sub.name, ""))
+
+    if has_model_genconfig:
+        for mg in unique_mg_strs:
+            sub = summary_by_name[f"Model: {mg}"]
+            summary["models"][mg] = _entry(sub, summary_emojis.get(sub.name, ""))
+
+    for sub in crossproduct_subsets:
+        summary["splits"][sub.name] = _entry(
+            sub, all_stats_emojis.get(sub.name, "")
+        )
+
+    return summary
 
 
 if __name__ == "__main__":
