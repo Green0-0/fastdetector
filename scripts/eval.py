@@ -6,7 +6,7 @@ import numpy as np
 
 from fastdetector.frontend.toml_config import EvalConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset
+from fastdetector.utils import load_dataset_auto_shard
 from fastdetector.utils import upload_readme, apply_filter_conditions
 from fastdetector.statistics.statistics_utils import compute_auroc
 from fastdetector.statistics.plotting import (
@@ -359,7 +359,7 @@ def main():
     target_dataset = globals_config.resolve_output_dataset(globals_config.eval_suffix)
 
     print(f"Loading dataset {source_dataset}...")
-    result_ds = load_dataset(source_dataset, split="train")
+    result_ds = load_dataset_auto_shard(source_dataset, split="train")
 
     if "original" not in result_ds.column_names or "final_response" not in result_ds.column_names:
         raise ValueError(

@@ -3,7 +3,7 @@ import json
 
 from fastdetector.frontend.toml_config import StatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset
+from fastdetector.utils import load_dataset_auto_shard
 from fastdetector.frontend.engine_config import EngineConfig as Engine
 from fastdetector.llm_utils import llm_server_context
 
@@ -354,7 +354,7 @@ def main():
     target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
 
     print(f"Loading dataset {source_dataset} (subset index {args.batch_id})...")
-    ds = load_dataset(source_dataset, split="train", subset_index=args.batch_id)
+    ds = load_dataset_auto_shard(source_dataset, split="train", subset_index=args.batch_id)
 
     col_a = stat_config.human_column
     col_b = stat_config.ai_column

@@ -11,7 +11,7 @@ from datasets import concatenate_datasets, Dataset
 
 from fastdetector.frontend.toml_config import StatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset
+from fastdetector.utils import load_dataset_auto_shard
 from fastdetector.utils import upload_readme
 from fastdetector.frontend.readme import build_readme_content
 
@@ -33,7 +33,7 @@ def main() -> None:
     shards: list[Dataset] = []
     for i in range(args.total_shards):
         print(f"  Loading shard_{i}...")
-        shard_ds = load_dataset(target_dataset, split="train", subset_index=i)
+        shard_ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=i)
         shards.append(shard_ds)
 
     print("Concatenating shards...")

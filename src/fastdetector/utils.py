@@ -2,11 +2,11 @@ from typing import Dict, Optional
 
 from huggingface_hub import HfApi, hf_hub_download
 from datasets import Dataset
-from datasets import load_dataset as _hf_load_dataset
+from datasets import load_dataset
 from datasets import get_dataset_config_names
 
 
-def load_dataset(
+def load_dataset_auto_shard(
     dataset_name: str,
     split: str = "train",
     subset_index: Optional[int] = 0,
@@ -51,8 +51,8 @@ def load_dataset(
 
     print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
     if config_name:
-        return _hf_load_dataset(dataset_name, name=config_name, split=split)
-    return _hf_load_dataset(dataset_name, split=split)
+        return load_dataset(dataset_name, name=config_name, split=split)
+    return load_dataset(dataset_name, split=split)
 
 
 def upload_readme(
