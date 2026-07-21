@@ -155,10 +155,20 @@ def _build_readme(
     unique_mg_strs: list,
 ) -> tuple[str, dict, dict]:
     """Configure an AutoVisualizer and produce the eval readme + charts."""
-    skip_val = (
-        eval_config.manual_threshold_score is not None
-        and eval_config.manual_threshold_bin is not None
-    )
+    # Manual thresholds must be both-set or both-unset. Setting only one
+    # would silently ignore it (skip_val=False → both get swept on val).
+    has_manual_score = eval_config.manual_threshold_score is not None
+    has_manual_bin = eval_config.manual_threshold_bin is not None
+    if has_manual_score != has_manual_bin:
+        raise ValueError(
+            f"manual_threshold_score and manual_threshold_bin must be both "
+            f"set or both unset. Got "
+            f"manual_threshold_score={eval_config.manual_threshold_score!r}, "
+            f"manual_threshold_bin={eval_config.manual_threshold_bin!r}. "
+            f"Setting only one would silently ignore it (the other would "
+            f"be swept on the val split, but skip_val requires both)."
+        )
+    skip_val = has_manual_score and has_manual_bin
 
     viz = AutoVisualizer(
         result_ds,
@@ -387,7 +397,7 @@ def _build_readme(
 
     template = _build_template(
         eval_config=eval_config,
-        subsets=summary_subsets,
+        summary_subsets=summary_subsets,
         unique_mg_strs=unique_mg_strs,
         unique_editlens_models=unique_editlens_models,
         skip_val=skip_val,
@@ -425,7 +435,7 @@ def _build_readme(
 
 def _build_template(
     eval_config: EvalConfig,
-    subsets: list[Subset],
+    summary_subsets: list[Subset],
     unique_mg_strs: list,
     unique_editlens_models: list,
     skip_val: bool,
@@ -481,7 +491,7 @@ def _build_template(
 
     # --- Per-subset plots (Overall + per-prompt + per-model, no cross-product) ---
     lines.append("## Summary Plots\n")
-    for sub in subsets:
+    for sub in summary_subsets:
         lines.append(f"### {sub.name}\n")
         lines.append(f"{{{{{sub.safe}_SCORE_CM}}}}")
         lines.append(f"{{{{{sub.safe}_BIN_CM}}}}\n")
@@ -628,6 +638,15 @@ def _compute_subset_corrs(
     Mirrors the old ``compute_metrics(... )["corrs"]`` field: for each
     distance metric, the correlation with ``ai_editlens_score`` (first dict)
     and with ``ai_editlens_bucket`` (second dict).
+
+    Note: correlations are computed on the full dataset (via ``mask_fn`` on
+    ``result_ds``), while the classifier metrics in ``summary_stats.json``
+    are computed on AutoVisualizer's internal test split. This mirrors the
+    pre-PR behavior — the old ``compute_metrics`` also ran on the full
+    dataset via ``get_stats_for_mask`` with the full-dataset mask. The two
+    are slightly inconsistent (corrs see more data than the metrics they
+    sit next to), but changing it would be a behavior change beyond this
+    PR's scope.
 
     NaN is returned when there are fewer than 2 rows or the metric column is
     missing/length-mismatched/non-numeric.

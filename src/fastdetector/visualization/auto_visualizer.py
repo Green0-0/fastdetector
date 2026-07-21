@@ -191,7 +191,7 @@ class ClassifierStatWrapper(_Wrapper):
                 raise ValueError(
                     f"ClassifierStatWrapper does not support stat '{stat_name}'. "
                     f"Available: acc, f1, auroc, tpr, fnr, fpr, tnr, precision, "
-                    f"recall, confusion_matrix."
+                    f"recall, confusion_matrix, TP, FP, TN, FN."
                 )
 
     def _stat_id_type(self, stat_name: str) -> str:
@@ -1015,12 +1015,22 @@ class AutoVisualizer:
 
         rank_values = []
         for r in rows:
-            w = r["cells"][widx]
-            rank_values.append(w._values.get(stat, float("nan")))
+            # Bounds-check + None-check: if the wrapper at widx is missing
+            # or its stat value is None/NaN, exclude from ranking (matches
+            # the `-` fallback that _render_table uses for missing cells).
+            cells = r.get("cells", [])
+            if widx >= len(cells):
+                rank_values.append(float("nan"))
+                continue
+            val = cells[widx]._values.get(stat)
+            if val is None:
+                rank_values.append(float("nan"))
+            else:
+                rank_values.append(val)
 
-        # Indices that participate in ranking (skip named exclusions + NaN).
+        # Indices that participate in ranking (skip named exclusions + NaN/None).
         valid = [(i, v) for i, v in enumerate(rank_values)
-                 if v == v and rows[i]["name"] not in skip_names]
+                 if v is not None and v == v and rows[i]["name"] not in skip_names]
 
         best: set[int] = set()
         worst: set[int] = set()
