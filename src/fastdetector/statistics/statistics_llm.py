@@ -40,7 +40,19 @@ def entropies_approx(top_logprobs: list[list[dict[str, float]]]) -> list[float]:
 
 def fastdetectgpt_scores_approx(token_logprobs: list[list[float | None]], top_logprobs: list[list[dict[str, float]]]) -> list[float]:
     """Approximate FastDetectGPT score for each text using top-N logprobs.
-    Score = mean((log_prob(x_i) - E[log_prob(x_i)]) / Std[log_prob(x_i)])
+    
+    Computes the conditional probability curvature as defined in the
+    Fast-DetectGPT paper (Bao et al., ICLR 2024), Eq. 3:
+        d(x) = (log p(x|x) - mu_tilde) / sigma_tilde
+    
+    Using the analytical solution from Appendix B:
+        d(x) = (sum_j [log p(x_j|x_{<j}) - mu_j]) / sqrt(sum_j sigma_j^2)
+             = (total_lp - total_expected_lp) / sqrt(total_variance)
+    
+    This is the z-score of the total conditional log-probability, NOT the
+    mean of per-position z-scores. The paper treats the passage as a single
+    point and computes the curvature at that point. This matches the official
+    implementation at github.com/baoguangsheng/fast-detect-gpt.
     
     Args:
         token_logprobs: Logprobs of the actual tokens.
@@ -102,16 +114,36 @@ def fastdetectgpt_scores_approx(token_logprobs: list[list[float | None]], top_lo
     return results
 
 def binoculars_scores_approx(token_logprobs_m1: list[list[float | None]], 
+                             token_logprobs_m2: list[list[float | None]],
                              top_logprobs_m1: list[list[dict[str, float]]],
                              top_logprobs_m2: list[list[dict[str, float]]]) -> list[float]:
     """Approximate Binoculars score using top-N logprobs.
-    B = log(PPL_M1) / log(X-PPL_M1_M2)
-    log(PPL_M1) = - 1/N sum log p_M1(x_i)
-    log(X-PPL_M1_M2) = 1/N sum_i H(M2_i, M1_i)
-    H(M2_i, M1_i) = - sum_v p_M2(v) log p_M1(v)
-    
+
+    Computes the Binoculars score following Hans et al. (2024), Eq. 4:
+        B(x) = log(PPL_performer) / X-PPL(observer, performer)
+
+    where:
+        log(PPL_performer) = -1/N * sum log p_performer(x_i)
+        X-PPL(observer, performer) = 1/N * sum_i H(p_observer_i || p_performer_i)
+        H(p_observer_i || p_performer_i) = - sum_v p_observer(v) * log p_performer(v)
+
+    This matches the official implementation at github.com/ahans30/Binoculars,
+    which computes:
+        ppl = perplexity(encodings, performer_logits)   # log(PPL_performer)
+        x_ppl = entropy(observer_logits, performer_logits, ...)  # H(observer, performer)
+        binoculars_scores = ppl / x_ppl
+
+    M1 is the Observer and M2 is the Performer, following the convention
+    where the first checkpoint is the observer (base model) and the second
+    is the performer (instruction-tuned model).
+
+    Note: AI-generated text typically has B < threshold (lower score), while
+    human text has B closer to or above 1. The classifier should treat
+    human text as the positive class (higher score = human).
+
     Args:
         token_logprobs_m1: Actual token logprobs from M1 (Observer).
+        token_logprobs_m2: Actual token logprobs from M2 (Performer).
         top_logprobs_m1: Top logprobs dicts from M1 (Observer).
         top_logprobs_m2: Top logprobs dicts from M2 (Performer).
         
@@ -119,47 +151,54 @@ def binoculars_scores_approx(token_logprobs_m1: list[list[float | None]],
         List of approximated Binoculars scores.
     """
     results = []
-    for token_lps_m1, top_lps_m1, top_lps_m2 in zip(token_logprobs_m1, top_logprobs_m1, top_logprobs_m2):
-        if not token_lps_m1 or not top_lps_m1 or not top_lps_m2:
+    for token_lps_m1, token_lps_m2, top_lps_m1, top_lps_m2 in zip(
+        token_logprobs_m1, token_logprobs_m2, top_logprobs_m1, top_logprobs_m2
+    ):
+        if not token_lps_m1 or not token_lps_m2 or not top_lps_m1 or not top_lps_m2:
             results.append(0.0)
             continue
             
-        total_lp_m1 = 0.0
+        total_lp_m2 = 0.0
         total_cross_entropy = 0.0
         valid_tokens = 0
         
-        for lp_m1, top_m1, top_m2 in zip(token_lps_m1, top_lps_m1, top_lps_m2):
-            if lp_m1 is None or not top_m1 or not top_m2:
+        for lp_m1, lp_m2, top_m1, top_m2 in zip(token_lps_m1, token_lps_m2, top_lps_m1, top_lps_m2):
+            if lp_m1 is None or lp_m2 is None or not top_m1 or not top_m2:
                 continue
                 
             p_m1_dict = {k: math.exp(v) for k, v in top_m1.items()}
             p_m2_dict = {k: math.exp(v) for k, v in top_m2.items()}
             
-            Z_m1 = sum(p_m1_dict.values())
-            M_m1 = max(0.0, 1.0 - Z_m1)
-            p_min_m1 = min(p_m1_dict.values()) if p_m1_dict else 0.0
-            p_bound_m1 = min(p_min_m1, M_m1)
-            lp_tail_m1 = math.log(p_bound_m1 + 1e-12)
-            
+            # Tail mass for M2 (Performer) — used for cross-entropy fallback
             Z_m2 = sum(p_m2_dict.values())
             M_m2 = max(0.0, 1.0 - Z_m2)
+            p_min_m2 = min(p_m2_dict.values()) if p_m2_dict else 0.0
+            p_bound_m2 = min(p_min_m2, M_m2)
+            lp_tail_m2 = math.log(p_bound_m2 + 1e-12)
             
+            # Tail mass for M1 (Observer)
+            Z_m1 = sum(p_m1_dict.values())
+            M_m1 = max(0.0, 1.0 - Z_m1)
+            
+            # Cross-entropy H(p_observer || p_performer) = -sum_v p_observer(v) * log p_performer(v)
+            # We use M1=Observer's distribution to weight M2=Performer's log-probs
             cross_entropy = 0.0
-            for v, p_m2_v in p_m2_dict.items():
-                if v in top_m1:
-                    lp_m1_v = top_m1[v]
+            for v, p_m1_v in p_m1_dict.items():
+                if v in top_m2:
+                    lp_m2_v = top_m2[v]
                 else:
-                    lp_m1_v = lp_tail_m1
-                cross_entropy -= p_m2_v * lp_m1_v
+                    lp_m2_v = lp_tail_m2
+                cross_entropy -= p_m1_v * lp_m2_v
                 
-            cross_entropy -= M_m2 * lp_tail_m1
+            cross_entropy -= M_m1 * lp_tail_m2
             
-            total_lp_m1 += lp_m1
+            # Numerator: log(PPL_performer) = -sum log p_performer(x_i) / N
+            total_lp_m2 += lp_m2
             total_cross_entropy += cross_entropy
             valid_tokens += 1
             
         if valid_tokens > 0 and total_cross_entropy > 1e-6:
-            results.append(-total_lp_m1 / total_cross_entropy)
+            results.append(-total_lp_m2 / total_cross_entropy)
         else:
             results.append(0.0)
             
