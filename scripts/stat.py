@@ -184,16 +184,16 @@ def compute_basic_metrics(ds, stat_config: StatConfig):
 
     if stat_config.jaccards_1:
         print("Computing Jaccards n=1...")
-        ds = ds.add_column(f"jaccard_1_{col_a}_{col_b}", pairwise_jaccards(originals, news, 1))
+        ds = ds.add_column("jaccard_1", pairwise_jaccards(originals, news, 1))
     if stat_config.jaccards_2:
         print("Computing Jaccards n=2...")
-        ds = ds.add_column(f"jaccard_2_{col_a}_{col_b}", pairwise_jaccards(originals, news, 2))
+        ds = ds.add_column("jaccard_2", pairwise_jaccards(originals, news, 2))
     if stat_config.jaccards_3:
         print("Computing Jaccards n=3...")
-        ds = ds.add_column(f"jaccard_3_{col_a}_{col_b}", pairwise_jaccards(originals, news, 3))
+        ds = ds.add_column("jaccard_3", pairwise_jaccards(originals, news, 3))
     if stat_config.levenshteins:
         print("Computing Levenshteins...")
-        ds = ds.add_column(f"levenshtein_{col_a}_{col_b}", pairwise_levenshteins(originals, news))
+        ds = ds.add_column("levenshtein", pairwise_levenshteins(originals, news))
     return ds
 
 
@@ -209,7 +209,7 @@ def compute_softngram(ds, stat_config: StatConfig):
         model_name=stat_config.softngram_model,
         phrase_batch_size=2048,
     )
-    return ds.add_column(f"pairwise_softngram_{col_a}_{col_b}", scores)
+    return ds.add_column("pairwise_softngram", scores)
 
 
 def compute_embedding_metrics(ds, stat_config: StatConfig):
@@ -229,7 +229,7 @@ def compute_embedding_metrics(ds, stat_config: StatConfig):
     cols_to_remove.extend([f"{col_a}_embedding", f"{col_b}_embedding"])
 
     print("Computing pairwise cosine similarity...")
-    ds = ds.add_column(f"pairwise_cosdist_{col_a}_{col_b}", pairwise_cosdist(emb_a, emb_b))
+    ds = ds.add_column("pairwise_cosdist", pairwise_cosdist(emb_a, emb_b))
     return ds, cols_to_remove
 
 
@@ -263,11 +263,11 @@ def compute_token_embedding_metrics(ds, stat_config: StatConfig):
             all_m_scores.extend(m_scores)
 
     if stat_config.bertscore:
-        ds = ds.add_column(f"pairwise_bertscore_precision_{col_a}_{col_b}", all_b_prec)
-        ds = ds.add_column(f"pairwise_bertscore_recall_{col_a}_{col_b}", all_b_rec)
-        ds = ds.add_column(f"pairwise_bertscore_f1_{col_a}_{col_b}", all_b_f1)
+        ds = ds.add_column("pairwise_bertscore_precision", all_b_prec)
+        ds = ds.add_column("pairwise_bertscore_recall", all_b_rec)
+        ds = ds.add_column("pairwise_bertscore_f1", all_b_f1)
     if stat_config.moverscore:
-        ds = ds.add_column(f"pairwise_moverscore_{col_a}_{col_b}", all_m_scores)
+        ds = ds.add_column("pairwise_moverscore", all_m_scores)
     return ds
 
 
@@ -349,7 +349,7 @@ def compute_reranker_metric(ds, stat_config: StatConfig):
         model_name=stat_config.reranker_model,
         batch_size=stat_config.batch_size,
     )
-    return ds.add_column(f"pairwise_cross_encoder_{col_a}_{col_b}", scores)
+    return ds.add_column("pairwise_cross_encoder", scores)
 
 
 # ---------------------------------------------------------------------------
