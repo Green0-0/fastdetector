@@ -815,9 +815,21 @@ class AutoVisualizer:
                 "stat": str, "stat_2": str|None, "format": str}``.
                 ``format`` defaults to ``"{value:.4f}"``; when ``stat_2`` is
                 set it defaults to ``"{value:.4f} ± {value_2:.4f}"``.
-            emoji_config: Optional ``{"mode": "single"|"pct", "pct": float,
-                "wrapper_idx": int, "stat": str}``. Marks best (✔️) and
-                worst (❗) rows by the specified stat.
+            emoji_config: Optional dict with keys:
+
+                - ``"mode"``: ``"single"`` (mark the single best/worst) or
+                  ``"pct"`` (mark the top/bottom ``pct`` fraction).
+                - ``"pct"``: float in (0, 1), required when mode is ``"pct"``.
+                - ``"wrapper_idx"``: index of the wrapper in each row's
+                  ``cells`` list to rank by.
+                - ``"stat"``: stat name to rank by (e.g. ``"acc"``, ``"fnr"``).
+                - ``"higher_is_better"``: bool, default ``True``. Set to
+                  ``False`` for stats where lower is better (e.g. ``"fnr"``,
+                  ``"fpr"``) so the best/worst markers aren't inverted.
+                - ``"skip_names"``: optional set of row names to exclude
+                  from ranking (the rows are still rendered, just without
+                  emoji markers). Useful for "Overall" rows where ranking
+                  is semantically meaningless.
         """
         if not rows:
             raise ValueError(f"specify_table('{id}'): rows list is empty.")
@@ -958,36 +970,77 @@ class AutoVisualizer:
             md += f"- **{names[i]} vs {names[j]}**: {corr:.4f}\n"
         return md
 
+    def _compute_row_emojis(self, rows: List[dict], emoji_config: Optional[dict]) -> Dict[str, str]:
+        """Compute ``{row_name: emoji_prefix}`` for a table's rows.
+
+        Returns a dict mapping each row's name to its emoji prefix (one of
+        ``"✔️ "``, ``"❗ "``, or ``""``). Rows named in
+        ``emoji_config["skip_names"]`` are excluded from ranking and always
+        receive ``""``.
+        """
+        if not emoji_config:
+            return {r["name"]: "" for r in rows}
+
+        widx = emoji_config["wrapper_idx"]
+        stat = emoji_config["stat"]
+        higher_is_better = emoji_config.get("higher_is_better", True)
+        skip_names = set(emoji_config.get("skip_names", ()))
+
+        rank_values = []
+        for r in rows:
+            w = r["cells"][widx]
+            rank_values.append(w._values.get(stat, float("nan")))
+
+        # Indices that participate in ranking (skip named exclusions + NaN).
+        valid = [(i, v) for i, v in enumerate(rank_values)
+                 if v == v and rows[i]["name"] not in skip_names]
+
+        best: set[int] = set()
+        worst: set[int] = set()
+        if valid:
+            valid_sorted = sorted(valid, key=lambda x: x[1])
+            n = len(valid_sorted)
+            if emoji_config["mode"] == "single":
+                if higher_is_better:
+                    best = {valid_sorted[-1][0]}
+                    worst = {valid_sorted[0][0]}
+                else:
+                    best = {valid_sorted[0][0]}
+                    worst = {valid_sorted[-1][0]}
+            else:  # "pct"
+                n_top = max(1, int(n * emoji_config["pct"]))
+                if higher_is_better:
+                    worst = {idx for idx, _ in valid_sorted[:n_top]}
+                    best = {idx for idx, _ in valid_sorted[-n_top:]}
+                else:
+                    best = {idx for idx, _ in valid_sorted[:n_top]}
+                    worst = {idx for idx, _ in valid_sorted[-n_top:]}
+
+        return {
+            r["name"]: ("✔️ " if i in best else ("❗ " if i in worst else ""))
+            for i, r in enumerate(rows)
+        }
+
+    def get_table_row_emojis(self, table_id: str) -> Dict[str, str]:
+        """Return ``{row_name: emoji_prefix}`` for a registered table.
+
+        Useful when the caller wants to attach the same emoji markers to a
+        side-channel data structure (e.g. ``summary_stats.json``). The table
+        must have already been rendered via :meth:`apply`.
+        """
+        spec = self._table_specs.get(table_id)
+        if spec is None:
+            return {}
+        return self._compute_row_emojis(spec["rows"], spec.get("emoji_config"))
+
     def _render_table(self, spec: dict) -> str:
         rows = spec["rows"]
         columns = spec["columns"]
         emoji_config = spec.get("emoji_config")
 
         # --- Apply emoji markers to row names ---
-        row_names = [r["name"] for r in rows]
-        if emoji_config:
-            widx = emoji_config["wrapper_idx"]
-            stat = emoji_config["stat"]
-            rank_values = []
-            for r in rows:
-                w = r["cells"][widx]
-                rank_values.append(w._values.get(stat, float("nan")))
-
-            valid = [(i, v) for i, v in enumerate(rank_values) if v == v]  # not NaN
-            if valid:
-                valid_sorted = sorted(valid, key=lambda x: x[1])
-                n = len(valid_sorted)
-                if emoji_config["mode"] == "single":
-                    best = {valid_sorted[-1][0]}
-                    worst = {valid_sorted[0][0]}
-                else:  # "pct"
-                    n_top = max(1, int(n * emoji_config["pct"]))
-                    worst = {idx for idx, _ in valid_sorted[:n_top]}
-                    best = {idx for idx, _ in valid_sorted[-n_top:]}
-                row_names = [
-                    ("✔️ " if i in best else ("❗ " if i in worst else "")) + name
-                    for i, name in enumerate(row_names)
-                ]
+        emojis = self._compute_row_emojis(rows, emoji_config)
+        row_names = [emojis[r["name"]] + r["name"] for r in rows]
 
         # --- Build table ---
         header = "| Subset | " + " | ".join(c["header"] for c in columns) + " |\n"
