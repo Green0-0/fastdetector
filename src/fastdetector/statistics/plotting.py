@@ -18,6 +18,13 @@ def get_histogram(
 ) -> bytes:
     """Generate a single histogram with multiple datasets overlayed.
 
+    All datasets share the same bin edges, computed from the global min/max
+    across every dataset in *data_lists*. Without shared bins, matplotlib
+    computes bin edges independently per `plt.hist` call, so datasets with
+    different ranges produce histograms whose bars are not directly
+    comparable — a tall bar in one dataset may cover a wider probability
+    range than a tall bar in another, making the overlay misleading.
+
     Args:
         data_lists: List of data lists.
         labels: List of labels corresponding to the data lists.
@@ -29,9 +36,28 @@ def get_histogram(
         Histogram as a PNG bytes object.
     """
     plt.figure(figsize=figsize)
+
+    # Compute shared bin edges from the combined range of all non-empty
+    # datasets. If every dataset is empty/None, fall back to a dummy
+    # [0, 1] range so plt.hist doesn't error out.
+    all_values = [
+        v for data in data_lists if data is not None
+        for v in (data.tolist() if hasattr(data, "tolist") else data)
+        if v == v  # filter NaN
+    ]
+    if all_values:
+        lo, hi = float(min(all_values)), float(max(all_values))
+        if lo == hi:
+            # Single distinct value — pad the range so plt.hist can render.
+            pad = abs(lo) * 1e-6 + 1e-6
+            lo, hi = lo - pad, hi + pad
+        shared_edges = np.linspace(lo, hi, bins + 1)
+    else:
+        shared_edges = np.linspace(0.0, 1.0, bins + 1)
+
     for data, label in zip(data_lists, labels):
         if data is not None:
-            plt.hist(data, bins=bins, alpha=0.5, label=label)
+            plt.hist(data, bins=shared_edges, alpha=0.5, label=label)
     plt.title(title)
     if labels and any(labels):
         plt.legend()
