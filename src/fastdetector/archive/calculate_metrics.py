@@ -35,9 +35,9 @@ def main():
     ai_texts = result_ds[args.col_ai]
 
     print("Adding pairwise text statistics...")
-    result_ds = result_ds.add_column("pairwise_jaccard_1", pairwise_jaccards(human_texts, ai_texts, 1))
-    result_ds = result_ds.add_column("pairwise_jaccard_2", pairwise_jaccards(human_texts, ai_texts, 2))
-    result_ds = result_ds.add_column("pairwise_levenshtein", pairwise_levenshteins(human_texts, ai_texts))
+    result_ds = result_ds.add_column("jaccard_1", pairwise_jaccards(human_texts, ai_texts, 1))
+    result_ds = result_ds.add_column("jaccard_2", pairwise_jaccards(human_texts, ai_texts, 2))
+    result_ds = result_ds.add_column("levenshtein", pairwise_levenshteins(human_texts, ai_texts))
     
     print("Computing global text statistics...")
     global_stats = []
@@ -83,7 +83,7 @@ def main():
     human_embs = np.array(result_ds[f"{args.col_human}_embedding"])
     ai_embs = np.array(result_ds[f"{args.col_ai}_embedding"])
     
-    result_ds = result_ds.add_column("pairwise_cosdist", pairwise_cosdist(human_embs, ai_embs))
+    result_ds = result_ds.add_column("cosdist", pairwise_cosdist(human_embs, ai_embs))
 
     print("Computing BERTScore and MoverScore...")
     human_embs_list = [np.array(e) for e in result_ds[f"{args.col_human}_token_embeddings"]]
@@ -92,32 +92,32 @@ def main():
     ai_tokens_list = result_ds[f"{args.col_ai}_tokens"]
     
     b_prec, b_rec, b_f1 = bertscore(human_embs_list, ai_embs_list, human_tokens_list, ai_tokens_list)
-    result_ds = result_ds.add_column("pairwise_bertscore_precision", b_prec)
-    result_ds = result_ds.add_column("pairwise_bertscore_recall", b_rec)
-    result_ds = result_ds.add_column("pairwise_bertscore_f1", b_f1)
+    result_ds = result_ds.add_column("bertscore_precision", b_prec)
+    result_ds = result_ds.add_column("bertscore_recall", b_rec)
+    result_ds = result_ds.add_column("bertscore", b_f1)
     
     m_scores = moverscore(human_embs_list, ai_embs_list, human_tokens_list, ai_tokens_list)
-    result_ds = result_ds.add_column("pairwise_moverscore", m_scores)
+    result_ds = result_ds.add_column("moverscore", m_scores)
 
     print("Retrieving pairwise cross encoder similarities...")
     ce_col = f"pairwise_cross_encoder_{args.col_human}_{args.col_ai}"
-    result_ds = result_ds.add_column("pairwise_cross_encoder", result_ds[ce_col])
+    result_ds = result_ds.add_column("reranker", result_ds[ce_col])
 
     print("Retrieving soft ngram scores...")
     sn_col = f"pairwise_softngram_{args.col_human}_{args.col_ai}"
-    result_ds = result_ds.add_column("pairwise_softngram", result_ds[sn_col])
+    result_ds = result_ds.add_column("softngram", result_ds[sn_col])
 
     print("Computing minmax norms and percentiles...")
-    result_ds = result_ds.add_column("pairwise_cosdist_quantile", quantile(result_ds["pairwise_cosdist"]))
-    result_ds = result_ds.add_column("pairwise_levenshtein_norm", min_max_norm(result_ds["pairwise_levenshtein"]))
-    result_ds = result_ds.add_column("pairwise_levenshtein_quantile", quantile(result_ds["pairwise_levenshtein"]))
-    result_ds = result_ds.add_column("pairwise_jaccard_1_quantile", quantile(result_ds["pairwise_jaccard_1"]))
-    result_ds = result_ds.add_column("pairwise_jaccard_2_quantile", quantile(result_ds["pairwise_jaccard_2"]))
-    result_ds = result_ds.add_column("pairwise_cross_encoder_norm", min_max_norm(result_ds["pairwise_cross_encoder"]))
-    result_ds = result_ds.add_column("pairwise_cross_encoder_quantile", quantile(result_ds["pairwise_cross_encoder"]))
-    result_ds = result_ds.add_column("pairwise_softngram_quantile", quantile(result_ds["pairwise_softngram"]))
-    result_ds = result_ds.add_column("pairwise_bertscore_f1_quantile", quantile(result_ds["pairwise_bertscore_f1"]))
-    result_ds = result_ds.add_column("pairwise_moverscore_quantile", quantile(result_ds["pairwise_moverscore"]))
+    result_ds = result_ds.add_column("cosdist_quantile", quantile(result_ds["cosdist"]))
+    result_ds = result_ds.add_column("levenshtein_norm", min_max_norm(result_ds["levenshtein"]))
+    result_ds = result_ds.add_column("levenshtein_quantile", quantile(result_ds["levenshtein"]))
+    result_ds = result_ds.add_column("jaccard_1_quantile", quantile(result_ds["jaccard_1"]))
+    result_ds = result_ds.add_column("jaccard_2_quantile", quantile(result_ds["jaccard_2"]))
+    result_ds = result_ds.add_column("reranker_norm", min_max_norm(result_ds["reranker"]))
+    result_ds = result_ds.add_column("reranker_quantile", quantile(result_ds["reranker"]))
+    result_ds = result_ds.add_column("softngram_quantile", quantile(result_ds["softngram"]))
+    result_ds = result_ds.add_column("bertscore_quantile", quantile(result_ds["bertscore"]))
+    result_ds = result_ds.add_column("moverscore_quantile", quantile(result_ds["moverscore"]))
 
     print("Computing LLM statistics from precomputed logprobs...")
     h_tokens_llama = result_ds[f"{args.col_human}_tokens_llama"]
@@ -171,21 +171,21 @@ def main():
         global_stats.append(f"- **{b_stat}**: Human {h_mean_bino:.4f} | AI {a_mean_bino:.4f}")
         
     global_stats.append("\n## Embeddings & Cosine Similarities (Average)")
-    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['pairwise_cosdist']):.4f}")
+    global_stats.append(f"- **Pairwise**: {np.mean(result_ds['cosdist']):.4f}")
     
-    global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['pairwise_cross_encoder']):.4f}")
-    global_stats.append(f"- **Pairwise Soft N-Gram**: {np.mean(result_ds['pairwise_softngram']):.4f}")
-    global_stats.append(f"- **Pairwise BERTScore F1**: {np.mean(result_ds['pairwise_bertscore_f1']):.4f}")
-    global_stats.append(f"- **Pairwise MoverScore**: {np.mean(result_ds['pairwise_moverscore']):.4f}")
+    global_stats.append(f"- **Pairwise Cross-Encoder**: {np.mean(result_ds['reranker']):.4f}")
+    global_stats.append(f"- **Pairwise Soft N-Gram**: {np.mean(result_ds['softngram']):.4f}")
+    global_stats.append(f"- **Pairwise BERTScore F1**: {np.mean(result_ds['bertscore']):.4f}")
+    global_stats.append(f"- **Pairwise MoverScore**: {np.mean(result_ds['moverscore']):.4f}")
     
     metrics_data = [
-        ("Levenshtein", np.array(result_ds["pairwise_levenshtein_quantile"])),
-        ("Cross-Encoder", np.array(result_ds["pairwise_cross_encoder_quantile"])),
-        ("Jaccard", np.array(result_ds["pairwise_jaccard_1_quantile"])),
-        ("Cosine", np.array(result_ds["pairwise_cosdist_quantile"])),
-        ("Soft N-Gram", np.array(result_ds["pairwise_softngram_quantile"])),
-        ("BERTScore F1", np.array(result_ds["pairwise_bertscore_f1_quantile"])),
-        ("MoverScore", np.array(result_ds["pairwise_moverscore_quantile"]))
+        ("Levenshtein", np.array(result_ds["levenshtein_quantile"])),
+        ("Cross-Encoder", np.array(result_ds["reranker_quantile"])),
+        ("Jaccard", np.array(result_ds["jaccard_1_quantile"])),
+        ("Cosine", np.array(result_ds["cosdist_quantile"])),
+        ("Soft N-Gram", np.array(result_ds["softngram_quantile"])),
+        ("BERTScore F1", np.array(result_ds["bertscore_quantile"])),
+        ("MoverScore", np.array(result_ds["moverscore_quantile"]))
     ]
     
     global_stats.append("\n## Pearson Correlation Coefficients")
@@ -225,14 +225,14 @@ def main():
         optimal_thresholds[f"Binoculars ({b_stat})"] = (opt_t_bino, opt_acc_bino)
         conf_matrices[f"Binoculars ({b_stat})"] = get_confusion_matrix([result_ds[f"human_{b_stat}"], result_ds[f"ai_{b_stat}"]], [True, False], False, opt_t_bino, f"Confusion Matrix: {b_stat}")
 
-    charts["hist_pairwise_cosdist.png"] = get_histogram([result_ds["pairwise_cosdist"]], ["Pairwise Cosine Distance"], "Histogram: Pairwise Cosine Distance")
-    charts["hist_pairwise_crossencoder.png"] = get_histogram([result_ds["pairwise_cross_encoder"]], ["Pairwise Cross-Encoder"], "Histogram: Pairwise Cross-Encoder")
-    charts["hist_pairwise_levenshtein.png"] = get_histogram([result_ds["pairwise_levenshtein"]], ["Pairwise Levenshtein"], "Histogram: Pairwise Levenshtein")
-    charts["hist_pairwise_jaccard.png"] = get_histogram([result_ds["pairwise_jaccard_1"], result_ds["pairwise_jaccard_2"]], ["Pairwise Jaccard (n=1)", "Pairwise Jaccard (n=2)"], "Histogram: Pairwise Jaccard")
+    charts["hist_cosdist.png"] = get_histogram([result_ds["cosdist"]], ["Pairwise Cosine Distance"], "Histogram: Pairwise Cosine Distance")
+    charts["hist_reranker.png"] = get_histogram([result_ds["reranker"]], ["Pairwise Cross-Encoder"], "Histogram: Pairwise Cross-Encoder")
+    charts["hist_levenshtein.png"] = get_histogram([result_ds["levenshtein"]], ["Pairwise Levenshtein"], "Histogram: Pairwise Levenshtein")
+    charts["hist_jaccard.png"] = get_histogram([result_ds["jaccard_1"], result_ds["jaccard_2"]], ["Pairwise Jaccard (n=1)", "Pairwise Jaccard (n=2)"], "Histogram: Pairwise Jaccard")
     
-    charts["hist_pairwise_softngram.png"] = get_histogram([result_ds["pairwise_softngram"]], ["Pairwise Soft N-Gram"], "Histogram: Pairwise Soft N-Gram")
-    charts["hist_pairwise_bertscore_f1.png"] = get_histogram([result_ds["pairwise_bertscore_f1"]], ["Pairwise BERTScore F1"], "Histogram: Pairwise BERTScore F1")
-    charts["hist_pairwise_moverscore.png"] = get_histogram([result_ds["pairwise_moverscore"]], ["Pairwise MoverScore"], "Histogram: Pairwise MoverScore")
+    charts["hist_softngram.png"] = get_histogram([result_ds["softngram"]], ["Pairwise Soft N-Gram"], "Histogram: Pairwise Soft N-Gram")
+    charts["hist_bertscore.png"] = get_histogram([result_ds["bertscore"]], ["Pairwise BERTScore F1"], "Histogram: Pairwise BERTScore F1")
+    charts["hist_moverscore.png"] = get_histogram([result_ds["moverscore"]], ["Pairwise MoverScore"], "Histogram: Pairwise MoverScore")
 
     
     total_runtime = time.time() - start_time
@@ -256,7 +256,7 @@ def main():
     readme_content += "\n## Histograms\n"
     for stat in ["perplexity", "entropy", "fastdetectgpt", "top_p_outlier", "top_k_outlier", "binoculars"]:
         readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
-    for stat in ["pairwise_cosdist", "pairwise_crossencoder", "pairwise_levenshtein", "pairwise_jaccard", "pairwise_softngram", "pairwise_bertscore_f1", "pairwise_moverscore"]:
+    for stat in ["cosdist", "reranker", "levenshtein", "jaccard", "softngram", "bertscore", "moverscore"]:
         if f"hist_{stat}.png" in charts:
             readme_content += f"![Histogram {stat}](hist_{stat}.png)\n"
 

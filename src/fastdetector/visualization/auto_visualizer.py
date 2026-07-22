@@ -1,36 +1,4 @@
-"""AutoVisualizer: compile-then-evaluate README/chart builder.
-
-The user spends the first phase declaring *what* to analyze (binding columns,
-declaring IDs, wiring up plots). Nothing runs during this phase. The second
-phase is a single :meth:`apply` call that traces the entire description,
-deduplicates array extractions, computes everything, and produces the final
-output.
-
-Design principles
------------------
-1. **Lazy evaluation** — no computation happens until ``apply()`` is called.
-   This allows deduplication of shared array extractions and catches all
-   configuration errors (unresolved IDs, missing thresholds, wrong columns)
-   at a single well-defined moment.
-
-2. **Template string substitution** — the README is a plain string with
-   ``{{ID}}`` placeholders. ``apply()`` replaces every placeholder with a
-   scalar value (formatted), a markdown image embed (for plots), or a
-   markdown chunk (for tables / pearson sections). Unresolved IDs fail
-   loudly.
-
-3. **Library stays generic** — no knowledge of stat vs eval, no hardcoded
-   column names, no metric registry. All such knowledge lives in the
-   scripts that configure the visualizer.
-
-4. **Wrappers are handles, not values** — ``bind_*`` returns a wrapper object
-   on which the user calls ``specify_stats`` to map internal stat names to
-   template IDs. The wrapper does not carry computed data until ``apply()``
-   runs.
-"""
-
 import re
-import itertools
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -49,8 +17,6 @@ from fastdetector.visualization.plotting import (
 )
 
 
-# A mask function receives a dataset split (same format as the full dataset)
-# and returns a boolean numpy array of length ``len(split)``.
 MaskFn = Callable[[Dataset], np.ndarray]
 
 
@@ -121,7 +87,7 @@ class StatWrapper(_Wrapper):
         viz: "AutoVisualizer",
         name: str,
         column: str,
-        mask_fn: MaskFn,
+        mask_fn: Optional[MaskFn] = None,
         split: str = "test",
     ):
         super().__init__(viz, name)
@@ -160,8 +126,8 @@ class ClassifierStatWrapper(_Wrapper):
         name: str,
         column_names: List[str],
         column_classes: List[bool],
-        mask_fn: MaskFn,
-        threshold_id: str,
+        mask_fn: Optional[MaskFn] = None,
+        threshold_id: str = "",
         autoclass_column: Optional[str] = None,
         split: str = "test",
     ):
@@ -247,8 +213,8 @@ class ClassifierThresholdStatWrapper(_Wrapper):
         name: str,
         column_names: List[str],
         column_classes: List[bool],
-        mask_fn: MaskFn,
-        threshold_type: str,
+        mask_fn: Optional[MaskFn] = None,
+        threshold_type: str = "score",
         autoclass_column: Optional[str] = None,
         flip_class: bool = False,
         split: str = "val",
@@ -265,13 +231,12 @@ class ClassifierThresholdStatWrapper(_Wrapper):
         self._threshold_dict: dict = {}
 
     def _resolve(self, viz: "AutoVisualizer") -> None:
-        ds = viz._get_split(self._split)
-        if ds is None:
-            raise ValueError(
-                f"Cannot sweep threshold on split '{self._split}': this split "
-                f"is not available. Pass val_split to AutoVisualizer or use "
-                f"bind_static_threshold."
-            )
+        ds = viz._splits.get(self._split)
+        assert ds is not None, (
+            f"Cannot sweep threshold on split '{self._split}': this split "
+            f"is not available. Pass val_split to AutoVisualizer or use "
+            f"bind_static_threshold."
+        )
 
         arrays, classes = self._extract_arrays(viz)
         threshold_dict, optimal_acc, sweep_data = compute_threshold_sweep(
@@ -281,11 +246,10 @@ class ClassifierThresholdStatWrapper(_Wrapper):
         self._sweep_data = sweep_data
 
         selected = threshold_dict.get(self._threshold_type)
-        if selected is None:
-            raise ValueError(
-                f"Unknown threshold_type '{self._threshold_type}'. "
-                f"Available: {list(threshold_dict.keys())}"
-            )
+        assert selected is not None, (
+            f"Unknown threshold_type '{self._threshold_type}'. "
+            f"Available: {list(threshold_dict.keys())}"
+        )
 
         # Register the threshold value + flip_class under each threshold_value ID
         # so ClassifierStatWrapper can look it up.
@@ -385,38 +349,23 @@ class AutoVisualizer:
     5. Apply: ``readme, charts, values = viz.apply(template)``
     """
 
-    def __init__(
-        self,
-        ds: Dataset,
-        val_split: Optional[float] = None,
-        seed: int = 42,
-    ):
+    def __init__(self, ds: Dataset, val_split: Optional[float] = None, seed: int = 42):
         """Initialize the visualizer.
 
         Args:
             ds: The HuggingFace dataset.
             val_split: If set, proportion of the dataset to use as the
                 validation split (for threshold sweeping). The remainder is
-                the test split. If ``None``, no split is performed and
-                ``bind_classifier_threshold`` will fail.
+                the test split. If ``None``, no split is performed.
             seed: Random seed for the val/test split (deterministic regeneration).
         """
-        self._ds_full = ds
-        self._ds_val: Optional[Dataset] = None
-        self._ds_test: Dataset = ds
-
+        self._splits: Dict[str, Dataset] = {"test": ds}
+        
         if val_split is not None:
-            if not (0 < val_split < 1):
-                raise ValueError(f"val_split must be in (0, 1), got {val_split}.")
-            n = len(ds)
-            val_size = max(1, int(n * val_split))
-            rng = np.random.RandomState(seed)
-            indices = np.arange(n)
-            rng.shuffle(indices)
-            val_idx = indices[:val_size]
-            test_idx = indices[val_size:]
-            self._ds_val = ds.select(val_idx.tolist())
-            self._ds_test = ds.select(test_idx.tolist())
+            assert 0 < val_split < 1, f"val_split must be in (0, 1), got {val_split}."
+            splits = ds.train_test_split(test_size=val_split, seed=seed)
+            self._splits["val"] = splits["test"]
+            self._splits["test"] = splits["train"]
 
         self._wrappers: List[_Wrapper] = []
         self._threshold_wrappers: List[ClassifierThresholdStatWrapper] = []
@@ -437,22 +386,10 @@ class AutoVisualizer:
         self._extract_cache: Dict[Tuple[str, int, str], np.ndarray] = {}
 
     # ------------------------------------------------------------------
-    # Split access
-    # ------------------------------------------------------------------
-
-    def _get_split(self, split: str) -> Optional[Dataset]:
-        if split == "val":
-            return self._ds_val
-        elif split == "test":
-            return self._ds_test
-        else:
-            raise ValueError(f"Unknown split '{split}'. Use 'val' or 'test'.")
-
-    # ------------------------------------------------------------------
     # Array extraction (with caching)
     # ------------------------------------------------------------------
 
-    def _extract(self, column: str, mask_fn: MaskFn, split: str) -> np.ndarray:
+    def _extract(self, column: str, mask_fn: Optional[MaskFn], split: str) -> np.ndarray:
         """Extract a numeric column from a split, filtered by a mask function.
 
         Results are cached per (column, mask_fn, split) so that multiple
@@ -462,30 +399,21 @@ class AutoVisualizer:
         if cache_key in self._extract_cache:
             return self._extract_cache[cache_key]
 
-        ds = self._get_split(split)
-        if ds is None:
-            raise ValueError(
-                f"Split '{split}' is not available. "
-                f"Pass val_split to AutoVisualizer if you need a validation split."
-            )
-
-        if column not in ds.column_names:
-            raise ValueError(
-                f"Column '{column}' not found in dataset. "
-                f"Available columns: {ds.column_names}"
-            )
-
-        mask = mask_fn(ds)
-        mask = np.asarray(mask, dtype=bool)
-        if len(mask) != len(ds):
-            raise ValueError(
-                f"Mask function returned {len(mask)} elements but split "
-                f"'{split}' has {len(ds)} rows."
-            )
+        ds = self._splits.get(split)
+        assert ds is not None, f"Split '{split}' not found in {self._splits.keys()}"
+        assert column in ds.column_names, f"Column '{column}' not found in dataset. Available columns: {ds.column_names}"
 
         col_data = ds[column]
         try:
-            arr = np.array(col_data, dtype=float)[mask]
+            arr = np.array(col_data, dtype=float)
+            if mask_fn is not None:
+                mask = mask_fn(ds)
+                mask = np.asarray(mask, dtype=bool)
+                assert len(mask) == len(ds), (
+                    f"Mask function returned {len(mask)} elements but split "
+                    f"'{split}' has {len(ds)} rows."
+                )
+                arr = arr[mask]
         except (ValueError, TypeError) as e:
             raise ValueError(
                 f"Column '{column}' could not be converted to float for "
@@ -501,26 +429,20 @@ class AutoVisualizer:
     # ------------------------------------------------------------------
 
     def _register_id(self, tid: str, wrapper: _Wrapper, id_type: str) -> None:
-        if tid in self._id_registry:
-            existing_wrapper, _ = self._id_registry[tid]
-            if existing_wrapper is not wrapper:
-                raise ValueError(
-                    f"Template ID '{tid}' is already registered by another "
-                    f"wrapper. Each ID must be unique."
-                )
+        assert tid not in self._id_registry, f"Template ID '{tid}' is already registered."
         self._id_registry[tid] = (wrapper, id_type)
 
     def _register_threshold(self, tid: str, value: float, flip_class: bool) -> None:
+        assert tid not in self._threshold_registry, f"Threshold ID '{tid}' is already registered."
         self._threshold_registry[tid] = (value, flip_class)
 
     def _get_threshold(self, threshold_id: str) -> Tuple[float, bool]:
-        if threshold_id not in self._threshold_registry:
-            raise ValueError(
-                f"Threshold ID '{threshold_id}' was not registered by any "
-                f"threshold wrapper. Make sure a ClassifierThresholdStatWrapper "
-                f"or StaticThresholdWrapper has called "
-                f"specify_stats(threshold_value='{threshold_id}')."
-            )
+        assert threshold_id in self._threshold_registry, (
+            f"Threshold ID '{threshold_id}' was not registered by any "
+            f"threshold wrapper. Make sure a ClassifierThresholdStatWrapper "
+            f"or StaticThresholdWrapper has called "
+            f"specify_stats(threshold_value='{threshold_id}')."
+        )
         return self._threshold_registry[threshold_id]
 
     # ------------------------------------------------------------------
@@ -530,45 +452,43 @@ class AutoVisualizer:
     def bind_stat(
         self,
         column: str,
-        mask_fn: MaskFn,
-        name: Optional[str] = None,
+        name: str,
+        mask_fn: Optional[MaskFn] = None,
         split: str = "test",
     ) -> StatWrapper:
         """Bind a numeric column for univariate analysis.
 
         Args:
             column: Column name in the dataset.
+            name: Display name (for tables, pearson output, etc.).
             mask_fn: Function(ds_split) -> bool array. Applied to the
                 chosen split to select rows.
-            name: Display name (for tables, pearson output, etc.). Defaults
-                to the column name.
             split: Which split to use ("test" or "val"). Defaults to "test".
 
         Returns:
             A :class:`StatWrapper`.
         """
-        w = StatWrapper(self, name or column, column, mask_fn, split)
+        w = StatWrapper(self, name, column, mask_fn, split)
         self._wrappers.append(w)
         return w
 
     def bind_classifier_stat(
         self,
-        column_names: Union[str, List[str]],
-        column_classes: Union[bool, List[bool]],
-        mask_fn: MaskFn,
-        threshold_id: str,
+        column_names: List[str],
+        column_classes: List[bool],
+        name: str,
+        mask_fn: Optional[MaskFn] = None,
+        threshold_id: str = "",
         autoclass_column: Optional[str] = None,
-        name: Optional[str] = None,
         split: str = "test",
     ) -> ClassifierStatWrapper:
         """Bind score column(s) as a classifier, evaluated at a fixed threshold.
 
         Args:
-            column_names: Either a list of score column names (one per class)
-                or a single score column name (when ``autoclass_column`` is set).
-            column_classes: Either a list of booleans (True = positive class,
-                one per column) or a single boolean (when a single column is
-                passed without ``autoclass_column``).
+            column_names: A list of score column names (one per class).
+            column_classes: A list of booleans (True = positive class,
+                one per column).
+            name: Display name.
             mask_fn: Function(ds_split) -> bool array.
             threshold_id: Template ID of the threshold to use (must be
                 registered by a threshold wrapper's
@@ -576,34 +496,24 @@ class AutoVisualizer:
             autoclass_column: If set, a boolean column whose per-row value
                 determines the class. Mutually exclusive with passing multiple
                 column_names.
-            name: Display name. Defaults to joined column names.
             split: Which split to use. Defaults to "test".
 
         Returns:
             A :class:`ClassifierStatWrapper`.
         """
-        if isinstance(column_names, str):
-            column_names = [column_names]
-        if isinstance(column_classes, bool):
-            column_classes = [column_classes]
-
         if autoclass_column is not None:
-            if len(column_names) != 1:
-                raise ValueError(
-                    f"When autoclass_column is set, exactly one score column "
-                    f"must be provided, got {column_names}."
-                )
-            default_name = column_names[0]
+            assert len(column_names) == 1, (
+                f"When autoclass_column is set, exactly one score column "
+                f"must be provided, got {column_names}."
+            )
         else:
-            if len(column_names) != len(column_classes):
-                raise ValueError(
-                    f"column_names ({column_names}) and column_classes "
-                    f"({column_classes}) must have the same length."
-                )
-            default_name = " vs ".join(column_names)
+            assert len(column_names) == len(column_classes), (
+                f"column_names ({column_names}) and column_classes "
+                f"({column_classes}) must have the same length."
+            )
 
         w = ClassifierStatWrapper(
-            self, name or default_name, column_names, column_classes,
+            self, name, column_names, column_classes,
             mask_fn, threshold_id, autoclass_column, split,
         )
         self._wrappers.append(w)
@@ -611,13 +521,13 @@ class AutoVisualizer:
 
     def bind_classifier_threshold(
         self,
-        column_names: Union[str, List[str]],
-        column_classes: Union[bool, List[bool]],
-        mask_fn: MaskFn,
-        threshold_type: str,
+        column_names: List[str],
+        column_classes: List[bool],
+        name: str,
+        mask_fn: Optional[MaskFn] = None,
+        threshold_type: str = "score",
         autoclass_column: Optional[str] = None,
         flip_class: bool = False,
-        name: Optional[str] = None,
         split: str = "val",
     ) -> ClassifierThresholdStatWrapper:
         """Bind a classifier threshold determined by sweeping.
@@ -627,48 +537,38 @@ class AutoVisualizer:
         from ``specify_stats(threshold_value=...)``.
 
         Args:
-            column_names: Score column name(s).
-            column_classes: Class label(s) (True = positive).
+            column_names: List of score column names.
+            column_classes: List of class labels (True = positive).
+            name: Display name (used for sweep plot title).
             mask_fn: Function(ds_split) -> bool array.
             threshold_type: Which threshold to select from the sweep
                 (``"accuracy"``, ``"f1"``, ``"fpr_1pct"``, etc.).
             autoclass_column: Optional boolean column for autoclass mode.
             flip_class: If True, values <= threshold are positive.
-            name: Display name (used for sweep plot title).
             split: Which split to sweep on. Defaults to "val".
 
         Returns:
             A :class:`ClassifierThresholdStatWrapper`.
         """
-        if isinstance(column_names, str):
-            column_names = [column_names]
-        if isinstance(column_classes, bool):
-            column_classes = [column_classes]
-
         if autoclass_column is not None:
-            if len(column_names) != 1:
-                raise ValueError(
-                    f"When autoclass_column is set, exactly one score column "
-                    f"must be provided, got {column_names}."
-                )
-            default_name = column_names[0]
+            assert len(column_names) == 1, (
+                f"When autoclass_column is set, exactly one score column "
+                f"must be provided, got {column_names}."
+            )
         else:
-            if len(column_names) != len(column_classes):
-                raise ValueError(
-                    f"column_names ({column_names}) and column_classes "
-                    f"({column_classes}) must have the same length."
-                )
-            default_name = " vs ".join(column_names)
-
-        valid_types = ["accuracy", "f1"] + list(FPR_TARGETS.keys())
-        if threshold_type not in valid_types:
-            raise ValueError(
-                f"Unknown threshold_type '{threshold_type}'. "
-                f"Valid: {valid_types}"
+            assert len(column_names) == len(column_classes), (
+                f"column_names ({column_names}) and column_classes "
+                f"({column_classes}) must have the same length."
             )
 
+        valid_types = ["accuracy", "f1"] + list(FPR_TARGETS.keys())
+        assert threshold_type in valid_types, (
+            f"Unknown threshold_type '{threshold_type}'. "
+            f"Valid: {valid_types}"
+        )
+
         w = ClassifierThresholdStatWrapper(
-            self, name or default_name, column_names, column_classes,
+            self, name, column_names, column_classes,
             mask_fn, threshold_type, autoclass_column, flip_class, split,
         )
         self._threshold_wrappers.append(w)
@@ -678,20 +578,20 @@ class AutoVisualizer:
     def bind_static_threshold(
         self,
         value: float,
+        name: str,
         flip_class: bool = False,
-        name: Optional[str] = None,
     ) -> StaticThresholdWrapper:
         """Bind a manual threshold (no sweep, no plot).
 
         Args:
             value: The threshold value.
-            flip_class: If True, values <= threshold are positive.
             name: Internal name (for debugging; not displayed).
+            flip_class: If True, values <= threshold are positive.
 
         Returns:
             A :class:`StaticThresholdWrapper`.
         """
-        w = StaticThresholdWrapper(self, name or f"static_{value}", value, flip_class)
+        w = StaticThresholdWrapper(self, name, value, flip_class)
         self._static_wrappers.append(w)
         self._wrappers.append(w)
         return w
@@ -720,8 +620,7 @@ class AutoVisualizer:
             figsize: Figure size.
             title: Plot title. Defaults to the ID.
         """
-        if not wrappers:
-            raise ValueError(f"specify_histogram('{id}'): wrappers list is empty.")
+        assert wrappers, f"specify_histogram('{id}'): wrappers list is empty."
         self._register_id(id, wrappers[0], "plot")
         self._plot_specs[id] = {
             "type": "histogram",
@@ -756,8 +655,7 @@ class AutoVisualizer:
             figsize: Figure size.
             title: Plot title. Defaults to the ID.
         """
-        if not y_wrappers:
-            raise ValueError(f"specify_scatterplot('{id}'): y_wrappers list is empty.")
+        assert y_wrappers, f"specify_scatterplot('{id}'): y_wrappers list is empty."
         self._register_id(id, x_wrapper, "plot")
         self._plot_specs[id] = {
             "type": "scatterplot",
@@ -771,7 +669,7 @@ class AutoVisualizer:
             "title": title or id,
         }
 
-    def specify_pearson(
+    def specify_pearson_heatmap(
         self,
         id: str,
         wrappers: List[_Wrapper],
@@ -780,20 +678,17 @@ class AutoVisualizer:
         """Register a Pearson correlation section under a template ID.
 
         Computes all pairwise Pearson correlations among the wrappers' value
-        arrays and formats them as a markdown list.
+        arrays and formats them as a symmetric markdown table.
 
         Args:
             id: Template ID. The template ``{{id}}`` is replaced with the
-                markdown list.
-            wrappers: List of wrappers (>= 2 required).
+                markdown table.
+            wrappers: List of wrappers (>= 1 required).
             title: Section heading. Defaults to the ID.
         """
-        if len(wrappers) < 2:
-            raise ValueError(
-                f"specify_pearson('{id}'): need at least 2 wrappers, "
-                f"got {len(wrappers)}."
-            )
-        self._register_id(id, wrappers[0], "markdown")
+        if not wrappers:
+            return
+        self._register_id(id, wrappers[0], "plot")
         self._pearson_specs[id] = {
             "wrappers": wrappers,
             "title": title or id,
@@ -837,10 +732,8 @@ class AutoVisualizer:
             row_header: Label for the first column (which lists row names).
                 Defaults to ``"Name"``.
         """
-        if not rows:
-            raise ValueError(f"specify_table('{id}'): rows list is empty.")
-        if not columns:
-            raise ValueError(f"specify_table('{id}'): columns list is empty.")
+        assert rows, f"specify_table('{id}'): rows list is empty."
+        assert columns, f"specify_table('{id}'): columns list is empty."
         self._register_id(id, rows[0]["cells"][0], "markdown")
         self._table_specs[id] = {
             "rows": rows,
@@ -926,8 +819,10 @@ class AutoVisualizer:
         for tid, spec in self._pearson_specs.items():
             if tid not in referenced_ids:
                 continue
-            md = self._render_pearson(spec)
-            values_dict[tid] = md
+            png = self._render_pearson_heatmap(spec)
+            filename = f"{tid}.png"
+            charts[filename] = png
+            values_dict[tid] = filename
 
         # Phase 6: Render tables referenced in the template.
         for tid, spec in self._table_specs.items():
@@ -976,26 +871,53 @@ class AutoVisualizer:
         else:
             raise ValueError(f"Unknown plot type: {spec['type']}")
 
-    def _render_pearson(self, spec: dict) -> str:
+    def _render_pearson_heatmap(self, spec: dict) -> bytes:
+        import matplotlib.pyplot as plt
+        import io
+        
         wrappers = spec["wrappers"]
+        assert wrappers, "No wrappers provided for heatmap."
+
         arrays = [w._get_value_array(self) for w in wrappers]
         names = [w.name for w in wrappers]
 
-        md = f"### {spec['title']}\n\n"
-        for (i, j) in itertools.combinations(range(len(wrappers)), 2):
-            if len(arrays[i]) == 0 or len(arrays[j]) == 0:
-                corr = float("nan")
-            elif len(arrays[i]) != len(arrays[j]):
-                raise ValueError(
-                    f"Pearson correlation between '{names[i]}' and '{names[j]}' "
-                    f"failed: arrays have different lengths ({len(arrays[i])} "
-                    f"vs {len(arrays[j])}). Make sure the wrappers use the same "
-                    f"mask and split."
-                )
-            else:
-                corr = float(np.corrcoef(arrays[i], arrays[j])[0, 1])
-            md += f"- **{names[i]} vs {names[j]}**: {corr:.4f}\n"
-        return md
+        n = len(wrappers)
+        matrix = np.zeros((n, n))
+
+        for i in range(n):
+            for j in range(n):
+                if len(arrays[i]) == 0 or len(arrays[j]) == 0:
+                    matrix[i, j] = float("nan")
+                elif len(arrays[i]) != len(arrays[j]):
+                    raise ValueError(
+                        f"Pearson correlation between '{names[i]}' and '{names[j]}' "
+                        f"failed: arrays have different lengths ({len(arrays[i])} "
+                        f"vs {len(arrays[j])}). Make sure the wrappers use the same "
+                        f"mask and split."
+                    )
+                else:
+                    matrix[i, j] = float(np.corrcoef(arrays[i], arrays[j])[0, 1])
+
+        fig, ax = plt.subplots(figsize=(max(6, n), max(6, n)))
+        im = ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
+
+        ax.set_xticks(np.arange(n), labels=names)
+        ax.set_yticks(np.arange(n), labels=names)
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+        for i in range(n):
+            for j in range(n):
+                val = matrix[i, j]
+                text_color = "w" if abs(val) > 0.5 else "black"
+                ax.text(j, i, f"{val:.2f}", ha="center", va="center", color=text_color)
+
+        ax.set_title(spec["title"])
+        fig.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", bbox_inches="tight", dpi=150)
+        plt.close(fig)
+        return buf.getvalue()
 
     def _compute_row_emojis(self, rows: List[dict], emoji_config: Optional[dict]) -> Dict[str, str]:
         """Compute ``{row_name: emoji_prefix}`` for a table's rows.
@@ -1157,11 +1079,10 @@ class AutoVisualizer:
                 id_str = full
                 fmt = None
 
-            if id_str not in values_dict and id_str not in id_types:
-                raise ValueError(
-                    f"Unresolved template ID: '{id_str}'. "
-                    f"Make sure it was registered via bind_* / specify_*."
-                )
+            assert id_str in values_dict or id_str in id_types, (
+                f"Unresolved template ID: '{id_str}'. "
+                f"Make sure it was registered via bind_* / specify_*."
+            )
 
             id_type = id_types[id_str]
             value = values_dict.get(id_str)
@@ -1169,21 +1090,19 @@ class AutoVisualizer:
             if id_type == "plot":
                 return f"![{id_str}]({id_str}.png)"
             elif id_type == "markdown":
-                if value is None:
-                    raise ValueError(
-                        f"Template ID '{id_str}' is registered as markdown but "
-                        f"was not computed. This usually means the spec was "
-                        f"registered but unreachable from the template; either "
-                        f"reference it or remove the specify_* call."
-                    )
+                assert value is not None, (
+                    f"Template ID '{id_str}' is registered as markdown but "
+                    f"was not computed. This usually means the spec was "
+                    f"registered but unreachable from the template; either "
+                    f"reference it or remove the specify_* call."
+                )
                 return str(value)
             else:  # scalar
-                if value is None:
-                    raise ValueError(
-                        f"Template ID '{id_str}' is registered as a scalar but "
-                        f"was not computed. Check that the wrapper's _resolve "
-                        f"actually populates this stat."
-                    )
+                assert value is not None, (
+                    f"Template ID '{id_str}' is registered as a scalar but "
+                    f"was not computed. Check that the wrapper's _resolve "
+                    f"actually populates this stat."
+                )
                 if fmt:
                     return format(value, fmt)
                 if isinstance(value, float):

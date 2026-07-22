@@ -1,3 +1,7 @@
+1. Review stat_readme, eval.py
+2. Review visualization/
+
+
 1. Review automatated readme writing / plotting
 2. Update filter and stat readme scripts
 3. Fix cross encoder OOM

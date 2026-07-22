@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from typing import Any, Optional, List
 
 from fastdetector.frontend.engine_config import EngineConfig
@@ -134,16 +134,16 @@ class StatConfig(BaseModel):
     parallelization_type: str = "data"
 
     # Basic Similarity Metrics
-    jaccards_1: bool
-    jaccards_2: bool
-    jaccards_3: bool
-    levenshteins: bool
+    jaccard_1: bool
+    jaccard_2: bool
+    jaccard_3: bool
+    levenshtein: bool
 
     # Deep Embedding Metrics
     moverscore: bool
     bertscore: bool
-    pairwise_cosim: bool
-    pairwise_softngram: bool
+    cosdist: bool
+    softngram: bool
 
     # LLM & Generation Metrics
     perplexity: bool
@@ -152,7 +152,7 @@ class StatConfig(BaseModel):
     topk_outlier: bool
     binoculars_score: bool
     fastdetectgpt_score: bool
-    reranker_score: bool
+    reranker: bool
 
     # Thresholds for the outlier metrics. ``topk_threshold`` must be
     # ``<= top_logprobs_k`` or the metric is undefined for every position
@@ -184,3 +184,11 @@ class StatConfig(BaseModel):
     # a concentrated-tail lower bound that systematically underestimates
     # both (see ``_tail_moments`` in statistics_llm.py).
     llm_vocab_size: Optional[int] = None
+
+    @model_validator(mode='after')
+    def validate_llm_settings(self) -> 'StatConfig':
+        if len(self.llm_checkpoints) != len(self.col_suffixes):
+            raise ValueError(f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) must match col_suffixes ({len(self.col_suffixes)})")
+        if self.binoculars_score and len(self.llm_checkpoints) < 2:
+            raise ValueError(f"binoculars_score requires at least 2 llm_checkpoints, but only {len(self.llm_checkpoints)} were provided.")
+        return self

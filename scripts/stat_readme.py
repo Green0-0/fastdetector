@@ -1,19 +1,3 @@
-"""CLI entry point: build a HuggingFace dataset README from stat shards.
-
-Loads globals.toml + stat.toml, concatenates ``--total-shards`` shards of
-the stat-suffixed dataset, configures an :class:`AutoVisualizer` with the
-metrics enabled in the stat config, and uploads the README + charts to the Hub.
-
-Note on threshold sweeping: stat_readme creates ``AutoVisualizer(ds,
-val_split=None)`` and passes ``split="test"`` to ``bind_classifier_threshold``.
-This means thresholds are swept AND evaluated on the full dataset (no
-holdout) — which matches the pre-PR behavior of
-``frontend/readme.py::_build_classifier_section``. The AutoVisualizer's
-"no wrapper ever sees the full unsplit dataset" design principle applies
-to the eval pathway (which uses a real val split); stat_readme intentionally
-opts out because the stat pipeline has no separate validation set.
-"""
-
 import argparse
 import re
 
@@ -24,111 +8,6 @@ from fastdetector.frontend.toml_config import StatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_auto_shard, upload_readme
 from fastdetector.visualization import AutoVisualizer
-
-
-# ---------------------------------------------------------------------------
-# Mask helpers
-# ---------------------------------------------------------------------------
-
-def _overall_mask(ds: Dataset) -> np.ndarray:
-    """Mask that selects all rows."""
-    return np.ones(len(ds), dtype=bool)
-
-
-# ---------------------------------------------------------------------------
-# Metric → column-name mapping (stat_readme-specific knowledge)
-# ---------------------------------------------------------------------------
-
-def _metric_columns(config: StatConfig) -> list[str]:
-    """Return the list of numeric metric column names produced by stat.py.
-
-    These names must match the column names written by ``scripts/stat.py``.
-    """
-    cols: list[str] = []
-
-    if config.jaccards_1:
-        cols.append("jaccard_1")
-    if config.jaccards_2:
-        cols.append("jaccard_2")
-    if config.jaccards_3:
-        cols.append("jaccard_3")
-    if config.levenshteins:
-        cols.append("levenshtein")
-
-    if config.pairwise_softngram:
-        cols.append("pairwise_softngram")
-    if config.pairwise_cosim:
-        cols.append("pairwise_cosdist")
-    if config.bertscore:
-        cols.append("pairwise_bertscore_f1")
-    if config.moverscore:
-        cols.append("pairwise_moverscore")
-    if config.reranker_score:
-        cols.append("pairwise_cross_encoder")
-
-    need_llm = any([
-        config.perplexity, config.entropy, config.topp_outlier,
-        config.topk_outlier, config.binoculars_score, config.fastdetectgpt_score,
-    ])
-    if need_llm:
-        for idx, _ in enumerate(config.llm_checkpoints):
-            suffix = config.col_suffixes[idx] if idx < len(config.col_suffixes) else f"_model_{idx}"
-            if config.perplexity:
-                cols.extend([f"{config.human_column}_perplexity{suffix}",
-                             f"{config.ai_column}_perplexity{suffix}"])
-            if config.entropy:
-                cols.extend([f"{config.human_column}_entropy{suffix}",
-                             f"{config.ai_column}_entropy{suffix}"])
-            if config.fastdetectgpt_score:
-                cols.extend([f"{config.human_column}_fastdetectgpt{suffix}",
-                             f"{config.ai_column}_fastdetectgpt{suffix}"])
-
-        if config.binoculars_score and len(config.llm_checkpoints) >= 2:
-            cols.extend([f"{config.human_column}_binoculars",
-                         f"{config.ai_column}_binoculars"])
-
-    return cols
-
-
-def _classifier_setups(config: StatConfig) -> list[tuple[str, list[str], list[bool], bool]]:
-    """Return classifier configurations for the stat readme.
-
-    Each tuple is ``(name, column_names, column_classes, flip_class)``.
-
-    Directionality:
-    - FastDetectGPT: higher score = AI. AI column is the positive class.
-      No flip needed (default: score > threshold = positive).
-    - Binoculars: lower score = AI. Human column is the positive class
-      (higher score = more likely human). No flip needed.
-    """
-    setups: list[tuple[str, list[str], list[bool], bool]] = []
-    col_a = config.human_column
-    col_b = config.ai_column
-
-    need_llm = any([
-        config.perplexity, config.entropy, config.topp_outlier,
-        config.topk_outlier, config.binoculars_score, config.fastdetectgpt_score,
-    ])
-    if need_llm:
-        for idx, _ in enumerate(config.llm_checkpoints):
-            suffix = config.col_suffixes[idx] if idx < len(config.col_suffixes) else f"_model_{idx}"
-            if config.fastdetectgpt_score:
-                setups.append((
-                    f"FastDetectGPT{suffix}",
-                    [f"{col_b}_fastdetectgpt{suffix}", f"{col_a}_fastdetectgpt{suffix}"],
-                    [True, False],
-                    False,
-                ))
-
-        if config.binoculars_score and len(config.llm_checkpoints) >= 2:
-            setups.append((
-                "Binoculars",
-                [f"{col_a}_binoculars", f"{col_b}_binoculars"],
-                [True, False],
-                False,
-            ))
-
-    return setups
 
 
 def _safe_name(name: str) -> str:
@@ -142,80 +21,6 @@ def _safe_name(name: str) -> str:
     raw = re.sub(r"[^a-zA-Z0-9]", "_", name)
     return re.sub(r"_+", "_", raw).strip("_").upper()
 
-
-# ---------------------------------------------------------------------------
-# README template builder
-# ---------------------------------------------------------------------------
-
-def _build_template(
-    has_summary_table: bool,
-    classifier_specs: list[dict],  # {name, threshold_id, sweep_id, opt_acc_id, cm_id}
-    histogram_ids: list[str],
-    scatterplot_ids: list[str],
-    correlation_id: str,
-) -> str:
-    """Build the readme template string with ``{{ID}}`` placeholders.
-
-    All IDs (``threshold_id``, ``sweep_id``, ``opt_acc_id``, ``cm_id``) are
-    passed in already-sanitized from ``_build_readme`` so the template and
-    the binding site use exactly the same string. This avoids the previous
-    bug where ``_build_template`` re-derived ``cm_id`` with a weaker
-    sanitizer that diverged for names containing ``(``, ``)``, ``:``, or
-    consecutive underscores.
-    """
-    lines: list[str] = []
-    lines.append("# FastDetector Dataset Metrics\n")
-
-    # --- Summary Statistics table ---
-    if has_summary_table:
-        lines.append("## Summary Statistics\n")
-        lines.append("{{SUMMARY_STATS_TABLE}}\n")
-
-    # --- Pearson Correlations ---
-    if correlation_id:
-        lines.append("## Pearson Correlation Coefficients\n")
-        lines.append(f"{{{{{correlation_id}}}}}\n")
-
-    # --- Classifier sections ---
-    if classifier_specs:
-        lines.append("## Classifier Optimal Thresholds\n")
-        for spec in classifier_specs:
-            lines.append(
-                f"- **{spec['name']}**: Threshold {{{{{spec['threshold_id']}}}}} "
-                f"(Accuracy {{{{{spec['opt_acc_id']}}}}})\n"
-            )
-        lines.append("")
-
-        lines.append("## Confusion Matrices\n")
-        for spec in classifier_specs:
-            lines.append(f"{{{{{spec['cm_id']}}}}}\n")
-        lines.append("")
-
-        lines.append("## Classifier Sweep Plots\n")
-        for spec in classifier_specs:
-            lines.append(f"{{{{{spec['sweep_id']}}}}}\n")
-        lines.append("")
-
-    # --- Histograms ---
-    if histogram_ids:
-        lines.append("## Histograms\n")
-        for hid in histogram_ids:
-            lines.append(f"{{{{{hid}}}}}\n")
-        lines.append("")
-
-    # --- Scatterplots ---
-    if scatterplot_ids:
-        lines.append("## Scatterplots\n")
-        for sid in scatterplot_ids:
-            lines.append(f"{{{{{sid}}}}}\n")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build dataset README for stat datasets.")
@@ -242,28 +47,33 @@ def main() -> None:
     print(f"Total merged dataset size: {len(ds)} rows.")
 
     print("Building README via AutoVisualizer...")
-    readme_content, charts = _build_readme(ds, stat_config)
-
-    print(f"Uploading README to {target_dataset}...")
-    upload_readme(
-        dataset_name=target_dataset,
-        files=charts,
-        readme_content=readme_content,
-        append_readme_source=target_dataset,
-    )
-    print("Done!")
-
-
-def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
-    """Configure an AutoVisualizer and produce the readme + charts."""
-    # val_split=None: stat_readme has no separate validation set, so
-    # bind_classifier_threshold below passes split="test" intentionally —
-    # the sweep runs on the full dataset. This matches the pre-PR behavior
-    # of frontend/readme.py::_build_classifier_section.
     viz = AutoVisualizer(ds, val_split=None)
 
-    # --- Bind univariate stats for summary table ---
-    metric_cols = _metric_columns(config)
+    metric_names = [
+        "jaccard_1",
+        "jaccard_2",
+        "jaccard_3",
+        "levenshtein",
+        "softngram",
+        "cosdist",
+        "bertscore",
+        "moverscore",
+        "reranker",
+    ]
+    metric_cols = [col for col in metric_names if getattr(stat_config, col, False)]
+
+    for idx, _ in enumerate(stat_config.llm_checkpoints):
+        suffix = stat_config.col_suffixes[idx]
+        if stat_config.perplexity:
+            metric_cols.extend([f"{stat_config.human_column}_perplexity{suffix}", f"{stat_config.ai_column}_perplexity{suffix}"])
+        if stat_config.entropy:
+            metric_cols.extend([f"{stat_config.human_column}_entropy{suffix}", f"{stat_config.ai_column}_entropy{suffix}"])
+        if stat_config.fastdetectgpt_score:
+            metric_cols.extend([f"{stat_config.human_column}_fastdetectgpt{suffix}", f"{stat_config.ai_column}_fastdetectgpt{suffix}"])
+
+    if stat_config.binoculars_score:
+        metric_cols.extend([f"{stat_config.human_column}_binoculars", f"{stat_config.ai_column}_binoculars"])
+        
     stat_rows = []
     stat_columns = [
         {"header": "Mean", "wrapper_idx": 0, "stat": "mean"},
@@ -271,12 +81,13 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
         {"header": "Max", "wrapper_idx": 0, "stat": "max"},
         {"header": "Min", "wrapper_idx": 0, "stat": "min"},
     ]
+    correlation_wrappers = []
 
     for col in metric_cols:
         if col not in ds.column_names:
             print(f"Warning: column '{col}' not found in dataset. Skipping.")
             continue
-        w = viz.bind_stat(col, _overall_mask, name=col)
+        w = viz.bind_stat(col, name=col)
         safe = _safe_name(col)
         w.specify_stats(
             mean=f"{safe}_MEAN",
@@ -285,37 +96,37 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
             min=f"{safe}_MIN",
         )
         stat_rows.append({"name": col, "cells": [w]})
+        correlation_wrappers.append(w)
 
-    has_summary_table = bool(stat_rows)
-    if has_summary_table:
-        viz.specify_table(
-            "SUMMARY_STATS_TABLE", stat_rows, stat_columns,
-            row_header="Metric",
-        )
+    viz.specify_table("SUMMARY_STATS_TABLE", stat_rows, stat_columns, row_header="Metric")
+    viz.specify_pearson_heatmap("CORRELATIONS", correlation_wrappers, title="Pearson Correlation Coefficients")
 
-    # --- Bind pearson correlations for distance metrics ---
-    correlation_wrappers = []
-    for col in ["pairwise_cosdist", "pairwise_bertscore_f1", "pairwise_moverscore",
-                "pairwise_cross_encoder", "pairwise_softngram"]:
-        if col in ds.column_names:
-            w = viz.bind_stat(col, _overall_mask, name=col)
-            correlation_wrappers.append(w)
-
-    correlation_id = "CORRELATIONS" if len(correlation_wrappers) >= 2 else ""
-    if correlation_id:
-        viz.specify_pearson(correlation_id, correlation_wrappers,
-                            title="Pearson Correlation Coefficients")
-
-    # --- Bind classifier thresholds + stats ---
-    # Each spec carries the full set of IDs (threshold, sweep, opt_acc, cm)
-    # so _build_template doesn't need to re-derive them with a divergent
-    # sanitizer. The previous code re-derived cm_id and opt_acc_id from
-    # `name` with a weaker sanitizer, which crashed for any name containing
-    # `(`, `)`, `:`, or consecutive underscores.
     classifier_specs: list[dict] = []
     histogram_ids: list[str] = []
 
-    for name, columns, classes, flip in _classifier_setups(config):
+    setups: list[tuple[str, list[str], list[bool], bool]] = []
+    col_a = stat_config.human_column
+    col_b = stat_config.ai_column
+
+    for idx, _ in enumerate(stat_config.llm_checkpoints):
+        suffix = stat_config.col_suffixes[idx]
+        if stat_config.fastdetectgpt_score:
+            setups.append((
+                f"FastDetectGPT{suffix}",
+                [f"{col_b}_fastdetectgpt{suffix}", f"{col_a}_fastdetectgpt{suffix}"],
+                [True, False],
+                False,
+            ))
+
+    if stat_config.binoculars_score:
+        setups.append((
+            "Binoculars",
+            [f"{col_a}_binoculars", f"{col_b}_binoculars"],
+            [True, False],
+            False,
+        ))
+
+    for name, columns, classes, flip in setups:
         missing = [c for c in columns if c not in ds.column_names]
         if missing:
             print(f"Warning: columns {missing} not found for classifier '{name}'. Skipping.")
@@ -330,11 +141,10 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
         tw = viz.bind_classifier_threshold(
             column_names=columns,
             column_classes=classes,
-            mask_fn=_overall_mask,
-            threshold_type=config.threshold_type,
+            threshold_type=stat_config.threshold_type,
             flip_class=flip,
             name=name,
-            split="test",  # see val_split note above
+            split="test",
         )
         tw.specify_stats(
             threshold_value=threshold_id,
@@ -345,7 +155,6 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
         cw = viz.bind_classifier_stat(
             column_names=columns,
             column_classes=classes,
-            mask_fn=_overall_mask,
             threshold_id=threshold_id,
             name=name,
         )
@@ -359,18 +168,16 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
             "cm_id": cm_id,
         })
 
-        # Histogram for the classifier scores
         hist_wrappers = []
         for col, cls in zip(columns, classes):
             label = f"{col} ({'AI' if cls else 'Human'})"
-            hw = viz.bind_stat(col, _overall_mask, name=label)
+            hw = viz.bind_stat(col, name=label)
             hist_wrappers.append(hw)
 
         hist_id = f"{safe}_HIST"
         viz.specify_histogram(hist_id, hist_wrappers, title=f"Histogram: {name}")
         histogram_ids.append(hist_id)
 
-    # --- Scatterplots: distance metrics vs each other ---
     scatterplot_ids: list[str] = []
     if len(correlation_wrappers) > 1:
         x_w = correlation_wrappers[0]
@@ -384,18 +191,58 @@ def _build_readme(ds: Dataset, config: StatConfig) -> tuple[str, dict]:
             )
             scatterplot_ids.append(sid)
 
-    # --- Build template ---
-    template = _build_template(
-        has_summary_table=has_summary_table,
-        classifier_specs=classifier_specs,
-        histogram_ids=histogram_ids,
-        scatterplot_ids=scatterplot_ids,
-        correlation_id=correlation_id,
-    )
+    lines: list[str] = []
+    lines.append("# FastDetector Dataset Metrics\n")
 
-    # --- Apply ---
-    readme, charts, _ = viz.apply(template)
-    return readme, charts
+    lines.append("## Summary Statistics\n")
+    lines.append("{{SUMMARY_STATS_TABLE}}\n")
+
+    lines.append("## Pearson Correlation Coefficients\n")
+    lines.append("{{CORRELATIONS}}\n")
+
+    if classifier_specs:
+        lines.append("## Classifier Optimal Thresholds\n")
+        for spec in classifier_specs:
+            lines.append(
+                f"- **{spec['name']}**: Threshold {{{{{spec['threshold_id']}}}}} "
+                f"(Accuracy {{{{{spec['opt_acc_id']}}}}})\n"
+            )
+        lines.append("")
+
+        lines.append("## Confusion Matrices\n")
+        for spec in classifier_specs:
+            lines.append(f"{{{{{spec['cm_id']}}}}}\n")
+        lines.append("")
+
+        lines.append("## Classifier Sweep Plots\n")
+        for spec in classifier_specs:
+            lines.append(f"{{{{{spec['sweep_id']}}}}}\n")
+        lines.append("")
+
+    if histogram_ids:
+        lines.append("## Histograms\n")
+        for hid in histogram_ids:
+            lines.append(f"{{{{{hid}}}}}\n")
+        lines.append("")
+
+    if scatterplot_ids:
+        lines.append("## Scatterplots\n")
+        for sid in scatterplot_ids:
+            lines.append(f"{{{{{sid}}}}}\n")
+        lines.append("")
+
+    template = "\n".join(lines)
+
+    readme_content, charts, _ = viz.apply(template)
+
+    print(f"Uploading README to {target_dataset}...")
+    upload_readme(
+        dataset_name=target_dataset,
+        files=charts,
+        readme_content=readme_content,
+        append_readme_source=target_dataset,
+    )
+    print("Done!")
 
 
 if __name__ == "__main__":

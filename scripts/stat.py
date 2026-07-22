@@ -145,7 +145,7 @@ def make_llm_metrics_processor(
     def process_llm_metrics(examples):
         result = {}
         for idx, _ in enumerate(llm_checkpoints):
-            suffix = col_suffixes[idx] if idx < len(col_suffixes) else f"_model_{idx}"
+            suffix = col_suffixes[idx]
             for col in (col_a, col_b):
                 token_lps = examples[f"{col}_token_logprobs{suffix}"]
                 top_lp = deserialize_top_logprobs(examples[f"{col}_top_logprobs{suffix}"])
@@ -161,9 +161,9 @@ def make_llm_metrics_processor(
                 if stat_config.fastdetectgpt_score:
                     result[f"{col}_fastdetectgpt{suffix}"] = fastdetectgpt_scores_approx(token_lps, top_lp, vocab_size=stat_config.llm_vocab_size)
 
-        if stat_config.binoculars_score and len(llm_checkpoints) >= 2:
-            s1 = col_suffixes[0] if len(col_suffixes) > 0 else "_model_0"
-            s2 = col_suffixes[1] if len(col_suffixes) > 1 else "_model_1"
+        if stat_config.binoculars_score:
+            s1 = col_suffixes[0]
+            s2 = col_suffixes[1]
             for col in (col_a, col_b):
                 token_lps_m1 = examples[f"{col}_token_logprobs{s1}"]
                 token_lps_m2 = examples[f"{col}_token_logprobs{s2}"]
@@ -182,16 +182,16 @@ def compute_basic_metrics(ds, stat_config: StatConfig):
     originals = ds[col_a]
     news = ds[col_b]
 
-    if stat_config.jaccards_1:
+    if stat_config.jaccard_1:
         print("Computing Jaccards n=1...")
         ds = ds.add_column("jaccard_1", pairwise_jaccards(originals, news, 1))
-    if stat_config.jaccards_2:
+    if stat_config.jaccard_2:
         print("Computing Jaccards n=2...")
         ds = ds.add_column("jaccard_2", pairwise_jaccards(originals, news, 2))
-    if stat_config.jaccards_3:
+    if stat_config.jaccard_3:
         print("Computing Jaccards n=3...")
         ds = ds.add_column("jaccard_3", pairwise_jaccards(originals, news, 3))
-    if stat_config.levenshteins:
+    if stat_config.levenshtein:
         print("Computing Levenshteins...")
         ds = ds.add_column("levenshtein", pairwise_levenshteins(originals, news))
     return ds
@@ -201,7 +201,7 @@ def compute_softngram(ds, stat_config: StatConfig):
     """Compute soft n-gram distance and add as a column."""
     col_a = stat_config.human_column
     col_b = stat_config.ai_column
-    if not stat_config.pairwise_softngram:
+    if not stat_config.softngram:
         return ds
     print(f"Computing soft ngram scores between {col_a} and {col_b}...")
     scores = batch_soft_ngram_scores(
@@ -209,14 +209,14 @@ def compute_softngram(ds, stat_config: StatConfig):
         model_name=stat_config.softngram_model,
         phrase_batch_size=2048,
     )
-    return ds.add_column("pairwise_softngram", scores)
+    return ds.add_column("softngram", scores)
 
 
 def compute_embedding_metrics(ds, stat_config: StatConfig):
     """Compute cosine-distance and (optionally) store raw embeddings for later removal."""
     col_a = stat_config.human_column
     col_b = stat_config.ai_column
-    if not stat_config.pairwise_cosim:
+    if not stat_config.cosdist:
         return ds, []
 
     cols_to_remove = []
@@ -229,7 +229,7 @@ def compute_embedding_metrics(ds, stat_config: StatConfig):
     cols_to_remove.extend([f"{col_a}_embedding", f"{col_b}_embedding"])
 
     print("Computing pairwise cosine similarity...")
-    ds = ds.add_column("pairwise_cosdist", pairwise_cosdist(emb_a, emb_b))
+    ds = ds.add_column("cosdist", pairwise_cosdist(emb_a, emb_b))
     return ds, cols_to_remove
 
 
@@ -263,11 +263,11 @@ def compute_token_embedding_metrics(ds, stat_config: StatConfig):
             all_m_scores.extend(m_scores)
 
     if stat_config.bertscore:
-        ds = ds.add_column("pairwise_bertscore_precision", all_b_prec)
-        ds = ds.add_column("pairwise_bertscore_recall", all_b_rec)
-        ds = ds.add_column("pairwise_bertscore_f1", all_b_f1)
+        ds = ds.add_column("bertscore_precision", all_b_prec)
+        ds = ds.add_column("bertscore_recall", all_b_rec)
+        ds = ds.add_column("bertscore", all_b_f1)
     if stat_config.moverscore:
-        ds = ds.add_column("pairwise_moverscore", all_m_scores)
+        ds = ds.add_column("moverscore", all_m_scores)
     return ds
 
 
@@ -308,7 +308,7 @@ def compute_llm_metrics(ds, stat_config: StatConfig, globals_config):
 
     # Phase 1: fetch logprobs for each checkpoint
     for idx, checkpoint in enumerate(stat_config.llm_checkpoints):
-        suffix = stat_config.col_suffixes[idx] if idx < len(stat_config.col_suffixes) else f"_model_{idx}"
+        suffix = stat_config.col_suffixes[idx]
         print(f"Launching {checkpoint} to fetch logprobs (Suffix: {suffix})...")
 
         with llm_server_context(
@@ -341,7 +341,7 @@ def compute_reranker_metric(ds, stat_config: StatConfig):
     """Compute pairwise cross-encoder (reranker) scores."""
     col_a = stat_config.human_column
     col_b = stat_config.ai_column
-    if not stat_config.reranker_score:
+    if not stat_config.reranker:
         return ds
     print(f"Computing pairwise cross-encoder scores between {col_a} and {col_b}...")
     scores = batch_cross_encoder(
@@ -349,7 +349,7 @@ def compute_reranker_metric(ds, stat_config: StatConfig):
         model_name=stat_config.reranker_model,
         batch_size=stat_config.batch_size,
     )
-    return ds.add_column("pairwise_cross_encoder", scores)
+    return ds.add_column("reranker", scores)
 
 
 # ---------------------------------------------------------------------------

@@ -99,10 +99,6 @@ def extract_model_genconfig(result_ds, model_col):
 # Mask function builders
 # ---------------------------------------------------------------------------
 
-def _overall_mask(ds: Dataset) -> np.ndarray:
-    return np.ones(len(ds), dtype=bool)
-
-
 def _column_equals_mask(column: str, value: str):
     """Return a mask_fn that selects rows where ``column == value``."""
     def mask_fn(ds: Dataset) -> np.ndarray:
@@ -179,7 +175,7 @@ def _build_readme(
     # Build overall + per-prompt + per-model + cross-product subsets. Track
     # them separately so the summary table can pick up exactly the
     # non-cross-product ones without scanning by name.
-    subsets: list[Subset] = [Subset("Overall", _overall_mask)]
+    subsets: list[Subset] = [Subset("Overall", None)]
     prompt_subsets: list[Subset] = []
     model_subsets: list[Subset] = []
     crossproduct_subsets: list[Subset] = []
@@ -219,7 +215,6 @@ def _build_readme(
         score_tw = viz.bind_classifier_threshold(
             column_names=score_columns,
             column_classes=classes,
-            mask_fn=_overall_mask,
             threshold_type=eval_config.threshold_type_score,
             name="EditLens Score",
         )
@@ -232,7 +227,6 @@ def _build_readme(
         bin_tw = viz.bind_classifier_threshold(
             column_names=bin_columns,
             column_classes=classes,
-            mask_fn=_overall_mask,
             threshold_type=eval_config.threshold_type_bin,
             name="EditLens Bin",
         )
@@ -287,10 +281,10 @@ def _build_readme(
     dist_wrappers = []
     for m in eval_config.distance_metrics:
         if m in result_ds.column_names:
-            w = viz.bind_stat(m, _overall_mask, name=m)
+            w = viz.bind_stat(m, name=m)
             dist_wrappers.append(w)
 
-    ai_score_wrapper = viz.bind_stat("ai_editlens_score", _overall_mask, name="AI EditLens Score")
+    ai_score_wrapper = viz.bind_stat("ai_editlens_score", name="AI EditLens Score")
 
     # --- Pearson correlations: AI score vs distance metrics (overall) ---
     if dist_wrappers:
@@ -358,16 +352,16 @@ def _build_readme(
     # Cross-product subsets get only a table row in "All Statistics"; their
     # histograms/scatterplots are not generated (matching the old behavior).
     for sub in summary_subsets:
-        h_w = viz.bind_stat("human_editlens_score", sub.mask_fn, name=f"{sub.name} Human")
-        a_w = viz.bind_stat("ai_editlens_score", sub.mask_fn, name=f"{sub.name} AI")
+        h_w = viz.bind_stat("human_editlens_score", name=f"{sub.name} Human", mask_fn=sub.mask_fn)
+        a_w = viz.bind_stat("ai_editlens_score", name=f"{sub.name} AI", mask_fn=sub.mask_fn)
         viz.specify_histogram(
             f"{sub.safe}_SCORE_HIST",
             [h_w, a_w],
             title=f"EditLens Scores: {sub.name}",
         )
 
-        hb_w = viz.bind_stat("human_editlens_bucket", sub.mask_fn, name=f"{sub.name} Human")
-        ab_w = viz.bind_stat("ai_editlens_bucket", sub.mask_fn, name=f"{sub.name} AI")
+        hb_w = viz.bind_stat("human_editlens_bucket", name=f"{sub.name} Human", mask_fn=sub.mask_fn)
+        ab_w = viz.bind_stat("ai_editlens_bucket", name=f"{sub.name} AI", mask_fn=sub.mask_fn)
         viz.specify_histogram(
             f"{sub.safe}_BIN_HIST",
             [hb_w, ab_w],
@@ -377,7 +371,7 @@ def _build_readme(
         # Scatterplot: AI score vs each distance metric.
         if dist_wrappers:
             for dw in dist_wrappers:
-                dw_sub = viz.bind_stat(dw.name, sub.mask_fn, name=dw.name)
+                dw_sub = viz.bind_stat(dw.name, name=dw.name, mask_fn=sub.mask_fn)
                 viz.specify_scatterplot(
                     f"{sub.safe}_SCATTER_{dw.name.upper()}",
                     a_w,
@@ -651,7 +645,11 @@ def _compute_subset_corrs(
     NaN is returned when there are fewer than 2 rows or the metric column is
     missing/length-mismatched/non-numeric.
     """
-    mask = mask_fn(result_ds)
+    if mask_fn is not None:
+        mask = mask_fn(result_ds)
+        mask = np.asarray(mask, dtype=bool)
+    else:
+        mask = np.ones(len(result_ds), dtype=bool)
     n = int(np.sum(mask))
 
     nan_pair = ({m: float("nan") for m in distance_metrics},
