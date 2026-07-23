@@ -96,18 +96,23 @@ class FilterConfig(BaseModel):
     langdetect_threshold: Optional[float] = None
 
 
-class EvalConfig(BaseModel):
-    """Configuration for downstream evaluation and classification thresholds."""
+class ClassifierConfig(BaseModel):
+    name: str
+    suffix: str
+    direction: str = "higher_is_ai"
+
+class AnalysisConfig(BaseModel):
+    """Configuration for universal evaluation and subset breakdowns (analysis.py)."""
+
+    # Global column context
+    base_columns: List[str]
+    fixed_classes: Optional[List[bool]] = None
+    auto_class_column: Optional[str] = None
+    ai_label: Optional[str] = None
 
     # Column Definitions
     prompt_metadata_column: str
     model_metadata_column: str
-
-    # Classifier Model Settings
-    base_model: str
-    checkpoint: str
-    max_length: int
-    batch_size: int
 
     # Thresholds & Splits.
     # Set manual_threshold_* to None to auto-derive from validation sweep.
@@ -123,15 +128,20 @@ class EvalConfig(BaseModel):
 
     # Distance Metrics for Correlation/Plots
     distance_metrics: List[str] = []
+    
+    # Classifiers to Evaluate
+    classifiers: List[ClassifierConfig] = []
 
 
-class StatConfig(BaseModel):
-    """Configuration for the comprehensive dataset statistics pipeline (stat.py)."""
-
-    # Column Mapping
+class DistanceStatConfig(BaseModel):
+    """Configuration for distance-based statistics (distance_stats.py)."""
     human_column: str
     ai_column: str
-    parallelization_type: str = "data"
+    embedding_batch_size: int = 4
+    token_embedding_batch_size: int = 4
+    reranker_batch_size: int = 4
+    softngram_phrase_batch_size: int = 2048
+    token_embedding_chunk_size: int = 100
 
     # Basic Similarity Metrics
     jaccard_1: bool
@@ -144,6 +154,20 @@ class StatConfig(BaseModel):
     bertscore: bool
     cosdist: bool
     softngram: bool
+    reranker: bool
+
+    # Specific Models
+    softngram_model: str
+    embedding_model: str
+    token_embedding_model: str
+    reranker_model: str
+
+
+class LLMStatConfig(BaseModel):
+    """Configuration for LLM-based metric extraction (llm_stats.py)."""
+    columns_to_score: List[str]
+    parallelization_type: str = "data"
+    batch_size: int
 
     # LLM & Generation Metrics
     perplexity: bool
@@ -152,43 +176,31 @@ class StatConfig(BaseModel):
     topk_outlier: bool
     binoculars_score: bool
     fastdetectgpt_score: bool
-    reranker: bool
 
-    # Thresholds for the outlier metrics. ``topk_threshold`` must be
-    # ``<= top_logprobs_k`` or the metric is undefined for every position
-    # (the k-th largest logprob cannot be computed) and the metric will
-    # return NaN for every text.
     topp_threshold: float = 0.95
     topk_threshold: int = 50
-
-    # Runtime & Optimization Flags
-    threshold_type: str
-    remove_columns_afterwards: bool
-    batch_size: int
-
-    # Specific Models
-    softngram_model: str
-    embedding_model: str
-    token_embedding_model: str
-    reranker_model: str
 
     # LLM Endpoints
     llm_checkpoints: List[str]
     col_suffixes: List[str]
     top_logprobs_k: int
-
-    # Vocabulary size of the LLM serving logprobs. Used by the tail-mass
-    # heuristic in ``entropies_approx`` and ``fastdetectgpt_scores_approx``
-    # to estimate the entropy / second-moment contribution of the
-    # probability mass outside the top-N logprobs. ``None`` falls back to
-    # a concentrated-tail lower bound that systematically underestimates
-    # both (see ``_tail_moments`` in statistics_llm.py).
     llm_vocab_size: Optional[int] = None
 
     @model_validator(mode='after')
-    def validate_llm_settings(self) -> 'StatConfig':
+    def validate_llm_settings(self) -> 'LLMStatConfig':
         if len(self.llm_checkpoints) != len(self.col_suffixes):
             raise ValueError(f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) must match col_suffixes ({len(self.col_suffixes)})")
-        if self.binoculars_score and len(self.llm_checkpoints) < 2:
-            raise ValueError(f"binoculars_score requires at least 2 llm_checkpoints, but only {len(self.llm_checkpoints)} were provided.")
+        if self.binoculars_score and len(self.llm_checkpoints) != 2:
+            raise ValueError(f"Binoculars score requires exactly 2 llm_checkpoints, but {len(self.llm_checkpoints)} were provided.")
         return self
+
+
+class EditLensStatConfig(BaseModel):
+    """Configuration for EditLens-specific bucket and score inference (editlens_stats.py)."""
+    columns_to_score: List[str]
+    suffix: str
+    
+    base_model: str
+    checkpoint: str
+    max_length: int
+    batch_size: int

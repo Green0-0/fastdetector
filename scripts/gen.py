@@ -89,6 +89,7 @@ def main() -> None:
 
     source_dataset = globals_config.resolve_input_dataset(globals_config.post_filter_suffix)
     target_dataset = globals_config.resolve_output_dataset(globals_config.gen_suffix)
+    stat_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
 
     print(f"Running generation pipeline...")
     print(f"Source Dataset: {source_dataset}")
@@ -133,6 +134,11 @@ def main() -> None:
     print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
     result_ds.push_to_hub(target_dataset, config_name=config_name)
     upload_readme(dataset_name=target_dataset, readme_content=readme_content)
+
+    print(f"Pushing cloned dataset to '{stat_dataset}' (config '{config_name}') with a stub readme...")
+    result_ds.push_to_hub(stat_dataset, config_name=config_name)
+    stub_readme = "# WIP Fastdetector dataset\nWaiting for statistics to finish generating...\n"
+    upload_readme(dataset_name=stat_dataset, readme_content=stub_readme)
 
 
 if __name__ == "__main__":

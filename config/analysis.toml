@@ -1,0 +1,47 @@
+prompt_metadata_column = "prompt"
+model_metadata_column = "generator_model"
+
+validation_size = 0.1
+threshold_type_bin = "f1"
+threshold_type_score = "fpr_0_5pct"
+
+filter_type = "OR"
+
+[[filter_conditions]]
+column = "pairwise_cosdist"
+operator = ">="
+value = 0.03
+
+[[filter_conditions]]
+column = "pairwise_softngram"
+operator = ">="
+value = 0.06
+
+distance_metrics = [
+    "pairwise_cosdist",
+    "pairwise_softngram"
+]
+# ---------------------------------------------------------
+# Global Classifier Input Setup
+# ---------------------------------------------------------
+# You can define inputs in two ways:
+#
+# 1. Fixed Classes (e.g. comparing human-written text vs ai-written text from separate columns):
+#    base_columns = ["original", "final_response"]
+#    fixed_classes = [false, true] # false = Human, true = AI
+#
+# 2. Auto Classes (e.g. comparing scores in a single column determined by a separate label column):
+#    base_columns = ["text"]
+#    # auto_class_column = "label"
+#    # ai_label = "AI" # The string value that indicates the AI class
+# ---------------------------------------------------------
+base_columns = ["original", "final_response"]
+fixed_classes = [false, true]
+
+[[classifiers]]
+name = "EditLens Roberta-Large Score"
+suffix = "_editlens_score_roberta_large"
+
+[[classifiers]]
+name = "EditLens Roberta-Large Bucket"
+suffix = "_editlens_bucket_roberta_large"

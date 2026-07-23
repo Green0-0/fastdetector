@@ -1,0 +1,7 @@
+columns_to_score = ["original", "final_response"]
+suffix = "_roberta_large"
+
+base_model = "FacebookAI/roberta-large"
+checkpoint = "pangram/editlens_roberta-large"
+max_length = 512
+batch_size = 24

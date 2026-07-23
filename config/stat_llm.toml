@@ -1,0 +1,21 @@
+columns_to_score = ["original", "final_response"]
+parallelization_type = "data"
+batch_size = 4
+
+perplexity = true
+entropy = true
+topp_outlier = true
+topk_outlier = true
+binoculars_score = true
+fastdetectgpt_score = true
+
+topp_threshold = 0.95
+topk_threshold = 50
+
+llm_checkpoints = [
+    "unsloth/Llama-3.2-3B-Instruct",
+    "unsloth/Llama-3.2-3B"
+]
+col_suffixes = ["_llama_instruct", "_llama_base"]
+top_logprobs_k = 100
+# llm_vocab_size = 128256

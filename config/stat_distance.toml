@@ -1,0 +1,23 @@
+human_column = "original"
+ai_column = "final_response"
+embedding_batch_size = 4
+token_embedding_batch_size = 4
+reranker_batch_size = 2
+softngram_phrase_batch_size = 2048
+token_embedding_chunk_size = 100
+
+jaccard_1 = true
+jaccard_2 = true
+jaccard_3 = false
+levenshtein = true
+
+moverscore = true
+bertscore = true
+cosdist = true
+softngram = true
+reranker = true
+
+softngram_model = "all-MiniLM-L6-v2"
+embedding_model = "Qwen/Qwen3-Embedding-4B"
+token_embedding_model = "answerdotai/ModernBERT-base"
+reranker_model = "Qwen/Qwen3-Reranker-4B"
