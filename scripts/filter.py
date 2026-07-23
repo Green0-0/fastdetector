@@ -1,7 +1,7 @@
 import argparse
 import os
 from langdetect import detect_langs
-from langdetect.lang_detect_exception import LangDetectException, ProabilityException
+from langdetect.lang_detect_exception import LangDetectException
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
@@ -98,7 +98,7 @@ def main():
                     if lang.lang == 'en' and lang.prob >= filter_config.langdetect_threshold:
                         return True
                 return False
-            except (LangDetectException, ProabilityException):
+            except LangDetectException:
                 return False
                 
         print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
