@@ -56,7 +56,7 @@ def post_process_response(row):
                             
                     mod_4 = 1
                     
-    # 5. If more than 30% of the words or over 50 words were dropped during the above process, revert back to the original
+    # 5. If more than 25% of the words or over 40 words were dropped during the above process, revert back to the original
     orig_words = len(orig_resp.split())
     new_words = len(resp.split())
     dropped = orig_words - new_words
@@ -127,9 +127,11 @@ def main() -> None:
     readme_content += f"- Step 4 (Remove first line): {prop_4:.2%} modified\n"
     readme_content += f"- Reverted due to excessive divergence: {reverted_count}\n"
 
-    result_ds = result_ds.remove_columns(["mod_1", "mod_2", "mod_3", "mod_4", "reverted"])
+    cols_to_remove = [c for c in ["mod_1", "mod_2", "mod_3", "mod_4", "reverted"] if c in result_ds.column_names]
+    if cols_to_remove:
+        result_ds = result_ds.remove_columns(cols_to_remove)
 
-    config_name = f"shard_{args.batch_id}" if args.batch_id is not None else "default"
+    config_name = f"shard_{args.batch_id}"
 
     print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
     result_ds.push_to_hub(target_dataset, config_name=config_name)

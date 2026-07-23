@@ -28,7 +28,7 @@ def main():
     )
 
     source_dataset = globals_config.resolve_input_dataset(globals_config.raw_suffix)
-    intermediate_dataset = f"{globals_config.dataset_prefix}-{globals_config.pre_filter_suffix}"
+    intermediate_dataset = globals_config.resolve_output_dataset(globals_config.pre_filter_suffix)
 
     print(f"Running filtering generation pipeline...")
     ds, gen_readme = run_pipeline(

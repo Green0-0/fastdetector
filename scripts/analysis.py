@@ -302,7 +302,7 @@ def main():
     readme_md, charts = _build_readme(result_ds, eval_config, has_prompts, has_mg, unique_prompts, unique_mgs)
     
     print("Uploading README and charts to Hub...")
-    upload_readme(target_dataset, readme_md, charts)
+    upload_readme(target_dataset, files=charts, readme_content=readme_md)
     print("Done!")
 
 if __name__ == "__main__":

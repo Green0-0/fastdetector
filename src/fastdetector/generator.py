@@ -232,6 +232,10 @@ def build_dataset(
     """
     print(f"Processing {len(samples)} samples...")
 
+    if not samples:
+        print("No samples to process; returning an empty dataset.")
+        return {"original": [], "prompt": [], "final_response": []}, 0, 0, 0
+
     mapped_prompts, prompt_labels = prompts.map(samples)
     max_turns = max(len(p.chat_turns) for p in mapped_prompts)
     responses_grouped: list[list[str]] = [[] for _ in samples]
