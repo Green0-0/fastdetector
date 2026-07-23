@@ -127,7 +127,9 @@ def main() -> None:
     readme_content += f"- Step 4 (Remove first line): {prop_4:.2%} modified\n"
     readme_content += f"- Reverted due to excessive divergence: {reverted_count}\n"
 
-    result_ds = result_ds.remove_columns(["mod_1", "mod_2", "mod_3", "mod_4", "reverted"])
+    cols_to_remove = [c for c in ["mod_1", "mod_2", "mod_3", "mod_4", "reverted"] if c in result_ds.column_names]
+    if cols_to_remove:
+        result_ds = result_ds.remove_columns(cols_to_remove)
 
     config_name = f"shard_{args.batch_id}"
 
