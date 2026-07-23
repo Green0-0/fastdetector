@@ -1,7 +1,7 @@
 import argparse
 import os
 from langdetect import detect_langs
-from langdetect.lang_detect_exception import LangDetectException
+from langdetect.lang_detect_exception import LangDetectException, ProabilityException
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
@@ -28,7 +28,7 @@ def main():
     )
 
     source_dataset = globals_config.resolve_input_dataset(globals_config.raw_suffix)
-    intermediate_dataset = f"{globals_config.dataset_prefix}-{globals_config.pre_filter_suffix}"
+    intermediate_dataset = globals_config.resolve_output_dataset(globals_config.pre_filter_suffix)
 
     print(f"Running filtering generation pipeline...")
     ds, gen_readme = run_pipeline(
@@ -98,7 +98,7 @@ def main():
                     if lang.lang == 'en' and lang.prob >= filter_config.langdetect_threshold:
                         return True
                 return False
-            except LangDetectException:
+            except (LangDetectException, ProabilityException):
                 return False
                 
         print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
