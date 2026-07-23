@@ -79,8 +79,10 @@ async def _batch_fetch_logprobs_async(
         return result
 
     tasks = [_tracked(t) for t in texts]
-    results = await asyncio.gather(*tasks)
-    await client.close()
+    try:
+        results = await asyncio.gather(*tasks)
+    finally:
+        await client.close()
     return results
 
 
