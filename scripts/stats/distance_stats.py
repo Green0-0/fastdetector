@@ -13,7 +13,7 @@ from fastdetector.statistics.statistics_embedding import pairwise_cosdist, berts
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
-    parser.add_argument("--distance-config", type=str, default="config/distance.toml")
+    parser.add_argument("--distance-config", type=str, default="config/stat_distance.toml")
     parser.add_argument("--batch-id", type=int, required=True)
     args = parser.parse_args()
 
