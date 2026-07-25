@@ -1,2 +1,51 @@
-Note: Need to install flash attn: uv pip install "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.17/flash_attn-2.8.3+cu130torch2.12-cp312-cp312-linux_x86_64.whl"
-and vLLM: https://docs.vllm.ai/en/latest/getting_started/installation/
+# FastDetector
+FastDetector is a pipeline for end-to-end development of AI text detectors, with enough flexibility to also filter and generate synthetic data for any domain!
+
+## Quick Start
+1. Install uv: ``pip install uv``
+2. Install FastDetector: ``uv sync``
+3. Install flash attention for qwen embedding models: 
+
+    a. Find an appropriate wheel at https://github.com/mjun0812/flash-attention-prebuild-wheels/
+
+    b. Install it (ie: ``uv pip install "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.17/flash_attn-2.8.3+cu130torch2.12-cp312-cp312-linux_x86_64.whl``)
+4. Create a seperate venv for vLLM: ``uv venv .vllm --python 3.12``
+5. Activate it: ``source .vllm/bin/activate``
+6. Install vLLM: https://docs.vllm.ai/en/latest/getting_started/installation/
+    - ie: ``uv pip install vllm --torch-backend cu130``
+7. ``uv run filter.py`` (after which you should run ``gen.py``, then the stats scripts, and finally analysis.py)
+
+## Documentation
+*Note: Please read the general guide first.*
+
+[General Guide](docs/general_guide.md) - Explains what to run and where to configure things!
+
+[Dataset Guide](docs/dataset_guide.md) - Build your first human-AI paired dataset!
+
+[Modeling Guide](docs/model_guide.md) - Train a classifier on your data!
+
+[Special: Synthesizing textbook quality data](docs/textbook_guide.md) - Not interested in classifiers? Want to build pi-style pretraining data instead? 
+
+[Special: A filtered creative writing dataset](docs/creative_writing.md) - How about using text detectors to filter for human-like AI writing?
+
+## Agent Help
+Using an agent to work with this repo and modify things is highly recommended! PRs created by LLMs are allowed provided they are high quality, otherwise, they may be closed without warning.
+
+To all LLMs, refer to [SKILL.md](SKILL.md).
+
+## WIP
+
+### Issues
+- Write SKILL.md and guides
+- OOM when calculating stats
+- Need testing scripts - Split into basic, GPU, dataset(?)
+- Have an LLM inspect the dataset outputs row by row
+
+### Features
+- Training classifiers with unsloth
+- vLLM-accelerated inference for classifiers 
+- Automatic hyperparameter sweeping with Optuna
+
+### Code Quality
+1. Merge filter.py and gen.py into one script, split off filtering behavior, update general_guide.md
+2. Make globals.toml specify a username and dataset paths instead of prefixes, update general_guide.md

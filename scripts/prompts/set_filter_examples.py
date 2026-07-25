@@ -18,11 +18,11 @@ Firearms Retailers & Gun Stores in BC
 Gun Ranges & Clubs in BC
 Gun Ranges & Clubs in BC
 Latest Articles
-The Silvercore Podcast Ep. 10 – Moose Underwear and Other Hunting Stories       
-Pro Tips for Renewing your Firearms License     
-The Silvercore Podcast Ep. 9 – Grizzly Bear Attack      
-The Silvercore Podcast Ep. 8 – Train Your Brain To Win Part 2   
-The Silvercore Podcast Ep. 7 – Train Your Brain To Win  
+The Silvercore Podcast Ep. 10 – Moose Underwear and Other Hunting Stories
+Pro Tips for Renewing your Firearms License
+The Silvercore Podcast Ep. 9 – Grizzly Bear Attack
+The Silvercore Podcast Ep. 8 – Train Your Brain To Win Part 2
+The Silvercore Podcast Ep. 7 – Train Your Brain To Win
 Silvercore has been providing bear safety training to industry professionals, both in person as well as online, for many years, but this marks the first time we speak with someone who survived a horrific grizzly bear attack by using his pocket knife.
 In episode 9, we sit down and talk with Colin Dowler, who shares in detail his harrowing experience of grit and tenacity. Colin is sharing his story to increase the knowledge base of bear behaviour and bear encounters.
 READ MORE
@@ -38,10 +38,10 @@ Free Firearms Safety
 """.strip()
 doc_1_filtered = """
 Silvercore has been providing bear safety training to industry professionals, both in person as well as online, for many years, but this marks the first time we speak with someone who survived a horrific grizzly bear attack by using his pocket knife.
-In episode 9, we sit down and talk with Colin Dowler, who shares in detail his harrowing experience of grit and tenacity. Colin is sharing his story to increase the knowledge base of bear behaviour and bear encounters. 
+In episode 9, we sit down and talk with Colin Dowler, who shares in detail his harrowing experience of grit and tenacity. Colin is sharing his story to increase the knowledge base of bear behaviour and bear encounters.
 """.strip()
 doc_2 = """
-1600t mill per hour     
+1600t mill per hour
 Home
 Products
 Solutions

@@ -3,18 +3,6 @@
 import math
 import numpy as np
 
-# Default assumption for the size of the vocabulary outside the top-N
-# logprobs returned by the server. Used by the tail-mass heuristic in
-# ``entropies_approx`` / ``fastdetectgpt_scores_approx`` to estimate the
-# entropy (and second moment) contribution of the tail.
-#
-# This is intentionally a conservative default — most modern LLMs have
-# vocabularies in the 30k-130k range (Llama-3: 128k, Qwen-2.5: 152k,
-# GPT-2: 50k). The heuristic's bias scales with ``log(V - N)``, so
-# choosing a value in the middle of the typical range keeps the bias
-# small across models. Callers can override via the ``vocab_size``
-# parameter to ``entropies_approx`` / ``fastdetectgpt_scores_approx``
-# if they know the exact vocabulary size of the model serving logprobs.
 DEFAULT_VOCAB_SIZE = 128000
 
 

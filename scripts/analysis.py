@@ -1,5 +1,8 @@
 """CLI entry point: generate evaluation README with dynamic classifiers and table of contents."""
 
+from fastdetector.visualization.plotting import generate_table
+from fastdetector.visualization.plotting import generate_pearson_heatmap
+from fastdetector.visualization.plotting import generate_histogram
 import argparse
 import json
 import re
@@ -14,10 +17,6 @@ from fastdetector.visualization.auto_visualizer import (
     ClassifierWrapper,
     ThresholdWrapper,
     StaticThresholdWrapper,
-    generate_table,
-    generate_pearson_heatmap,
-    generate_histogram,
-    generate_scatterplot,
     _extract
 )
 

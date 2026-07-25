@@ -79,7 +79,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the LLM Generation pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--gen-config", type=str, required=True, help="Path to gen TOML (e.g. config/gen/shard_0.toml)")
-    parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to subset the dataset.")
+    parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
 
     args = parser.parse_args()
 

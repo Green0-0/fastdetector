@@ -1,3 +1,4 @@
+from fastdetector.statistics.embeddings_api import batch_soft_ngram_scores
 import argparse
 from datasets import Dataset
 
@@ -6,15 +7,14 @@ from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_auto_shard
 
 from fastdetector.statistics.embeddings_api import batch_gen_embeddings, generate_token_embeddings_pairs, batch_cross_encoder
-from fastdetector.statistics.softngram_api import batch_soft_ngram_scores
 from fastdetector.statistics.statistics_basic import pairwise_jaccards, pairwise_levenshteins
 from fastdetector.statistics.statistics_embedding import pairwise_cosdist, bertscore, moverscore
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
-    parser.add_argument("--distance-config", type=str, default="config/stat_distance.toml")
-    parser.add_argument("--batch-id", type=int, required=True)
+    parser.add_argument("--distance-config", type=str, default="config/distance_stats.toml")
+    parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
     args = parser.parse_args()
 
     globals_config, config = load_config_pair(args.globals_config, args.distance_config, DistanceStatConfig)

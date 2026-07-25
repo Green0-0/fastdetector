@@ -7,15 +7,10 @@ calls them directly when only scalar values are needed (no plot).
 
 from typing import Sequence
 
+from sklearn.metrics import roc_auc_score
 import numpy as np
 
-from fastdetector.statistics.statistics_utils import compute_auroc
 
-
-# Map of threshold-dict keys to their target FPR values.
-# The keys are also used as TOML config values for threshold_type /
-# threshold_type_score / threshold_type_bin, so renaming them here requires
-# updating config/*.toml accordingly.
 FPR_TARGETS: dict[str, float] = {
     "fpr_1pct": 0.01,
     "fpr_0_1pct": 0.001,
@@ -23,6 +18,22 @@ FPR_TARGETS: dict[str, float] = {
     "fpr_0_01pct": 0.0001,
 }
 
+
+def compute_auroc(
+    y_true: list[bool] | list[int] | np.ndarray,
+    y_scores: list[float] | np.ndarray,
+) -> float:
+    """Compute Area Under the Receiver Operating Characteristic Curve (ROC AUC).
+
+    Args:
+        y_true: True binary labels.
+        y_scores: Target scores — probability estimates of the positive class
+            or confidence values.
+
+    Returns:
+        The AUROC score.
+    """
+    return float(roc_auc_score(y_true, y_scores))
 
 def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
     """Classify values in *arr* as positive (True) or negative (False).

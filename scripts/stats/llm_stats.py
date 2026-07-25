@@ -80,8 +80,8 @@ def make_llm_metrics_processor(columns_to_score, llm_checkpoints, col_suffixes, 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
-    parser.add_argument("--llm-config", type=str, default="config/stat_llm.toml")
-    parser.add_argument("--batch-id", type=int, required=True)
+    parser.add_argument("--llm-config", type=str, default="config/llm_stats.toml")
+    parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
     args = parser.parse_args()
 
     globals_config, config = load_config_pair(args.globals_config, args.llm_config, LLMStatConfig)

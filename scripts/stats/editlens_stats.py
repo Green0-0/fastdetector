@@ -14,8 +14,8 @@ from fastdetector.modeling.editlens import (
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
-    parser.add_argument("--editlens-config", type=str, default="config/stat_editlens.toml")
-    parser.add_argument("--batch-id", type=int, required=True)
+    parser.add_argument("--editlens-config", type=str, default="config/editlens_stats.toml")
+    parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
     args = parser.parse_args()
 
     globals_config, config = load_config_pair(args.globals_config, args.editlens_config, EditLensStatConfig)

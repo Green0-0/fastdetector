@@ -4,7 +4,7 @@ prompt_file = "prompts/filter_contiguous_subset.json"
 
 # Optional: split the filtered dataset into N shards named 'shard_0',
 # 'shard_1', etc. Omit (or set to null) to upload as a single 'default' config.
-# output_shards = 4
+# output_shards = 10
 langdetect_threshold = 0.95
 filter_type = "AND"
 

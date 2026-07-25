@@ -1,9 +1,9 @@
+from fastdetector.statistics.embeddings_api import batch_soft_ngram_scores
 import argparse
 import time
 import itertools
 from fastdetector.utils import load_dataset_local_fallback as load_dataset
 from fastdetector.utils import upload_dataset, upload_readme
-from fastdetector.statistics.statistics_api import batch_soft_ngram_scores
 
 def main():
     start_time = time.time()

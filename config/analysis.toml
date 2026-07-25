@@ -5,7 +5,7 @@ validation_size = 0.1
 threshold_type_bin = "f1"
 threshold_type_score = "fpr_0_5pct"
 
-filter_type = "OR"
+filter_tIn addition to united.com, we provide free access to these select websites. By clicking on a website, you’re leaving the United portal.ype = "OR"
 
 [[filter_conditions]]
 column = "pairwise_cosdist"
@@ -21,22 +21,11 @@ distance_metrics = [
     "pairwise_cosdist",
     "pairwise_softngram"
 ]
-# ---------------------------------------------------------
-# Global Classifier Input Setup
-# ---------------------------------------------------------
-# You can define inputs in two ways:
-#
-# 1. Fixed Classes (e.g. comparing human-written text vs ai-written text from separate columns):
-#    base_columns = ["original", "final_response"]
-#    fixed_classes = [false, true] # false = Human, true = AI
-#
-# 2. Auto Classes (e.g. comparing scores in a single column determined by a separate label column):
-#    base_columns = ["text"]
-#    # auto_class_column = "label"
-#    # ai_label = "AI" # The string value that indicates the AI class
-# ---------------------------------------------------------
+
 base_columns = ["original", "final_response"]
 fixed_classes = [false, true]
+# auto_class_column = "label" # Automatically determine the class using the value from this column 
+# ai_label = "AI" # The string value that indicates the AI class
 
 [[classifiers]]
 name = "EditLens Roberta-Large Score"

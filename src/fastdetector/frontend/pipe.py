@@ -20,12 +20,7 @@ def run_pipeline(
     source_dataset_name: str,
     batch_id: int | None = None,
 ) -> tuple[Dataset, str]:
-    """Run the generation pipeline and upload the result dataset.
-
-    Loads samples from ``source_dataset_name``, generates responses via the
-    configured LLM engine, builds a result dataset, uploads it to
-    ``target_dataset_name``, and returns the in-memory Dataset so callers
-    (e.g. ``filter.py``) can continue processing without re-loading from the Hub.
+    """Run the generation pipeline and return the result dataset.
 
     Args:
         globals_config: GlobalsConfig with venv paths, dataset name resolution, etc.

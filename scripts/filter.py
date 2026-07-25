@@ -102,8 +102,7 @@ def main():
                 return False
                 
         print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
-        num_proc = min(32, os.cpu_count() or 1)
-        ds_filtered = ds_filtered.filter(is_highly_english, num_proc=num_proc)
+        ds_filtered = ds_filtered.filter(is_highly_english, num_proc=4)
 
     filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
 

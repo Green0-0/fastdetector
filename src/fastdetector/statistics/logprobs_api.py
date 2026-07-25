@@ -1,9 +1,3 @@
-"""Fetch token logprobs from a vLLM / OpenAI-compatible completions endpoint.
-
-The logprobs-fetching logic is independent of the embedding / cross-encoder /
-soft-ngram logic and has its own async concurrency concerns.
-"""
-
 import asyncio
 from typing import Optional
 from openai import AsyncOpenAI
@@ -27,11 +21,6 @@ async def _fetch_logprobs_async(
                 timeout=600.0,
             )
             logprobs = response.choices[0].logprobs.model_dump()
-            # vLLM's completions API with echo=True + max_tokens=1 returns
-            # logprobs for N input tokens PLUS 1 generated token. The last
-            # entry corresponds to the (trivial) generated token and is not
-            # part of the input text, so we strip it from all three arrays
-            # to keep them aligned with the input tokens.
             if logprobs:
                 for key in ("token_logprobs", "top_logprobs", "tokens"):
                     if logprobs.get(key):
@@ -54,9 +43,6 @@ async def _batch_fetch_logprobs_async(
         models = await client.models.list(timeout=5.0)
         model_name = models.data[0].id
     except Exception as e:
-        # Fail fast: if we can't list models, the server is unreachable or
-        # misconfigured. Sending a fallback model name downstream would just
-        # produce a confusing 404 from /v1/completions.
         await client.close()
         raise RuntimeError(
             f"Could not list models from {api_url}/v1/models — server may be "
