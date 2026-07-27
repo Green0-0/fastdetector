@@ -11,6 +11,7 @@
 
 # ---- Activate project venv ----
 source .venv/bin/activate
+export PYTHONUNBUFFERED=1
 
 # ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/
@@ -20,27 +21,19 @@ export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:$CPLUS_INCLUDE_PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 source "$HOME/.cargo/env"
 
-# ---- vLLM venv ----
+# ---- vLLM venv (launched as a subprocess by the pipeline) ----
 export VLLM_VENV_PATH="${VLLM_VENV_PATH:-${PWD}/.vllm}"
-
 if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
   echo "vLLM venv not found: ${VLLM_VENV_PATH}" >&2
   exit 1
 fi
 
-export PYTHONUNBUFFERED=1
+# ---- HF cache (replaces the old scripts' --cache-dir flag) ----
+export HF_HOME="${HF_HOME:-/usr/project/xtmp/ccprocessing_cache/}"
 
-CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
-
-# ---- Run the dataset analysis ----
-python scripts/computational/run_editlens_stat.py --source-dataset G-reen/cc-2021-rewritten-stat --target-dataset G-reen/cc-2021-rewritten-stat-editlens --fastdetector-prompt-metadata-column prompt --cache-dir $CACHE_DIR
-
-python scripts/auxilary/metrics/build_editlens_readme.py \
-    --source-dataset G-reen/cc-2021-rewritten-stat-editlens \
-    --target-dataset G-reen/cc-2021-rewritten-stat-editlens \
-    --fastdetector-prompt-metadata-column prompt \
-    --distance-metrics pairwise_cosdist_original_final_response pairwise_softngram_original_final_response \
-    --distance-metrics-lower-bounds 0.03 0.06 \
-    --cache-dir $CACHE_DIR \
-    --manual-threshold-score -1.0 \
-    --manual-threshold-bin -1.0
+# ---- Run EditLens classifier inference ----
+python scripts/stats/editlens_stats.py \
+    --globals-config config/globals.toml \
+    --editlens-config config/editlens_stats.toml \
+    --batch-id 0
+echo "EditLens statistics complete."

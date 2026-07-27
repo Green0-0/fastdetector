@@ -10,6 +10,7 @@
 #SBATCH --gres=gpu:a5000:4
 #SBATCH --array=0-7
 
+# ---- Activate project venv ----
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
 
@@ -21,128 +22,30 @@ export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:$CPLUS_INCLUDE_PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 source "$HOME/.cargo/env"
 
-# ---- vLLM venv ----
+# ---- vLLM venv (launched as a subprocess by the pipeline) ----
 export VLLM_VENV_PATH="${VLLM_VENV_PATH:-${PWD}/.vllm}"
 if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
   echo "vLLM venv not found: ${VLLM_VENV_PATH}" >&2
   exit 1
 fi
+
+# ---- HF cache (replaces the old scripts' --cache-dir flag) ----
+export HF_HOME="${HF_HOME:-/usr/project/xtmp/ccprocessing_cache/}"
+
+# Aphrodite venv is needed only by the aphrodite-engine shard configs.
 export APHRODITE_VENV_PATH="${APHRODITE_VENV_PATH:-${PWD}/.aphrodite}"
 
-CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
+# ---- One generation job per shard ----
+# Requires the filter stage to have uploaded shard configs: set
+# output_shards in config/filter.toml to at least the array size (the
+# original layout used 10 shards, reserving 8/9 for OAI generation).
+# Each config/gen/shard_<I>.toml pins the model, engine, and sampling
+# params for that shard; --batch-id <I> selects the shard_<I> config of
+# the filtered dataset.
 I=$SLURM_ARRAY_TASK_ID
-
-case $I in
-    0)
-        MODEL_NAME="cyankiwi/granite-4.1-8b-AWQ-INT4"
-        SCRIPT="scripts/computational/gen_pipeline.py"
-        TEMP=0.6
-        TOP_P=0.9
-        TOP_K=40
-        DISABLE_THINKING=""
-        ;;
-    1)
-        MODEL_NAME="hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
-        SCRIPT="scripts/computational/gen_pipeline.py"
-        TEMP=0.6
-        TOP_P=0.9
-        TOP_K=40
-        DISABLE_THINKING=""
-        ;;
-    2)
-        MODEL_NAME="Qwen/Qwen3-8B-AWQ"
-        SCRIPT="scripts/computational/gen_pipeline.py"
-        TEMP=0.7
-        TOP_P=0.8
-        TOP_K=20
-        DISABLE_THINKING="--disable-thinking"
-        ;;
-    3)
-        MODEL_NAME="google/gemma-4-E4B-it"
-        SCRIPT="scripts/computational/gen_pipeline.py"
-        TEMP=0.7
-        TOP_P=0.8
-        TOP_K=-1
-        DISABLE_THINKING="--disable-thinking"
-        ;;
-    4)
-        MODEL_NAME="cyankiwi/Ministral-3-8B-Instruct-2512-AWQ-4bit"
-        SCRIPT="scripts/computational/gen_pipeline.py"
-        TEMP=0.6
-        TOP_P=0.9
-        TOP_K=40
-        DISABLE_THINKING=""
-        ;;
-    5)
-        MODEL_NAME="hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
-        SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
-        TEMP=1.25
-        TOP_A=0.1
-        XTC=0.3
-        NSIGMA=1.5
-        DISABLE_THINKING=""
-        ;;
-    6)
-        MODEL_NAME="cyankiwi/granite-4.1-8b-AWQ-INT4"
-        SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
-        TEMP=1.25
-        TOP_A=0.1
-        XTC=0.3
-        NSIGMA=1.5
-        DISABLE_THINKING=""
-        ;;
-    7)
-        MODEL_NAME="Qwen/Qwen3-8B-AWQ"
-        SCRIPT="scripts/computational/gen_pipeline_aphrodite.py"
-        TEMP=1.25
-        TOP_A=0.1
-        XTC=0.3
-        NSIGMA=1.5
-        DISABLE_THINKING="--disable-thinking"
-        ;;
-esac
-
-SHARD_BASE="G-reen_cc-2021-filtered-split-$I"
-TARGET_DS="${SHARD_BASE}-gen"
-
-echo "Starting dataset generation for shard $I using model $MODEL_NAME..."
-if [[ "$SCRIPT" == *"aphrodite"* ]]; then
-    python $SCRIPT \
-        --model-name "$MODEL_NAME" \
-        --temperature $TEMP \
-        --top-p 1.0 \
-        --top-k -1 \
-        --presence-penalty 1.5 \
-        --top-a $TOP_A \
-        --xtc $XTC \
-        --nsigma $NSIGMA \
-        $DISABLE_THINKING \
-        --max-model-len 32000 \
-        --max-dataset-len 15000 \
-        --prompt-file prompts/combined_dataset_test.json \
-        --source-dataset "$SHARD_BASE" \
-        --source-column collected_subset_original_final_response \
-        --num-samples 50000 \
-        --target-dataset "$TARGET_DS" \
-        --save-locally-instead \
-        --cache-dir $CACHE_DIR
-else
-    python $SCRIPT \
-        --model-name "$MODEL_NAME" \
-        --temperature $TEMP \
-        --top-p $TOP_P \
-        --top-k $TOP_K \
-        --presence-penalty 1.5 \
-        $DISABLE_THINKING \
-        --max-model-len 32000 \
-        --max-dataset-len 15000 \
-        --prompt-file prompts/combined_dataset_test.json \
-        --source-dataset "$SHARD_BASE" \
-        --source-column collected_subset_original_final_response \
-        --num-samples 50000 \
-        --target-dataset "$TARGET_DS" \
-        --save-locally-instead \
-        --cache-dir $CACHE_DIR
-fi
-
+echo "Starting dataset generation for shard $I..."
+python scripts/gen.py \
+    --globals-config config/globals.toml \
+    --gen-config "config/gen/shard_${I}.toml" \
+    --batch-id "$I"
 echo "Dataset generation complete for shard $I."

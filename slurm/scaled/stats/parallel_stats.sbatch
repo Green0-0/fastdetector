@@ -8,10 +8,13 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:a5000:1
-#SBATCH --array=0-24
+#SBATCH --array=0-7
 
+# ---- Activate project venv ----
 source .venv/bin/activate
+export PYTHONUNBUFFERED=1
 
+# ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/
 export PATH=$CUDA_HOME/bin:$PATH
 export CPATH=$CUDA_HOME/include:$CPATH
@@ -19,61 +22,36 @@ export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:$CPLUS_INCLUDE_PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 source "$HOME/.cargo/env"
 
-export PYTHONUNBUFFERED=1
+# ---- vLLM venv (launched as a subprocess by the pipeline) ----
+export VLLM_VENV_PATH="${VLLM_VENV_PATH:-${PWD}/.vllm}"
+if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
+  echo "vLLM venv not found: ${VLLM_VENV_PATH}" >&2
+  exit 1
+fi
 
+# ---- HF cache (replaces the old scripts' --cache-dir flag) ----
+export HF_HOME="${HF_HOME:-/usr/project/xtmp/ccprocessing_cache/}"
+
+# ---- One statistics job per shard of the stat dataset ----
+# The array range must match the shard configs uploaded by the gen stage:
+# 0-7 covers the parallel_gen array. If the OAI shards were also generated
+# (gen_oai_shard.sbatch uploads shard 8, and 9 if run twice), extend the
+# range above accordingly, e.g. --array=0-8.
+# Stats scripts are idempotent per column: reruns skip already-computed
+# metrics, so a partially failed array can simply be resubmitted.
 I=$SLURM_ARRAY_TASK_ID
-SHARD_BASE="G-reen_cc-2021-rewritten-split-$I"
-SN="${SHARD_BASE}-sn"
-TOK="${SHARD_BASE}-tok"
-EMB="${SHARD_BASE}-emb"
-STAT="${SHARD_BASE}-stat"
+echo "Processing shard $I"
 
-CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
+echo "Computing distance statistics..."
+python scripts/stats/distance_stats.py \
+    --globals-config config/globals.toml \
+    --distance-config config/distance_stats.toml \
+    --batch-id "$I"
 
-echo "Processing split $I"
+echo "Computing LLM statistics..."
+python scripts/stats/llm_stats.py \
+    --globals-config config/globals.toml \
+    --llm-config config/llm_stats.toml \
+    --batch-id "$I"
 
-echo "Computing soft ngram scores..."
-python scripts/computational/run_softngram_stats.py \
-    --source-dataset "$SHARD_BASE" \
-    --target-dataset "$SN" \
-    --columns original final_response \
-    --save-locally-instead \
-    --cache-dir $CACHE_DIR
-
-echo "Computing token embeddings..."
-python scripts/computational/run_embedding_tokenwise_stat.py \
-    --source-dataset "$SN" \
-    --target-dataset "$TOK" \
-    --columns original final_response \
-    --save-locally-instead \
-    --cache-dir $CACHE_DIR
-
-echo "Computing embeddings..."
-python scripts/computational/run_embedding_stats.py \
-    --source-dataset "$TOK" \
-    --target-dataset "$EMB" \
-    --model-name Qwen/Qwen3-Embedding-4B \
-    --columns original final_response \
-    --save-locally-instead \
-    --cache-dir $CACHE_DIR
-
-echo "Calculating final embedding metrics and removing raw embedding columns..."
-python scripts/auxilary/metrics/calc_embedding_metrics.py \
-    --source-dataset "$EMB" \
-    --columns-prefix original final_response \
-    --target-dataset "$STAT" \
-    --pairwise-cosim --bertscore --moverscore \
-    --remove-columns-afterwards \
-    --save-locally-instead \
-    --cache-dir $CACHE_DIR
-
-echo "Calculating final basic pair metrics..."
-python scripts/auxilary/metrics/calc_basic_pair_metrics.py \
-    --source-dataset "$STAT" \
-    --columns original final_response \
-    --target-dataset "$STAT" \
-    --jaccards-1 --jaccards-2 --levenshteins \
-    --save-locally-instead \
-    --cache-dir $CACHE_DIR
-
-echo "Array task $I complete."
+echo "Shard $I complete."

@@ -11,6 +11,7 @@
 
 # ---- Activate project venv ----
 source .venv/bin/activate
+export PYTHONUNBUFFERED=1
 
 # ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/
@@ -20,30 +21,23 @@ export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:$CPLUS_INCLUDE_PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 source "$HOME/.cargo/env"
 
-# ---- vLLM venv ----
+# ---- vLLM venv (launched as a subprocess by the pipeline) ----
 export VLLM_VENV_PATH="${VLLM_VENV_PATH:-${PWD}/.vllm}"
-
 if [[ ! -d "${VLLM_VENV_PATH}" ]]; then
   echo "vLLM venv not found: ${VLLM_VENV_PATH}" >&2
   exit 1
 fi
 
-CACHE_DIR="/usr/project/xtmp/ccprocessing_cache/"
+# ---- HF cache (replaces the old scripts' --cache-dir flag) ----
+export HF_HOME="${HF_HOME:-/usr/project/xtmp/ccprocessing_cache/}"
 
-# ---- Run the dataset generation ----
+# ---- Run the generation pipeline ----
+# Model and sampling params come from the gen TOML; dataset names come from
+# config/globals.toml. batch-id selects the shard_<N> config of the filtered
+# dataset (use 0 for an unsharded / 'default' filtered dataset).
 echo "Starting dataset generation..."
-python scripts/computational/gen_pipeline.py \
-    --model-name google/gemma-4-E4B-it \
-    --temperature 0.7 \
-    --top-p 0.8 \
-    --presence-penalty 1.5 \
-    --max-model-len 32000 \
-    --max-dataset-len 15000 \
-    --prompt-file prompts/combined_dataset_test.json \
-    --source-dataset G-reen/cc-2021-filtered \
-    --source-column collected_subset_original_final_response \
-    --num-samples 250000 \
-    --target-dataset G-reen/cc-2021-rewritten \
-    --cache-dir $CACHE_DIR
-
+python scripts/gen.py \
+    --globals-config config/globals.toml \
+    --gen-config config/gen/shard_0.toml \
+    --batch-id 0
 echo "Dataset generation complete."
