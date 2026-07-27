@@ -134,12 +134,6 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
             edit = torch.from_numpy(edit)
             
         if src.ndim != 2 or edit.ndim != 2 or src.shape[0] == 0 or edit.shape[0] == 0:
-            # Empty text(s): no tokens to match, so similarity is 0 and the
-            # returned distance is 1.0 (maximally dissimilar).
-            #
-            # These append to the same lists as the normal path below, which
-            # appends 1.0 - score. The values here are therefore already on
-            # the distance scale and must NOT be inverted again.
             precisions.append(1.0)
             recalls.append(1.0)
             f1s.append(1.0)
