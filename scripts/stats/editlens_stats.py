@@ -11,7 +11,12 @@ from fastdetector.modeling.editlens import (
     compute_editlens_scores,
 )
 
-def main():
+def main() -> None:
+    """Run EditLens bucket and score inference pipeline from configuration.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--editlens-config", type=str, default="config/editlens_stats.toml")

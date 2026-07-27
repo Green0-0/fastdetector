@@ -10,7 +10,14 @@ from transformers import AutoModel, AutoTokenizer
 def _build_kwargs(model_name: str) -> Dict:
     """Returns the SentenceTransformer/CrossEncoder kwargs for a given model.
 
-    Automatically applies flash attention, bf16, and left padding for Qwen3 models."""
+    Automatically applies flash attention, bf16, and left padding for Qwen3 models.
+
+    Args:
+        model_name: HuggingFace model identifier.
+
+    Returns:
+        Dictionary of Keyword arguments for model instantiation.
+    """
     if "qwen3" in model_name.lower():
         return {
             "model_kwargs": {"attn_implementation": "flash_attention_2", "torch_dtype": torch.bfloat16},
@@ -20,7 +27,14 @@ def _build_kwargs(model_name: str) -> Dict:
 
 
 def _release_model(model) -> None:
-    """Delete a model and reclaim CUDA memory."""
+    """Delete a model and reclaim CUDA memory.
+
+    Args:
+        model: PyTorch / SentenceTransformer model object to release.
+
+    Returns:
+        None.
+    """
     del model
     gc.collect()
     if torch.cuda.is_available():
@@ -109,7 +123,15 @@ def generate_token_embeddings_pairs(
     if torch.cuda.is_available():
         model = model.cuda()
 
-    def _extract_chunk(texts):
+    def _extract_chunk(texts: list[str]) -> tuple[list[np.ndarray], list[list[str]]]:
+        """Extract token-level embeddings and token lists for a chunk of texts.
+
+        Args:
+            texts: List of strings to encode.
+
+        Returns:
+            Tuple of (all_embeddings, all_tokens).
+        """
         all_embs = []
         all_tokens = []
         for i in range(0, len(texts), batch_size):

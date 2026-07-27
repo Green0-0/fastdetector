@@ -26,16 +26,32 @@ class NormedLinear(torch.nn.Module):
     a QLoRA adapter whose head was trained with this normalization.
     """
 
-    def __init__(self, hidden_size, num_labels, device=None, dtype=None):
+    def __init__(self, hidden_size: int, num_labels: int, device=None, dtype=None) -> None:
+        """Initialize NormedLinear layer.
+
+        Args:
+            hidden_size: Size of input hidden features.
+            num_labels: Number of target output classes/labels.
+            device: Torch device for parameters.
+            dtype: Torch data type for parameters.
+        """
         super().__init__()
         self.norm = torch.nn.LayerNorm(hidden_size, device=device, dtype=dtype)
         self.linear = torch.nn.Linear(hidden_size, num_labels, bias=False, device=device, dtype=dtype)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass applying LayerNorm followed by Linear projection.
+
+        Args:
+            x: Input tensor of shape (batch_size, hidden_size).
+
+        Returns:
+            Logits tensor of shape (batch_size, num_labels).
+        """
         return self.linear(self.norm(x))
 
 
-def clean_text(text):
+def clean_text(text: str) -> str:
     """Normalize text for EditLens inference.
 
     Steps:
@@ -43,6 +59,12 @@ def clean_text(text):
     2. Strip ``<think>...</think>`` blocks (Qwen3 reasoning traces).
     3. Collapse whitespace.
     4. Lowercase.
+
+    Args:
+        text: Input string or value to clean.
+
+    Returns:
+        Cleaned, normalized string.
     """
     if text is None:
         return ""
@@ -56,7 +78,14 @@ def clean_text(text):
 
 
 def is_qlora_checkpoint(checkpoint: str) -> bool:
-    """Return True if *checkpoint* is a PEFT/QLoRA adapter (has adapter_config.json)."""
+    """Return True if *checkpoint* is a PEFT/QLoRA adapter (has adapter_config.json).
+
+    Args:
+        checkpoint: Local path or HuggingFace repo ID.
+
+    Returns:
+        True if the checkpoint is a QLoRA adapter, False otherwise.
+    """
     if os.path.isdir(checkpoint):
         return os.path.exists(os.path.join(checkpoint, "adapter_config.json"))
     try:
@@ -72,6 +101,12 @@ def infer_n_buckets(checkpoint: str) -> int:
     For a full (non-QLoRA) checkpoint, reads ``num_labels`` from the model
     config. For a QLoRA adapter, reads the shape of the ``score.linear.weight``
     tensor from the adapter's safetensors or ``.bin`` file.
+
+    Args:
+        checkpoint: Local path or HuggingFace repo ID.
+
+    Returns:
+        Number of classification buckets (num_labels).
 
     Raises:
         ValueError: if n_buckets cannot be determined.
@@ -149,10 +184,6 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
         )
         base_model.config.pad_token_id = tokenizer.pad_token_id
 
-        # Replace the default Linear score head with NormedLinear so the
-        # adapter's trained head weights load into the right module shape.
-        # We check isinstance to avoid replacing heads that are already
-        # NormedLinear or some other custom module.
         if hasattr(base_model, "score") and isinstance(base_model.score, torch.nn.Linear):
             hidden_size = base_model.config.hidden_size
             device = next(base_model.parameters()).device
@@ -200,21 +231,23 @@ def compute_editlens_scores(
     """
     ds = Dataset.from_dict({"text": texts})
 
-    def tokenize(example):
+    def tokenize(example: dict) -> dict:
+        """Tokenize a batch of text examples after cleaning.
+
+        Args:
+            example: Dictionary with key "text" containing a list of strings.
+
+        Returns:
+            Dictionary of tokenized model inputs.
+        """
         cleaned_texts = [clean_text(t) for t in example["text"]]
         return tokenizer(cleaned_texts, truncation=True, max_length=max_length)
 
-    ds_tokenized = ds.map(tokenize, num_proc=4, batched=True, remove_columns=["text"])
+    ds_tokenized = ds.map(tokenize, batched=True, remove_columns=["text"])
 
-    # QLoRA 4-bit models use more memory per sample; cap batch size at 4.
     effective_batch_size = batch_size if not is_qlora else 4
 
     data_collator = DataCollatorWithPadding(tokenizer)
-    # Note: we intentionally do NOT call ds_tokenized.set_format("torch")
-    # here. DataCollatorWithPadding expects to receive Python lists from
-    # the dataset so it can pad variable-length sequences and convert to
-    # tensors itself. Pre-setting torch format would cause double-padding
-    # or shape errors.
     dataloader = DataLoader(
         ds_tokenized,
         batch_size=effective_batch_size,
@@ -224,9 +257,6 @@ def compute_editlens_scores(
     device = next(model.parameters()).device
     all_logits = []
 
-    # bf16 autocast on CUDA: speeds up inference and halves memory on
-    # bf16-capable GPUs. On CPU it's a no-op. For QLoRA, bnb_4bit_compute_dtype
-    # already handles bf16 compute, but autocast is harmless.
     use_autocast = device.type == "cuda"
     with torch.no_grad():
         for batch in dataloader:

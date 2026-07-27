@@ -109,7 +109,15 @@ def pairwise_levenshteins(texts_list_a: list[str], texts_list_b: list[str]) -> l
     return [float(Levenshtein.distance(t1, t2)) for t1, t2 in zip(texts_list_a, texts_list_b)]
 
 def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
-    """Compute the proportion and raw count of deviated lines between pairs of texts."""
+    """Compute the proportion and raw count of deviated lines between pairs of texts.
+
+    Args:
+        texts_a: First list of texts.
+        texts_b: Second list of texts.
+
+    Returns:
+        Tuple of (proportions_list, raw_counts_list).
+    """
     proportions = []
     raw_counts = []
     for a, b in zip(texts_a, texts_b):
@@ -127,7 +135,15 @@ def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float],
     return proportions, raw_counts
 
 def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
-    """Compute the proportion and raw count of deviated words between pairs of texts."""
+    """Compute the proportion and raw count of deviated words between pairs of texts.
+
+    Args:
+        texts_a: First list of texts.
+        texts_b: Second list of texts.
+
+    Returns:
+        Tuple of (proportions_list, raw_counts_list).
+    """
     proportions = []
     raw_counts = []
     for a, b in zip(texts_a, texts_b):
@@ -145,7 +161,15 @@ def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float],
     return proportions, raw_counts
 
 def deviated_characters(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
-    """Compute the proportion and raw count of deviated characters between pairs of texts."""
+    """Compute the proportion and raw count of deviated characters between pairs of texts.
+
+    Args:
+        texts_a: First list of texts.
+        texts_b: Second list of texts.
+
+    Returns:
+        Tuple of (proportions_list, raw_counts_list).
+    """
     proportions = []
     raw_counts = []
     for a, b in zip(texts_a, texts_b):
@@ -208,7 +232,15 @@ def min_max_norm(values: list[float]) -> list[float]:
     return ((arr - min_val) / (max_val - min_val)).tolist()
 
 def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
-    """Check if texts_b are strictly substrings of texts_a."""
+    """Check if texts_b are strictly substrings of texts_a.
+
+    Args:
+        texts_a: Source list of texts.
+        texts_b: Candidate subset texts to check.
+
+    Returns:
+        List of booleans, True if candidate is a strict substring of source.
+    """
     results = []
     for a, b in zip(texts_a, texts_b):
         a_str = str(a) if a is not None else ""
@@ -221,7 +253,14 @@ def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
 
 def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool], list[str]]:
     """Check if texts_b are loose substrings of texts_a, ignoring spaces, case, and unicode differences.
-    Returns a tuple of (is_subset, collected_subset)."""
+
+    Args:
+        texts_a: Source list of texts.
+        texts_b: Candidate subset texts to check.
+
+    Returns:
+        Tuple of (is_subsets_list, collected_subsets_list).
+    """
     is_subsets = []
     collected_subsets = []
     for a, b in zip(texts_a, texts_b):
@@ -337,7 +376,16 @@ def pairwise_chunked_jaccards(a: list[list[str]], b: list[list[str]], n: int, op
     return results
 
 def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operation: str = 'max') -> list[list[float]]:
-    """Compute pairwise chunked Levenshtein distance between two aligned lists of chunk lists."""
+    """Compute pairwise chunked Levenshtein distance between two aligned lists of chunk lists.
+
+    Args:
+        a: First list of chunk lists.
+        b: Second list of chunk lists.
+        operation: 'mean', 'max', or 'min'.
+
+    Returns:
+        List of lists of Levenshtein distance floats.
+    """
     results = []
     for chunks_a, chunks_b in zip(a, b):
         if not chunks_a or not chunks_b:
@@ -363,7 +411,14 @@ def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operat
     return results
 
 def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
-    """Compute quantile for a list of lists of values."""
+    """Compute quantile for a list of lists of values.
+
+    Args:
+        values_list: List of lists of floats.
+
+    Returns:
+        List of lists of quantile floats between 0.0 and 1.0.
+    """
     flat_values = [v for values in values_list for v in values]
     if not flat_values:
         return [[] for _ in values_list]
@@ -389,7 +444,14 @@ def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
     return results
 
 def chunkwise_min_max_norm(values_list: list[list[float]]) -> list[list[float]]:
-    """Compute min-max normalization for a list of lists of values."""
+    """Compute min-max normalization for a list of lists of values.
+
+    Args:
+        values_list: List of lists of floats.
+
+    Returns:
+        List of lists of min-max normalized floats scaled between 0.0 and 1.0.
+    """
     flat_values = [v for values in values_list for v in values]
     if not flat_values:
         return [[] for _ in values_list]

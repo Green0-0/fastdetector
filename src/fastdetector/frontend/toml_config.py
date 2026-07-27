@@ -26,13 +26,27 @@ class GlobalsConfig(BaseModel):
     aphrodite_venv_path: str = ".aphrodite"
 
     def resolve_input_dataset(self, suffix: str) -> str:
-        """Return the source dataset name for the given suffix, honouring override_dataset_input."""
+        """Return the source dataset name for the given suffix, honouring override_dataset_input.
+
+        Args:
+            suffix: Dataset suffix string.
+
+        Returns:
+            Resolved input dataset name.
+        """
         if self.override_dataset_input is not None:
             return self.override_dataset_input
         return f"{self.dataset_prefix}-{suffix}"
 
     def resolve_output_dataset(self, suffix: str) -> str:
-        """Return the target dataset name for the given suffix, honouring override_dataset_output."""
+        """Return the target dataset name for the given suffix, honouring override_dataset_output.
+
+        Args:
+            suffix: Dataset suffix string.
+
+        Returns:
+            Resolved output dataset name.
+        """
         if self.override_dataset_output is not None:
             return self.override_dataset_output
         return f"{self.dataset_prefix}-{suffix}"
@@ -188,6 +202,14 @@ class LLMStatConfig(BaseModel):
 
     @model_validator(mode='after')
     def validate_llm_settings(self) -> 'LLMStatConfig':
+        """Validate alignment of LLM checkpoints, column suffixes, and binoculars configuration.
+
+        Returns:
+            Self instance if validation succeeds.
+
+        Raises:
+            ValueError: If llm_checkpoints and col_suffixes lengths differ or binoculars requirements are unmet.
+        """
         if len(self.llm_checkpoints) != len(self.col_suffixes):
             raise ValueError(f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) must match col_suffixes ({len(self.col_suffixes)})")
         if self.binoculars_score and len(self.llm_checkpoints) != 2:

@@ -1,5 +1,6 @@
 """CLI entry point: generate evaluation README with dynamic classifiers and table of contents."""
 
+from typing import Optional
 from fastdetector.visualization.plotting import generate_table
 from fastdetector.visualization.plotting import generate_pearson_heatmap
 from fastdetector.visualization.plotting import generate_histogram
@@ -11,7 +12,7 @@ from datasets import Dataset
 
 from fastdetector.frontend.toml_config import AnalysisConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard, upload_readme, apply_filter_conditions
+from fastdetector.utils import load_dataset_all_shards, upload_readme, apply_filter_conditions
 from fastdetector.visualization.auto_visualizer import (
     StatWrapper,
     ClassifierWrapper,
@@ -21,18 +22,37 @@ from fastdetector.visualization.auto_visualizer import (
 )
 
 class NumpyEncoder(json.JSONEncoder):
+    """JSONEncoder subclass for serializing NumPy scalar and array types."""
+
     def default(self, obj):
         if isinstance(obj, np.floating): return float(obj)
         if isinstance(obj, np.integer): return int(obj)
         if isinstance(obj, np.ndarray): return obj.tolist()
         return super().default(obj)
 
-def _parse_genparams(val):
+def _parse_genparams(val: any) -> Optional[dict]:
+    """Parse JSON string or dictionary of generation parameters.
+
+    Args:
+        val: JSON string, dict, or None.
+
+    Returns:
+        Parsed parameters dictionary or None.
+    """
     if isinstance(val, dict): return val
     if not val: return None
     return json.loads(val)
 
-def extract_prompt_types(result_ds, prompt_col):
+def extract_prompt_types(result_ds: Dataset, prompt_col: str) -> tuple[np.ndarray, bool]:
+    """Extract prompt type metadata labels from dataset prompt metadata column.
+
+    Args:
+        result_ds: Input evaluation Dataset.
+        prompt_col: Name of prompt metadata column.
+
+    Returns:
+        Tuple of (prompt_types_array, has_prompt_metadata_boolean).
+    """
     if not (prompt_col and prompt_col in result_ds.column_names):
         return np.array(["Unknown"] * len(result_ds)), False
     pts = []
@@ -43,7 +63,19 @@ def extract_prompt_types(result_ds, prompt_col):
         pts.append(pt)
     return np.array(pts), True
 
-def extract_model_genconfig(result_ds, model_col):
+def extract_model_genconfig(result_ds: Dataset, model_col: str) -> tuple[np.ndarray, bool]:
+    """Extract combined model identifier and generation configuration labels.
+
+    Args:
+        result_ds: Input evaluation Dataset.
+        model_col: Name of generator model column.
+
+    Returns:
+        Tuple of (genconfig_labels_array, has_model_genconfig_boolean).
+
+    Raises:
+        ValueError: If model_col or generation_params column is missing.
+    """
     has_model_col = model_col in result_ds.column_names
     has_genparams = "generation_params" in result_ds.column_names
     if not has_model_col and not has_genparams:
@@ -59,21 +91,57 @@ def extract_model_genconfig(result_ds, model_col):
     return np.array(parsed), True
 
 def _column_equals_mask(column: str, value: str):
+    """Build a masking function that filters rows where dataset[column] == value.
+
+    Args:
+        column: Column name to match.
+        value: Target string value.
+
+    Returns:
+        Mask function returning boolean numpy array.
+    """
     def mask_fn(ds: Dataset) -> np.ndarray:
         return np.array(ds[column]) == value
     return mask_fn
 
 def _safe_name(name: str) -> str:
+    """Sanitize string for use in file names or identifiers.
+
+    Args:
+        name: Raw string.
+
+    Returns:
+        Sanitized uppercase alphanumeric string with underscores.
+    """
     raw = re.sub(r"[^a-zA-Z0-9]", "_", name)
     return re.sub(r"_+", "_", raw).strip("_").upper()
 
 class Subset:
+    """Represents a named data subset defined by a row-masking function."""
+
     def __init__(self, name: str, mask_fn):
+        """Initialize Subset.
+
+        Args:
+            name: Subset display name.
+            mask_fn: Row masking function.
+        """
         self.name = name
         self.mask_fn = mask_fn
         self.safe = _safe_name(name)
 
-def _extract_classifier_data(ds, eval_config, clf_config, mask_fn):
+def _extract_classifier_data(ds: Dataset, eval_config, clf_config, mask_fn) -> tuple[list, list, list]:
+    """Extract score arrays, class labels, and column names for classifier evaluation.
+
+    Args:
+        ds: Input Dataset.
+        eval_config: AnalysisConfig object.
+        clf_config: ClassifierConfig object.
+        mask_fn: Subset masking function or None.
+
+    Returns:
+        Tuple of (arrays_list, classes_boolean_list, column_names_list).
+    """
     extracted_human = []
     extracted_ai = []
     col_names_human = []
@@ -113,7 +181,20 @@ def _extract_classifier_data(ds, eval_config, clf_config, mask_fn):
     
     return arrays, classes, names
 
-def _build_readme(result_ds, eval_config, has_prompts, has_model_genconfig, unique_prompts, unique_mg_strs):
+def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_genconfig: bool, unique_prompts: list, unique_mg_strs: list) -> tuple[str, dict[str, bytes]]:
+    """Build evaluation README report markdown and generate diagnostic plot images.
+
+    Args:
+        result_ds: Evaluation Dataset.
+        eval_config: AnalysisConfig instance.
+        has_prompts: Boolean indicating if prompt type metadata exists.
+        has_model_genconfig: Boolean indicating if model genconfig metadata exists.
+        unique_prompts: List of unique prompt type strings.
+        unique_mg_strs: List of unique model genconfig strings.
+
+    Returns:
+        Tuple of (readme_markdown_string, dict_of_chart_filename_to_bytes).
+    """
     has_manual_score = eval_config.manual_threshold_score is not None
     has_manual_bin = eval_config.manual_threshold_bin is not None
     skip_val = has_manual_score and has_manual_bin
@@ -212,7 +293,15 @@ def _build_readme(result_ds, eval_config, has_prompts, has_model_genconfig, uniq
         for arr, cls_bool, col_name in zip(test_arrays, test_classes, test_names):
             class_str = "AI" if cls_bool else "Human"
             class MockStatWrapper:
-                def __init__(self, arr, name):
+                """Mock StatWrapper for histogram visualization of scores."""
+
+                def __init__(self, arr: np.ndarray, name: str) -> None:
+                    """Initialize MockStatWrapper.
+
+                    Args:
+                        arr: Scores array.
+                        name: Display name.
+                    """
                     self.arr = arr
                     self.name = name
             wrappers.append(MockStatWrapper(arr, f"{clf.name} ({class_str})"))
@@ -271,18 +360,22 @@ def _build_readme(result_ds, eval_config, has_prompts, has_model_genconfig, uniq
 
     return "\n".join(lines), charts
 
-def main():
+def main() -> None:
+    """Run analysis and evaluation reporting pipeline from configuration.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--analysis-config", type=str, default="config/analysis.toml")
-    parser.add_argument("--batch-id", type=int, default=0)
     args = parser.parse_args()
 
     globals_config, eval_config = load_config_pair(args.globals_config, args.analysis_config, AnalysisConfig)
 
     target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
-    print(f"Loading {target_dataset} (subset index {args.batch_id})...")
-    result_ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
+    print(f"Loading all shards for dataset {target_dataset}...")
+    result_ds = load_dataset_all_shards(target_dataset, split="train")
 
     if eval_config.filter_conditions:
         print("Applying filters...")

@@ -26,7 +26,17 @@ def _save_fig_to_png() -> bytes:
     return buf.read()
 
 def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
-    # TODO: Write readme, reviews
+    """Generate an overlay histogram of dataset values and render as PNG bytes.
+
+    Args:
+        wrappers: List of StatWrapper instances containing arrays to plot.
+        title: Figure title string.
+        bins: Number of histogram bins.
+        figsize: Figure width and height tuple.
+
+    Returns:
+        PNG image bytes.
+    """
     plt.figure(figsize=figsize)
 
     all_values = [
@@ -53,7 +63,21 @@ def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, 
     return _save_fig_to_png()
 
 def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], title: str, xlabel: str = "X", ylabel: str = "Y", point_alpha: float = 0.5, rolling_mean_window: int = 0, figsize: Tuple[int, int] = (8, 5)) -> bytes:
-    # TODO: Write readme, reviews
+    """Generate a scatterplot (with optional rolling mean trendline) and render as PNG bytes.
+
+    Args:
+        x_wrapper: StatWrapper for x-axis data.
+        y_wrappers: List of StatWrapper instances for y-axis datasets.
+        title: Figure title string.
+        xlabel: Label for x-axis.
+        ylabel: Label for y-axis.
+        point_alpha: Alpha transparency for scatter points.
+        rolling_mean_window: Window size for rolling mean trendline (0 to disable).
+        figsize: Figure width and height tuple.
+
+    Returns:
+        PNG image bytes.
+    """
     x_data = x_wrapper.arr
     y_data_lists = [w.arr for w in y_wrappers]
     labels = [w.name for w in y_wrappers]
@@ -99,6 +123,15 @@ def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], 
     return _save_fig_to_png()
 
 def generate_pearson_heatmap(wrappers: List[StatWrapper], title: str) -> bytes:
+    """Compute pairwise Pearson correlations among StatWrappers and render a heatmap.
+
+    Args:
+        wrappers: List of StatWrapper instances.
+        title: Figure title string.
+
+    Returns:
+        PNG image bytes.
+    """
     arrays = [w.arr for w in wrappers]
     names = [w.name for w in wrappers]
     n = len(wrappers)
@@ -131,6 +164,15 @@ def generate_pearson_heatmap(wrappers: List[StatWrapper], title: str) -> bytes:
     return buf.getvalue()
 
 def compute_row_emojis(rows: List[dict], emoji_config: Optional[dict]) -> Dict[str, str]:
+    """Compute best/worst indicator emojis for markdown summary table rows.
+
+    Args:
+        rows: List of row dictionaries containing cell metric values.
+        emoji_config: Configuration dictionary specifying metric, mode, and thresholds.
+
+    Returns:
+        Dictionary mapping row name to indicator emoji string ("✔️ ", "❗ ", or "").
+    """
     if not emoji_config:
         return {r["name"]: "" for r in rows}
         
@@ -178,6 +220,17 @@ def compute_row_emojis(rows: List[dict], emoji_config: Optional[dict]) -> Dict[s
     return {r["name"]: ("✔️ " if i in best else ("❗ " if i in worst else "")) for i, r in enumerate(rows)}
 
 def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional[dict] = None, row_header: str = "Name") -> Tuple[str, Dict[str, str]]:
+    """Format row and column cell values into a markdown summary table string.
+
+    Args:
+        rows: List of row data dictionaries.
+        columns: List of column specification dictionaries.
+        emoji_config: Optional configuration dictionary for indicator emojis.
+        row_header: Header label for the first column.
+
+    Returns:
+        Tuple of (markdown_table_string, emoji_mapping_dict).
+    """
     emojis = compute_row_emojis(rows, emoji_config)
     row_names = [emojis[r["name"]] + r["name"] for r in rows]
     

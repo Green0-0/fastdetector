@@ -16,7 +16,12 @@ from fastdetector.statistics.statistics_basic import (
     quantile
 )
 
-def main():
+def main() -> None:
+    """Run dataset generation, similarity metric computation, and condition filtering pipeline.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser(description="Run the dataset filtering pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--filter-config", type=str, default="config/filter.toml", help="Path to filter.toml")
@@ -88,7 +93,15 @@ def main():
     ds_filtered = apply_filter_conditions(ds, conditions, filter_config.filter_type)
 
     if filter_config.langdetect_threshold is not None:
-        def is_highly_english(example):
+        def is_highly_english(example: dict) -> bool:
+            """Check if the text in collected_subset meets the English probability threshold.
+
+            Args:
+                example: Row dictionary containing 'collected_subset'.
+
+            Returns:
+                True if English probability >= threshold, False otherwise.
+            """
             text = example.get("collected_subset", "")
             if not text or not text.strip():
                 return False

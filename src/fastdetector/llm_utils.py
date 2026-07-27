@@ -98,6 +98,8 @@ def launch_engine_server(
             (vLLM or Aphrodite).
         model_name: HuggingFace model ID or local path.
         port: Port for the OpenAI-compatible API server.
+        venv_path: Path to the python virtual environment containing the engine executable.
+        parallelization_type: Parallelization strategy ("data", "tensor", "pipeline").
         max_logprobs: Maximum number of top logprobs the server will return.
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).
         max_model_len: Maximum model context length.
@@ -192,7 +194,16 @@ def launch_engine_server(
 
 
 def _terminate_proc(proc: subprocess.Popen, engine: EngineConfig, timeout: int = 60) -> None:
-    """Terminate a subprocess gracefully, escalating to kill if needed."""
+    """Terminate a subprocess gracefully, escalating to kill if needed.
+
+    Args:
+        proc: The subprocess handle to terminate.
+        engine: Engine configuration describing the server process.
+        timeout: Time in seconds to wait for termination before sending SIGKILL.
+
+    Returns:
+        None.
+    """
     proc.terminate()
     try:
         proc.wait(timeout=timeout)
@@ -223,6 +234,8 @@ def llm_server_context(
         engine: Engine for the backend. Must be a local-server engine
             (vLLM or Aphrodite).
         model_name: HuggingFace model ID or local path.
+        venv_path: Path to the python virtual environment containing the engine executable.
+        parallelization_type: Parallelization strategy ("data", "tensor", "pipeline").
         port: Port for the API server. If None, a free port is chosen.
         max_logprobs: Maximum top-logprobs the server will return.
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).

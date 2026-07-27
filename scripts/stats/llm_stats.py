@@ -19,14 +19,49 @@ from fastdetector.statistics.statistics_llm import (
 )
 
 def serialize_top_logprobs(top_logprobs_seq: list) -> list:
+    """Serialize top logprobs dictionaries into JSON strings for dataset storage.
+
+    Args:
+        top_logprobs_seq: Sequence of top logprob dictionaries.
+
+    Returns:
+        List of JSON-serialized logprob lists.
+    """
     return [[json.dumps(d) for d in seq] for seq in top_logprobs_seq]
 
 def deserialize_top_logprobs(serialized_seq: list) -> list:
+    """Deserialize top logprobs JSON strings back into dictionaries.
+
+    Args:
+        serialized_seq: List of JSON-serialized logprob lists.
+
+    Returns:
+        List of deserialized top logprob dictionary sequences.
+    """
     if not serialized_seq: return []
     return [[json.loads(d) if isinstance(d, str) else d for d in seq] for seq in serialized_seq]
 
-def make_logprobs_processor(columns_to_score, suffix, stat_api_url, top_logprobs_k):
-    def process_logprobs(examples):
+def make_logprobs_processor(columns_to_score: list[str], suffix: str, stat_api_url: str, top_logprobs_k: int) -> callable:
+    """Build a map function for fetching logprobs across dataset columns.
+
+    Args:
+        columns_to_score: List of column names to score.
+        suffix: Column suffix string.
+        stat_api_url: LLM API base URL.
+        top_logprobs_k: Number of top logprobs to request.
+
+    Returns:
+        Dataset map transformation callable.
+    """
+    def process_logprobs(examples: dict) -> dict:
+        """Fetch logprobs for a batch of examples.
+
+        Args:
+            examples: Dataset batch dictionary.
+
+        Returns:
+            Dictionary containing token and top logprob columns.
+        """
         res = {}
         for col in columns_to_score:
             tok_lps, top_lps = fetch_logprobs_all(examples[col], stat_api_url, top_logprobs_k=top_logprobs_k)
@@ -35,8 +70,27 @@ def make_logprobs_processor(columns_to_score, suffix, stat_api_url, top_logprobs
         return res
     return process_logprobs
 
-def make_llm_metrics_processor(columns_to_score, llm_checkpoints, col_suffixes, config):
-    def process_llm_metrics(examples):
+def make_llm_metrics_processor(columns_to_score: list[str], llm_checkpoints: list[str], col_suffixes: list[str], config) -> callable:
+    """Build a map function for computing LLM-derived text metrics (perplexity, entropy, outliers, etc.).
+
+    Args:
+        columns_to_score: List of column names to score.
+        llm_checkpoints: List of model checkpoint identifiers.
+        col_suffixes: List of column suffixes aligned with checkpoints.
+        config: LLMStatConfig object.
+
+    Returns:
+        Dataset map transformation callable.
+    """
+    def process_llm_metrics(examples: dict) -> dict:
+        """Compute LLM metrics for a batch of examples from logprob columns.
+
+        Args:
+            examples: Dataset batch dictionary containing logprob columns.
+
+        Returns:
+            Dictionary containing computed metric columns.
+        """
         result = {}
         for idx, _ in enumerate(llm_checkpoints):
             suffix = col_suffixes[idx]
@@ -77,7 +131,12 @@ def make_llm_metrics_processor(columns_to_score, llm_checkpoints, col_suffixes, 
         return result
     return process_llm_metrics
 
-def main():
+def main() -> None:
+    """Run LLM logprob extraction and text metrics processing pipeline.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--llm-config", type=str, default="config/llm_stats.toml")

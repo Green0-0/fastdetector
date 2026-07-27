@@ -1,9 +1,7 @@
 from typing import Dict, Optional
 
 from huggingface_hub import HfApi, hf_hub_download
-from datasets import Dataset
-from datasets import load_dataset
-from datasets import get_dataset_config_names
+from datasets import Dataset, load_dataset, get_dataset_config_names, concatenate_datasets
 
 
 def load_dataset_auto_shard(
@@ -55,6 +53,38 @@ def load_dataset_auto_shard(
     return load_dataset(dataset_name, split=split)
 
 
+def load_dataset_all_shards(
+    dataset_name: str,
+    split: str = "train",
+) -> Dataset:
+    """Load all configs/shards of a dataset from Hugging Face Hub and concatenate them into a single Dataset.
+
+    Args:
+        dataset_name: HF Hub dataset repo ID.
+        split: Dataset split (default "train").
+
+    Returns:
+        The concatenated Dataset containing all rows from all shards.
+    """
+    try:
+        configs = get_dataset_config_names(dataset_name)
+    except Exception as e:
+        print(f"Notice: Could not list configs for '{dataset_name}': {e}. Loading default config.")
+        configs = []
+
+    if configs:
+        print(f"Loading all {len(configs)} configs ({configs}) for dataset '{dataset_name}'...")
+        shards = []
+        for cfg in configs:
+            shards.append(load_dataset(dataset_name, name=cfg, split=split))
+        if len(shards) == 1:
+            return shards[0]
+        return concatenate_datasets(shards)
+    else:
+        print(f"Loading default config for dataset '{dataset_name}'...")
+        return load_dataset(dataset_name, split=split)
+
+
 
 def upload_readme(
     dataset_name: str,
@@ -70,8 +100,19 @@ def upload_readme(
         readme_content: The content of the readme.
         append_readme_source: If set, download the README from this dataset
             and prepend it to *readme_content*.
+
+    Returns:
+        None.
     """
-    def _extract_yaml(text: str):
+    def _extract_yaml(text: str) -> tuple[str, str]:
+        """Extract YAML frontmatter from a markdown string.
+
+        Args:
+            text: Markdown text potentially starting with '---'.
+
+        Returns:
+            Tuple of (yaml_header_with_newline, remaining_body).
+        """
         if text.startswith("---"):
             idx = text.find("\n---", 3)
             if idx != -1:
@@ -168,7 +209,15 @@ def apply_filter_conditions(
     for c in conditions:
         print(c)
 
-    def filter_func(example):
+    def filter_func(example: dict) -> bool:
+        """Evaluate filter conditions on a single dataset example row.
+
+        Args:
+            example: Dictionary representing a dataset row.
+
+        Returns:
+            True if row meets the conditions according to filter_type, else False.
+        """
         bools = []
         for cond in conditions:
             col = cond.column

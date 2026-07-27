@@ -36,6 +36,10 @@ def _tail_moments(p: np.ndarray, vocab_size: int | None) -> tuple[float, float, 
       when ``p_min`` is very small (peaky top-N distributions), ``K``
       can exceed ``V - N`` and the heuristic **overestimates** instead.
 
+    Args:
+        p: Array of top-N probabilities.
+        vocab_size: Optional vocabulary size of the model.
+
     Returns:
         Tuple of ``(h_tail, e2_tail, M)``.
     """

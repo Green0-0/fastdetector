@@ -35,6 +35,11 @@ class PromptSet:
     """
 
     def __init__(self, prompts: list[Prompt]) -> None:
+        """Initialize PromptSet with a list of Prompt templates.
+
+        Args:
+            prompts: List of Prompt instances to populate the training set.
+        """
         self._train = list(prompts)
         self._test: list[Prompt] = []
         self._train_cursor = 0
@@ -66,7 +71,11 @@ class PromptSet:
         self._train = self._train[:split_index]
 
     def clear_test_set(self) -> None:
-        """Move all test-set prompts back into the training set and reset cursors."""
+        """Move all test-set prompts back into the training set and reset cursors.
+
+        Returns:
+            None.
+        """
         if not self._test or len(self._test) == 0:
             print("There is no test set to clear.")
             return
@@ -169,15 +178,27 @@ class PromptSet:
         return result
 
     def get_train(self) -> list[Prompt]:
-        """Return all prompts currently in the training set (without advancing the cursor)."""
+        """Return all prompts currently in the training set (without advancing the cursor).
+
+        Returns:
+            List of training Prompt objects.
+        """
         return list(self._train)
 
     def get_test(self) -> list[Prompt]:
-        """Return all prompts currently in the testing set (without advancing the cursor)."""
+        """Return all prompts currently in the testing set (without advancing the cursor).
+
+        Returns:
+            List of testing Prompt objects.
+        """
         return list(self._test)
 
     def reset(self) -> None:
-        """Reset both the training and testing cursors to 0."""
+        """Reset both the training and testing cursors to 0.
+
+        Returns:
+            None.
+        """
         self._train_cursor = 0
         self._test_cursor = 0
 
@@ -189,6 +210,9 @@ class PromptSet:
 
         Args:
             seed: PRNG seed for reproducibility.
+
+        Returns:
+            None.
         """
         rng = random.Random(seed)
         rng.shuffle(self._train)

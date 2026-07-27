@@ -4,7 +4,15 @@ import sys
 from huggingface_hub import hf_hub_download
 import math
 
-def download_summary(repo_id):
+def download_summary(repo_id: str) -> dict:
+    """Download summary_stats.json from a HuggingFace dataset repo.
+
+    Args:
+        repo_id: HuggingFace dataset repository ID.
+
+    Returns:
+        Parsed JSON dictionary of summary statistics.
+    """
     try:
         path = hf_hub_download(repo_id=repo_id, repo_type="dataset", filename="summary_stats.json")
         with open(path, 'r') as f:
@@ -13,14 +21,31 @@ def download_summary(repo_id):
         print(f"Failed to download summary_stats.json from {repo_id}: {e}")
         sys.exit(1)
 
-def is_valid(val):
+def is_valid(val: any) -> bool:
+    """Check if a metric value is numeric and non-NaN.
+
+    Args:
+        val: Value to check.
+
+    Returns:
+        True if valid float/int (not NaN/None), False otherwise.
+    """
     if val is None:
         return False
     if isinstance(val, (int, float)) and math.isnan(val):
         return False
     return True
 
-def format_single_metric(v1, v2):
+def format_single_metric(v1: any, v2: any) -> tuple[str, str, str]:
+    """Format metric values from two datasets and compute difference string.
+
+    Args:
+        v1: Metric value from dataset 1.
+        v2: Metric value from dataset 2.
+
+    Returns:
+        Tuple of (v1_str, v2_str, diff_str).
+    """
     if not is_valid(v1) and not is_valid(v2):
         return "-", "-", "-"
     
@@ -38,7 +63,18 @@ def format_single_metric(v1, v2):
     else:
         return v1_str, v2_str, "-"
 
-def generate_metric_table(ds1_name, ds2_name, m1, m2):
+def generate_metric_table(ds1_name: str, ds2_name: str, m1: dict, m2: dict) -> str:
+    """Generate markdown table comparing metrics between two datasets.
+
+    Args:
+        ds1_name: Baseline dataset name.
+        ds2_name: Comparison dataset name.
+        m1: Metrics dictionary for dataset 1.
+        m2: Metrics dictionary for dataset 2.
+
+    Returns:
+        Markdown table string.
+    """
     if m1 is None: m1 = {}
     if m2 is None: m2 = {}
     
@@ -62,11 +98,33 @@ def generate_metric_table(ds1_name, ds2_name, m1, m2):
         
     return header + "\n".join(rows) + "\n\n"
 
-def generate_markdown(ds1_name, ds2_name, d1, d2):
+def generate_markdown(ds1_name: str, ds2_name: str, d1: dict, d2: dict) -> str:
+    """Generate full markdown comparison report between two EditLens summary dicts.
+
+    Args:
+        ds1_name: Name of baseline dataset 1.
+        ds2_name: Name of comparison dataset 2.
+        d1: Summary dict for dataset 1.
+        d2: Summary dict for dataset 2.
+
+    Returns:
+        Complete markdown comparison report string.
+    """
     subset_acc_changes = []
     stat_changes = []
     
-    def process_metrics(subset_name, model_type, m1, m2):
+    def process_metrics(subset_name: str, model_type: str, m1: dict, m2: dict) -> None:
+        """Helper to collect and rank metric differences for a subset.
+
+        Args:
+            subset_name: Display name of the subset.
+            model_type: Classifier model type ("Score" or "Bin").
+            m1: Metrics dict for dataset 1.
+            m2: Metrics dict for dataset 2.
+
+        Returns:
+            None.
+        """
         if m1 is None: m1 = {}
         if m2 is None: m2 = {}
         
@@ -174,7 +232,12 @@ def generate_markdown(ds1_name, ds2_name, d1, d2):
             
     return md
 
-def main():
+def main() -> None:
+    """Compare two EditLens summary JSONs and output a markdown report.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser(description="Compare two EditLens summary JSONs")
     parser.add_argument("--dataset-1", type=str, required=True, help="First dataset (baseline)")
     parser.add_argument("--dataset-2", type=str, required=True, help="Second dataset")

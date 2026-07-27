@@ -126,12 +126,18 @@ def partial_stack(items_to_stack: list[list[list[str]]], min_stack_size: int = 1
     return result
 
 def force_reformat(original: list[list[str]], only_first_message: bool = False, modified_format: str = "{{TEXT}}") -> list[list[str]]:
-    """
-    Takes your original list of lists, and forces a reformat to a different format. 
+    """Reformat a list of chat turn lists by inserting text into a format template.
 
-    Replaces {{TEXT}} with the original string present.
-    
-    Returns a new list, without modifying the original list.
+    Replaces {{TEXT}} with the original string present. Returns a new list without
+    modifying the original list.
+
+    Args:
+        original: List of chat message lists.
+        only_first_message: If True, reformat only the first message in each chat.
+        modified_format: Formatting template containing '{{TEXT}}'.
+
+    Returns:
+        New list of reformatted chat message lists.
     """
     assert "{{TEXT}}" in modified_format, "modified_format must contain the placeholder '{{TEXT}}'."
 
@@ -184,8 +190,13 @@ def apply_recursive_format(original: list[list[str]], order: str = "first", res_
     return result
 
 def load_raw_samples(paths: list[str]) -> list[list[str]]:
-    """
-    Loads the samples in the specified path(s) as a single list of lists of strings.
+    """Load raw sample strings from JSON files into lists of single-element lists.
+
+    Args:
+        paths: List of file paths to JSON arrays containing raw sample strings.
+
+    Returns:
+        List of single-item string lists, e.g. ``[["sample1"], ["sample2"]]``.
     """    
     raw_samples = []
     for path in paths:
@@ -224,30 +235,56 @@ def load_raw_samples_balanced_autosplit(paths: list[str], split_proportion: floa
     return dataset1, dataset2
 
 def generate_dataset(prompts: list[list[str]], use_multiturn: bool = True) -> List[Prompt]:
-    """
-    Return a set of Prompt objects based on the input.
+    """Convert raw chat turn lists into Prompt dataclass objects.
+
+    Args:
+        prompts: List of chat turn string lists.
+        use_multiturn: Whether the prompts use multi-turn context.
+
+    Returns:
+        List of Prompt objects.
     """
     return [Prompt(chat_turns=chat, use_multiturn=use_multiturn) for chat in prompts]
 
 def add_metadata(prompts: List[Prompt], key: str, value: any) -> List[Prompt]:
-    """
-    Adds a key-value pair to the metadata dict of each prompt in the list.
+    """Add a key-value pair to the metadata dict of each Prompt in a list.
+
+    Args:
+        prompts: List of Prompt objects to modify in-place.
+        key: Metadata key name.
+        value: Metadata value.
+
+    Returns:
+        The modified list of Prompt objects.
     """
     for prompt in prompts:
         prompt.metadata[key] = value
     return prompts
 
 def add_example(prompts: List[Prompt], example: tuple[str, str]) -> List[Prompt]:
-    """
-    Adds a user-assistant example tuple to the examples list of each prompt in the list.
+    """Add a user-assistant example tuple to the examples list of each Prompt in a list.
+
+    Args:
+        prompts: List of Prompt objects to modify in-place.
+        example: Tuple of (user_message, assistant_response).
+
+    Returns:
+        The modified list of Prompt objects.
     """
     for prompt in prompts:
         prompt.examples.append(example)
     return prompts
 
-def save_dataset(dataset: list[Prompt], name: str, path: str = "prompts/"):
-    """
-    Save the dataset to a JSON file.
+def save_dataset(dataset: list[Prompt], name: str, path: str = "prompts/") -> None:
+    """Save a list of Prompt objects to a JSON file.
+
+    Args:
+        dataset: Non-empty list of Prompt objects to serialize.
+        name: Output filename (e.g. "my_dataset" or "my_dataset.json").
+        path: Output directory path.
+
+    Returns:
+        None.
     """
     assert dataset is not None and len(dataset) > 0, "Cannot save an empty dataset."
     

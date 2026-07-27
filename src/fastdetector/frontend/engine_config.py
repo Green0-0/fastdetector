@@ -15,6 +15,9 @@ class EngineConfig(str, Enum):
         Engines with is_local_server=True are launched via llm_server_context
         (which spawns a subprocess and waits for it to be healthy). Engines
         with is_local_server=False (e.g. OAI) use a pre-existing API endpoint.
+
+        Returns:
+            True if local server launch is required, False otherwise.
         """
         return self in (EngineConfig.VLLM, EngineConfig.APHRODITE)
 
@@ -25,12 +28,19 @@ class EngineConfig(str, Enum):
         Proprietary models use different sampling-param semantics: they don't accept
         temperature/top_p/top_k/presence_penalty, and disable_thinking is 
         translated to reasoning_effort="none" instead of a chat_template_kwarg.
+
+        Returns:
+            True if the engine is a proprietary API (e.g. OAI), False otherwise.
         """
         return self == EngineConfig.OAI
 
     @property
     def valid_sampling_params(self) -> list[str]:
-        """Returns all valid sampling parameters for this engine."""
+        """Returns all valid sampling parameters for this engine.
+
+        Returns:
+            List of supported parameter names.
+        """
         base_params = ["temperature", "top_p", "top_k", "presence_penalty", "disable_thinking"]
         
         if self == EngineConfig.VLLM:

@@ -9,7 +9,19 @@ async def _fetch_logprobs_async(
     text: str,
     top_logprobs_k: int,
     sem: asyncio.Semaphore,
-):
+) -> dict:
+    """Fetch logprobs for a single text via OpenAI completions API asynchronously.
+
+    Args:
+        client: AsyncOpenAI client instance.
+        model_name: Model identifier string.
+        text: Input string.
+        top_logprobs_k: Number of top logprobs to request per position.
+        sem: Concurrency limiting Semaphore.
+
+    Returns:
+        Dictionary of logprobs data (or empty dict on failure).
+    """
     async with sem:
         try:
             response = await client.completions.create(
@@ -36,7 +48,21 @@ async def _batch_fetch_logprobs_async(
     texts: list[str],
     top_logprobs_k: int,
     concurrency: int = 256,
-):
+) -> list[dict]:
+    """Fetch logprobs for a list of texts asynchronously with bounded concurrency.
+
+    Args:
+        api_url: API base URL.
+        texts: List of input text strings.
+        top_logprobs_k: Number of top logprobs per position.
+        concurrency: Max concurrent requests.
+
+    Returns:
+        List of logprobs dictionaries, one per input text.
+
+    Raises:
+        RuntimeError: If listing models from the API endpoint fails.
+    """
     api_url = api_url.rstrip("/")
     client = AsyncOpenAI(base_url=api_url, api_key="EMPTY", max_retries=5, timeout=600.0)
     try:
@@ -53,7 +79,15 @@ async def _batch_fetch_logprobs_async(
     total = len(texts)
     completed = 0
 
-    async def _tracked(text):
+    async def _tracked(text: str) -> dict:
+        """Fetch logprobs for a text and update completion progress.
+
+        Args:
+            text: Input string.
+
+        Returns:
+            Logprobs dictionary for the text.
+        """
         nonlocal completed
         if not text.strip():
             result = {}

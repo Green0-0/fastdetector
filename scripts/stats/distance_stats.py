@@ -10,7 +10,12 @@ from fastdetector.statistics.embeddings_api import batch_gen_embeddings, generat
 from fastdetector.statistics.statistics_basic import pairwise_jaccards, pairwise_levenshteins
 from fastdetector.statistics.statistics_embedding import pairwise_cosdist, bertscore, moverscore
 
-def main():
+def main() -> None:
+    """Run distance-based statistics computation pipeline from configuration.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--distance-config", type=str, default="config/distance_stats.toml")

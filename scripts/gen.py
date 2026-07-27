@@ -6,8 +6,15 @@ from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.utils import upload_readme
 
 
-def post_process_response(row):
-    """Applies four filter conditions to the row (described in the comments)."""
+def post_process_response(row: dict) -> dict:
+    """Applies filter and cleanup rules to the final_response field of a row.
+
+    Args:
+        row: Dataset row dictionary containing 'original' and 'final_response'.
+
+    Returns:
+        Modified row dictionary with post-processed response and modification tracking columns.
+    """
     orig_text = row.get("original", "")
     orig_resp = row.get("final_response", "")
     resp = orig_resp
@@ -28,7 +35,7 @@ def post_process_response(row):
             mod_2 = 1
             
     # 3. If the response begins with "here" or "sure" not case sensitive (and this doesn't occur in the original), and this is followed by a singular "---", remove all text from the here or sure to the "---"
-    PREFIXES = ("here ", "sure ", "here,", "sure,", "here:", "sure:", "sure!")
+    PREFIXES = ("here ", "sure ", "here,", "sure,", "here:", "sure:", "sure!", "certainly ", "certainly,", "certainly!", "i'm happy to help ")
 
     resp_sl = resp.strip().lower()
     if not orig_sl.startswith(PREFIXES):
@@ -76,6 +83,11 @@ def post_process_response(row):
     return row
 
 def main() -> None:
+    """Execute the text generation pipeline from command line configuration.
+
+    Returns:
+        None.
+    """
     parser = argparse.ArgumentParser(description="Run the LLM Generation pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--gen-config", type=str, required=True, help="Path to gen TOML (e.g. config/gen/shard_0.toml)")

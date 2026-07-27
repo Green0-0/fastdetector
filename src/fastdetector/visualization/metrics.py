@@ -40,6 +40,14 @@ def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
 
     Without flip: values > threshold are positive.
     With flip: values <= threshold are positive.
+
+    Args:
+        arr: Array of numerical score values.
+        threshold: Classification threshold value.
+        flip: If True, values <= threshold are treated as positive.
+
+    Returns:
+        Boolean numpy array of predictions.
     """
     if flip:
         return arr <= threshold
@@ -49,8 +57,16 @@ def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
 def _prf(tp: int, fp: int, tn: int, fn: int) -> tuple[float, float, float, float, float]:
     """Compute precision, recall, f1, fpr, tnr from confusion counts.
 
-    Returns ``(precision, recall, f1, fpr, tnr)``. Zero-division safe:
-    returns 0.0 for any rate whose denominator is 0.
+    Zero-division safe: returns 0.0 for any rate whose denominator is 0.
+
+    Args:
+        tp: True positives count.
+        fp: False positives count.
+        tn: True negatives count.
+        fn: False negatives count.
+
+    Returns:
+        Tuple of ``(precision, recall, f1, fpr, tnr)``.
     """
     actual_pos = tp + fn
     pred_pos = tp + fp
@@ -162,6 +178,12 @@ def compute_threshold_sweep(
 
         If no threshold satisfies the target, fall back to the threshold
         with the minimum FPR.
+
+        Args:
+            target_fpr: Desired false positive rate bound.
+
+        Returns:
+            Threshold float satisfying target FPR.
         """
         valid = [i for i, fpr in enumerate(agg_fprs) if fpr <= target_fpr]
         if not valid:

@@ -1,4 +1,3 @@
-# Setup
 FastDetector works through five general pipeline stages:
 
 0. **Writing prompts:** sample prompts are provided in sample_prompts/, but you are free to write your own. Once you have a list of prompts you should build (or have an agent build) them into a dataset, reference scripts/prompts and src/fastdetector/prompting. Finished example datasets are placed inside prompts/.

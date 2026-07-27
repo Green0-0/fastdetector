@@ -6,14 +6,35 @@ from fastdetector.prompting.prompt_builder import (
     add_metadata, load_raw_samples_balanced_autosplit
 )
 
-def build_prompts_generic(paths, dataset_name, prompt_type, target_size, max_stack):
-    """Load, split, resize, stack, format with recursive headers, and save."""
+def build_prompts_generic(paths: list[str], dataset_name: str, prompt_type: str, target_size: int, max_stack: int) -> tuple[list, list]:
+    """Load, split, resize, stack, format with recursive headers, and save generic prompt sets.
+
+    Args:
+        paths: List of raw sample JSON file paths.
+        dataset_name: Name prefix for saved dataset files.
+        prompt_type: PROMPT_TYPE metadata string.
+        target_size: Total number of prompts to generate across train and test splits.
+        max_stack: Maximum number of samples to stack per prompt.
+
+    Returns:
+        Tuple of (train_prompts_list, test_prompts_list).
+    """
     train_samples, test_samples = load_raw_samples_balanced_autosplit(paths, split_proportion=0.8, min_size=1, shuffle_before_split=True)
     
     train_size = int(target_size * 0.8)
     test_size = int(target_size * 0.2)
     
-    def process(samples, name, size):
+    def process(samples: list, name: str, size: int) -> list:
+        """Process, format, and save a subset of samples into Prompt dataclasses.
+
+        Args:
+            samples: List of raw sample chats.
+            name: Dataset filename to save.
+            size: Target number of prompts.
+
+        Returns:
+            List of generated Prompt objects.
+        """
         print(f"Building {name} using {len(samples)} sample prompts from {len(paths)} files...")
         samples = resize(samples, size)
         copies = [shuffle(samples, seed=i) for i in range(max_stack)]
@@ -32,7 +53,18 @@ def build_prompts_generic(paths, dataset_name, prompt_type, target_size, max_sta
     
     return train_prompts, test_prompts
 
-def build_indirect_reference(subcategories, dataset_name, prompt_type, target_size):
+def build_indirect_reference(subcategories: dict[str, str], dataset_name: str, prompt_type: str, target_size: int) -> tuple[list, list]:
+    """Build and save indirect reference prompt datasets from subcategory mapping.
+
+    Args:
+        subcategories: Dictionary mapping file path to follow-up instruction text.
+        dataset_name: Name prefix for saved dataset files.
+        prompt_type: PROMPT_TYPE metadata string.
+        target_size: Total target dataset size.
+
+    Returns:
+        Tuple of (train_prompts_list, test_prompts_list).
+    """
     print(f"Building {dataset_name} using {len(subcategories)} files...")
     train_target_size = int(target_size * 0.8)
     test_target_size = int(target_size * 0.2)
@@ -47,7 +79,16 @@ def build_indirect_reference(subcategories, dataset_name, prompt_type, target_si
         train_samples, test_samples = load_raw_samples_balanced_autosplit([path], split_proportion=0.8, min_size=1, shuffle_before_split=True)
         print(f"  Loaded {len(train_samples)} train and {len(test_samples)} test samples from {path}")
         
-        def process(samples, size):
+        def process(samples: list, size: int) -> list:
+            """Process and format indirect reference samples.
+
+            Args:
+                samples: List of raw sample chats.
+                size: Target number of prompts.
+
+            Returns:
+                List of generated Prompt objects.
+            """
             samples = resize(samples, size)
             samples = force_reformat(samples, only_first_message=True, modified_format="{{DOC}}\n{{TEXT}}\nDo not output anything besides what you were requested to write, and do not output any extra commentary.")
             samples = [chat + [followup_text] for chat in samples]
@@ -64,7 +105,12 @@ def build_indirect_reference(subcategories, dataset_name, prompt_type, target_si
     print(f"  Saved {len(all_train_prompts)} train and {len(all_test_prompts)} test prompts to {dataset_name}")
     return all_train_prompts, all_test_prompts
 
-def main():
+def main() -> None:
+    """Build all prompt datasets (direct, revise, rewrite, indirect) and write outputs to disk.
+
+    Returns:
+        None.
+    """
     all_train_prompts = []
     all_test_prompts = []
 
