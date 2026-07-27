@@ -1,6 +1,12 @@
 columns_to_score = ["original", "final_response"]
 parallelization_type = "data"
-batch_size = 4
+
+# Rows per Dataset.map batch when fetching logprobs; each batch is fired as
+# concurrent API requests, so this also bounds request concurrency.
+logprob_fetch_batch_size = 200
+
+# Fraction of GPU memory the stats vLLM server may use (0-1).
+gpu_memory_utilization = 0.75
 
 perplexity = true
 entropy = true
