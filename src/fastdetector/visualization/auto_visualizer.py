@@ -3,7 +3,7 @@ from datasets import Dataset
 from typing import List, Optional, Tuple, Dict, Callable
 
 from fastdetector.visualization.metrics import compute_threshold_sweep, compute_classifier_metrics, FPR_TARGETS
-from fastdetector.visualization.plotting import get_histogram, get_sweep_plot, format_confusion_matrix, get_scatterplot
+from fastdetector.visualization.plotting import get_sweep_plot, format_confusion_matrix
 
 MaskFn = Callable[[Dataset], np.ndarray]
 
