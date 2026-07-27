@@ -103,21 +103,26 @@ def run_pipeline(
 
     if engine.is_local_server:
         venv_path = globals_config.vllm_venv_path if engine == EngineConfig.VLLM else globals_config.aphrodite_venv_path
+        # Only forward max_model_len when set; passing None would override the
+        # server default and end up as a literal "--max-model-len None" flag.
+        server_kwargs = {}
+        if pipe_config.max_model_len is not None:
+            server_kwargs["max_model_len"] = pipe_config.max_model_len
         with llm_server_context(
             engine=engine,
             model_name=pipe_config.model_name,
             venv_path=venv_path,
             parallelization_type=pipe_config.parallelization_type,
             port=None,
-            max_model_len=pipe_config.max_model_len,
+            **server_kwargs,
         ) as api_url:
             print(f"Using API endpoint: {api_url}")
             result_dict, prompt_tokens, completion_tokens, failed_requests = build_dataset(
-            samples,
-            api_url=api_url,
-            prompts=prompts,
-            generation_params=generation_params,
-        )
+                samples,
+                api_url=api_url,
+                prompts=prompts,
+                generation_params=generation_params,
+            )
     else:
         if pipe_config.api_key_env is not None:
             api_key = os.environ.get(pipe_config.api_key_env, "EMPTY")

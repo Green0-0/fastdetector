@@ -181,7 +181,14 @@ class LLMStatConfig(BaseModel):
     """Configuration for LLM-based metric extraction (llm_stats.py)."""
     columns_to_score: List[str]
     parallelization_type: str = "data"
-    batch_size: int
+
+    # Number of dataset rows per Dataset.map batch when fetching logprobs.
+    # Each batch is fired as concurrent API requests, so this also bounds the
+    # effective request concurrency (further capped by the client semaphore).
+    logprob_fetch_batch_size: int = 200
+
+    # Fraction of GPU memory the stats vLLM server may use (0-1).
+    gpu_memory_utilization: float = 0.75
 
     # LLM & Generation Metrics
     perplexity: bool
