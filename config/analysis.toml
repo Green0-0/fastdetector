@@ -1,3 +1,8 @@
+# NOTE: In TOML, every bare key belongs to the most recent table header.
+# All top-level AnalysisConfig fields must therefore appear ABOVE the first
+# [[filter_conditions]] / [[classifiers]] block, or they will be silently
+# parsed as members of that table instead of the root document.
+
 prompt_metadata_column = "prompt"
 model_metadata_column = "generator_model"
 
@@ -7,25 +12,25 @@ threshold_type_score = "fpr_0_5pct"
 
 filter_type = "OR"
 
+base_columns = ["original", "final_response"]
+fixed_classes = [false, true]
+# auto_class_column = "label" # Automatically determine the class using the value from this column
+# ai_label = "AI" # The string value that indicates the AI class
+
+distance_metrics = [
+    "cosdist",
+    "softngram"
+]
+
 [[filter_conditions]]
-column = "pairwise_cosdist"
+column = "cosdist"
 operator = ">="
 value = 0.03
 
 [[filter_conditions]]
-column = "pairwise_softngram"
+column = "softngram"
 operator = ">="
 value = 0.06
-
-distance_metrics = [
-    "pairwise_cosdist",
-    "pairwise_softngram"
-]
-
-base_columns = ["original", "final_response"]
-fixed_classes = [false, true]
-# auto_class_column = "label" # Automatically determine the class using the value from this column 
-# ai_label = "AI" # The string value that indicates the AI class
 
 [[classifiers]]
 name = "EditLens Roberta-Large Score"
