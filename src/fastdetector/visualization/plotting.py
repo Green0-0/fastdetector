@@ -8,9 +8,14 @@ here call those helpers when needed and focus purely on drawing.
 from typing import Dict
 from typing import Optional
 from typing import Tuple
-from fastdetector.visualization.auto_visualizer import StatWrapper
+from typing import TYPE_CHECKING
 from typing import List
 import io
+
+if TYPE_CHECKING:
+    # Imported for type annotations only. A runtime import would be circular:
+    # auto_visualizer imports the rendering functions defined in this module.
+    from fastdetector.visualization.auto_visualizer import StatWrapper
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,7 +30,7 @@ def _save_fig_to_png() -> bytes:
     plt.close()
     return buf.read()
 
-def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
+def get_histogram(wrappers: List["StatWrapper"], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
     """Generate an overlay histogram of dataset values and render as PNG bytes.
 
     Args:
@@ -54,7 +59,7 @@ def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, 
 
     for wrapper in wrappers:
         if wrapper.arr is not None:
-            plt.hist(wrapper.arr, bins=shared_edges, alpha=0.5, label=wrapper.label)
+            plt.hist(wrapper.arr, bins=shared_edges, alpha=0.5, label=wrapper.name)
             
     plt.title(title)
     plt.legend()
@@ -62,7 +67,7 @@ def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, 
 
     return _save_fig_to_png()
 
-def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], title: str, xlabel: str = "X", ylabel: str = "Y", point_alpha: float = 0.5, rolling_mean_window: int = 0, figsize: Tuple[int, int] = (8, 5)) -> bytes:
+def get_scatterplot(x_wrapper: "StatWrapper", y_wrappers: List["StatWrapper"], title: str, xlabel: str = "X", ylabel: str = "Y", point_alpha: float = 0.5, rolling_mean_window: int = 0, figsize: Tuple[int, int] = (8, 5)) -> bytes:
     """Generate a scatterplot (with optional rolling mean trendline) and render as PNG bytes.
 
     Args:
@@ -122,7 +127,7 @@ def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], 
 
     return _save_fig_to_png()
 
-def generate_pearson_heatmap(wrappers: List[StatWrapper], title: str) -> bytes:
+def generate_pearson_heatmap(wrappers: List["StatWrapper"], title: str) -> bytes:
     """Compute pairwise Pearson correlations among StatWrappers and render a heatmap.
 
     Args:
@@ -234,8 +239,8 @@ def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional
     emojis = compute_row_emojis(rows, emoji_config)
     row_names = [emojis[r["name"]] + r["name"] for r in rows]
     
-    header = f"| {row_header} | " + " | ".join(c["header"] for c in columns) + " |\\n"
-    sep = "|---|" + "|".join(["---" for _ in columns]) + "|\\n"
+    header = f"| {row_header} | " + " | ".join(c["header"] for c in columns) + " |\n"
+    sep = "|---|" + "|".join(["---" for _ in columns]) + "|\n"
     
     lines = []
     for i, row in enumerate(rows):
@@ -265,7 +270,7 @@ def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional
                 cells.append(fmt.format(value=val))
         lines.append(f"| {row_names[i]} | " + " | ".join(cells) + " |")
         
-    return header + sep + "\\n".join(lines) + "\\n", emojis
+    return header + sep + "\n".join(lines) + "\n", emojis
 
 def get_sweep_plot(
     thresholds: np.ndarray,

@@ -3,7 +3,7 @@
 from typing import Optional
 from fastdetector.visualization.plotting import generate_table
 from fastdetector.visualization.plotting import generate_pearson_heatmap
-from fastdetector.visualization.plotting import generate_histogram
+from fastdetector.visualization.plotting import get_histogram
 import argparse
 import json
 import re
@@ -269,7 +269,7 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
 
     lines.append("## Univariate Analysis")
     if all_variables:
-        charts["UNIVARIATE.png"] = generate_histogram(all_variables, title="All Variables of Interest")
+        charts["UNIVARIATE.png"] = get_histogram(all_variables, title="All Variables of Interest")
         lines.append("![UNIVARIATE](UNIVARIATE.png)\n")
         
     lines.append("## Correlation Heatmap")
@@ -281,7 +281,7 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
     if dist_wrappers:
         for dw in dist_wrappers:
             safe_dist = _safe_name(dw.name)
-            charts[f"DIST_HIST_{safe_dist}.png"] = generate_histogram([dw], title=f"Distance: {dw.name}")
+            charts[f"DIST_HIST_{safe_dist}.png"] = get_histogram([dw], title=f"Distance: {dw.name}")
             lines.append(f"![DIST_HIST_{safe_dist}](DIST_HIST_{safe_dist}.png)")
     lines.append("\n")
 
@@ -307,7 +307,7 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
             wrappers.append(MockStatWrapper(arr, f"{clf.name} ({class_str})"))
             
         safe_clf = _safe_name(clf.name)
-        charts[f"CLF_HIST_{safe_clf}.png"] = generate_histogram(wrappers, title=f"Classifier: {clf.name}")
+        charts[f"CLF_HIST_{safe_clf}.png"] = get_histogram(wrappers, title=f"Classifier: {clf.name}")
         lines.append(f"![CLF_HIST_{safe_clf}](CLF_HIST_{safe_clf}.png)")
     lines.append("\n")
 
