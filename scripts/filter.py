@@ -5,7 +5,7 @@ from langdetect.lang_detect_exception import LangDetectException
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_readme, apply_filter_conditions
+from fastdetector.utils import upload_readme, apply_filter_conditions, shard_config_name
 
 from fastdetector.statistics.statistics_basic import (
     deviated_lines,
@@ -125,7 +125,7 @@ def main() -> None:
         for i in range(filter_config.output_shards):
             start = i * shard_size
             end = len(ds_filtered) if i == filter_config.output_shards - 1 else (i + 1) * shard_size
-            shards_to_upload.append((ds_filtered.select(range(start, end)), f"shard_{i}"))
+            shards_to_upload.append((ds_filtered.select(range(start, end)), shard_config_name(i)))
     else:
         shards_to_upload = [(ds_filtered, "default")]
 

@@ -3,7 +3,7 @@ import argparse
 from fastdetector.frontend.toml_config import GenConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_readme
+from fastdetector.utils import upload_readme, shard_config_name
 
 
 def post_process_response(row: dict) -> dict:
@@ -143,7 +143,7 @@ def main() -> None:
     if cols_to_remove:
         result_ds = result_ds.remove_columns(cols_to_remove)
 
-    config_name = f"shard_{args.batch_id}"
+    config_name = shard_config_name(args.batch_id)
 
     print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
     result_ds.push_to_hub(target_dataset, config_name=config_name)

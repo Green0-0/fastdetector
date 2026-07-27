@@ -4,47 +4,84 @@ from huggingface_hub import HfApi, hf_hub_download
 from datasets import Dataset, load_dataset, get_dataset_config_names, concatenate_datasets
 
 
+def shard_config_name(shard_index: int) -> str:
+    """Return the HF config name used for a given shard index.
+
+    Single definition shared by readers and writers so the two can never
+    drift apart.
+
+    Args:
+        shard_index: Zero-based shard index (the pipeline's ``--batch-id``).
+
+    Returns:
+        The config name, e.g. ``"shard_3"``.
+    """
+    return f"shard_{shard_index}"
+
+
 def load_dataset_auto_shard(
     dataset_name: str,
     split: str = "train",
     subset_index: Optional[int] = 0,
 ) -> Dataset:
-    """Load a dataset from the Hugging Face Hub, resolving a shard by index.
+    """Load a dataset from the Hugging Face Hub, resolving a shard by name.
 
-    When ``subset_index`` is not ``None`` the dataset's configs are listed and
-    the config at position ``subset_index`` is loaded. This preserves the
-    sharding/subset-access behavior used throughout the pipeline (each shard
-    is uploaded as a separate HF config named ``shard_<i>``).
+    Shards are uploaded as HF configs named ``shard_<i>``, so
+    ``subset_index`` is resolved to the config literally named
+    ``shard_<subset_index>``.
+
+    Resolution is deliberately *not* positional. ``get_dataset_config_names``
+    returns names sorted as strings, so with eleven or more shards the order
+    is ``shard_0, shard_1, shard_10, shard_11, shard_2, ...`` and indexing
+    into that list hands back the wrong shard. Because the stats scripts
+    write their results back to ``shard_<batch_id>``, a mismatched read would
+    silently overwrite a different shard than the one it read.
 
     Args:
         dataset_name: HF Hub dataset repo ID (e.g. "G-reen/cc-2021-rewritten").
         split: Dataset split (default "train").
-        subset_index: Index into the dataset's config list (default 0). If
-            ``None``, the default config is loaded without shard resolution.
+        subset_index: Shard index to load (default 0). If ``None``, the
+            default config is loaded without shard resolution.
 
     Returns:
         The loaded Dataset.
+
+    Raises:
+        ValueError: if ``subset_index`` names a shard the dataset does not
+            have. Failing here is intentional: continuing with some other
+            shard corrupts data.
     """
     config_name = None
     if subset_index is not None:
+        wanted = shard_config_name(subset_index)
         try:
             configs = get_dataset_config_names(dataset_name)
-            if configs and subset_index < len(configs):
-                config_name = configs[subset_index]
-                print(
-                    f"Resolved subset_index {subset_index} to config "
-                    f"'{config_name}' for dataset {dataset_name}"
-                )
-            else:
-                print(
-                    f"Warning: dataset '{dataset_name}' has {len(configs) if configs else 0} "
-                    f"configs; subset_index {subset_index} is out of range. "
-                    f"Falling back to the default config."
-                )
         except Exception as e:
             print(
                 f"Warning: could not list configs for '{dataset_name}': "
                 f"{type(e).__name__}: {e}. Loading the default config."
+            )
+            configs = []
+
+        if not configs:
+            pass  # nothing to resolve against; fall through to the default config
+        elif wanted in configs:
+            config_name = wanted
+            print(f"Resolved shard {subset_index} to config '{config_name}' for dataset {dataset_name}")
+        elif len(configs) == 1 and subset_index == 0:
+            # Unsharded upload (filter.py writes a single 'default' config).
+            config_name = configs[0]
+            print(
+                f"Dataset '{dataset_name}' is not sharded; loading its only "
+                f"config '{config_name}'."
+            )
+        else:
+            raise ValueError(
+                f"Dataset '{dataset_name}' has no config named '{wanted}'. "
+                f"Available configs: {sorted(configs)}. "
+                f"Pass a --batch-id matching one of the shard_<i> configs, or "
+                f"set override_dataset_input in globals.toml to read a "
+                f"dataset that does not follow the shard naming convention."
             )
 
     print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")

@@ -4,7 +4,7 @@ from datasets import Dataset
 
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard
+from fastdetector.utils import load_dataset_auto_shard, shard_config_name
 from fastdetector.frontend.engine_config import EngineConfig as Engine
 from fastdetector.llm_utils import llm_server_context
 
@@ -199,7 +199,7 @@ def main() -> None:
         ds = ds.remove_columns(cols_to_remove)
 
     print(f"Uploading dataset to {target_dataset}...")
-    ds.push_to_hub(target_dataset, config_name=f"shard_{args.batch_id}")
+    ds.push_to_hub(target_dataset, config_name=shard_config_name(args.batch_id))
     print("Done!")
 
 if __name__ == "__main__":
