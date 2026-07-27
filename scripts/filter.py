@@ -82,10 +82,15 @@ def main() -> None:
 """
     print(f"Uploading updated dataset to {intermediate_dataset}...")
     ds.push_to_hub(intermediate_dataset, config_name="default")
+    # Note: no append_readme_source here. Passing the dataset's own name made
+    # every rerun prepend the dataset's previous README to the new content,
+    # so the README grew and duplicated across runs. upload_readme already
+    # preserves the existing YAML header on its own; readme_content fully
+    # describes this run. (The filtered dataset below intentionally appends
+    # FROM this intermediate README to compose the full pipeline history.)
     upload_readme(
         dataset_name=intermediate_dataset,
         readme_content=readme_content,
-        append_readme_source=intermediate_dataset
     )
 
     conditions = filter_config.conditions
