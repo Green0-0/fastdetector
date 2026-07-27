@@ -3,7 +3,7 @@
 from typing import Optional
 from fastdetector.visualization.plotting import generate_table
 from fastdetector.visualization.plotting import generate_pearson_heatmap
-from fastdetector.visualization.plotting import generate_histogram
+from fastdetector.visualization.plotting import get_histogram
 import argparse
 import json
 import re
@@ -269,19 +269,19 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
 
     lines.append("## Univariate Analysis")
     if all_variables:
-        charts["UNIVARIATE.png"] = generate_histogram(all_variables, title="All Variables of Interest")
+        charts["UNIVARIATE.png"] = get_histogram([(w.arr, w.name) for w in all_variables], title="All Variables of Interest")
         lines.append("![UNIVARIATE](UNIVARIATE.png)\n")
         
     lines.append("## Correlation Heatmap")
     if all_variables:
-        charts["CORRELATIONS.png"] = generate_pearson_heatmap(all_variables, title="Correlations")
+        charts["CORRELATIONS.png"] = generate_pearson_heatmap([(w.arr, w.name) for w in all_variables], title="Correlations")
         lines.append("![CORRELATIONS](CORRELATIONS.png)\n")
         
     lines.append("## Histograms, Distances")
     if dist_wrappers:
         for dw in dist_wrappers:
             safe_dist = _safe_name(dw.name)
-            charts[f"DIST_HIST_{safe_dist}.png"] = generate_histogram([dw], title=f"Distance: {dw.name}")
+            charts[f"DIST_HIST_{safe_dist}.png"] = get_histogram([(dw.arr, dw.name)], title=f"Distance: {dw.name}")
             lines.append(f"![DIST_HIST_{safe_dist}](DIST_HIST_{safe_dist}.png)")
     lines.append("\n")
 
@@ -289,25 +289,13 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
     for clf in eval_config.classifiers:
         test_arrays, test_classes, test_names = _extract_classifier_data(test_ds, eval_config, clf, None)
         
-        wrappers = []
+        clf_series = []
         for arr, cls_bool, col_name in zip(test_arrays, test_classes, test_names):
             class_str = "AI" if cls_bool else "Human"
-            class MockStatWrapper:
-                """Mock StatWrapper for histogram visualization of scores."""
+            clf_series.append((arr, f"{clf.name} ({class_str})"))
 
-                def __init__(self, arr: np.ndarray, name: str) -> None:
-                    """Initialize MockStatWrapper.
-
-                    Args:
-                        arr: Scores array.
-                        name: Display name.
-                    """
-                    self.arr = arr
-                    self.name = name
-            wrappers.append(MockStatWrapper(arr, f"{clf.name} ({class_str})"))
-            
         safe_clf = _safe_name(clf.name)
-        charts[f"CLF_HIST_{safe_clf}.png"] = generate_histogram(wrappers, title=f"Classifier: {clf.name}")
+        charts[f"CLF_HIST_{safe_clf}.png"] = get_histogram(clf_series, title=f"Classifier: {clf.name}")
         lines.append(f"![CLF_HIST_{safe_clf}](CLF_HIST_{safe_clf}.png)")
     lines.append("\n")
 

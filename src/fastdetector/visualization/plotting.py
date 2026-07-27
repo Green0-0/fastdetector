@@ -3,12 +3,17 @@
 These are thin rendering functions. All classification computation (sweeps,
 TP/FP/TN/FN) lives in :mod:`fastdetector.visualization.metrics`; the functions
 here call those helpers when needed and focus purely on drawing.
+
+Series are passed as plain ``(values, label)`` tuples so this module has no
+dependency on the wrapper classes in ``auto_visualizer`` (which imports this
+module; a class dependency in the other direction previously made the two
+modules circular and unimportable).
 """
 
 from typing import Dict
 from typing import Optional
+from typing import Sequence
 from typing import Tuple
-from fastdetector.visualization.auto_visualizer import StatWrapper
 from typing import List
 import io
 
@@ -16,6 +21,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from fastdetector.visualization.metrics import _prf
+
+#: A plottable series: array of values plus its legend label.
+Series = Tuple[np.ndarray, str]
+
 
 def _save_fig_to_png() -> bytes:
     """Save the current matplotlib figure to PNG bytes and close it."""
@@ -25,14 +34,16 @@ def _save_fig_to_png() -> bytes:
     plt.close()
     return buf.read()
 
-def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
-    """Generate an overlay histogram of dataset values and render as PNG bytes.
+
+def get_histogram(series: List[Series], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
+    """Render overlaid histograms, one per series, sharing a single set of bin edges.
 
     Args:
-        wrappers: List of StatWrapper instances containing arrays to plot.
-        title: Figure title string.
+        series: List of ``(values, label)`` tuples. Entries whose values are
+            None are skipped.
+        title: Figure title.
         bins: Number of histogram bins.
-        figsize: Figure width and height tuple.
+        figsize: Figure width and height.
 
     Returns:
         PNG image bytes.
@@ -40,8 +51,8 @@ def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, 
     plt.figure(figsize=figsize)
 
     all_values = [
-        v for wrapper in wrappers if wrapper.arr is not None
-        for v in wrapper.arr.tolist()
+        v for arr, _ in series if arr is not None
+        for v in np.asarray(arr, dtype=float).tolist()
     ]
     if all_values:
         lo, hi = float(min(all_values)), float(max(all_values))
@@ -52,44 +63,57 @@ def generate_histogram(wrappers: List[StatWrapper], title: str, bins: int = 50, 
     else:
         shared_edges = np.linspace(0.0, 1.0, bins + 1)
 
-    for wrapper in wrappers:
-        if wrapper.arr is not None:
-            plt.hist(wrapper.arr, bins=shared_edges, alpha=0.5, label=wrapper.label)
-            
+    drawn = False
+    for arr, label in series:
+        if arr is not None:
+            plt.hist(arr, bins=shared_edges, alpha=0.5, label=label)
+            drawn = True
+
+    if drawn:
+        plt.legend()
     plt.title(title)
-    plt.legend()
     plt.grid(True)
 
     return _save_fig_to_png()
 
-def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], title: str, xlabel: str = "X", ylabel: str = "Y", point_alpha: float = 0.5, rolling_mean_window: int = 0, figsize: Tuple[int, int] = (8, 5)) -> bytes:
-    """Generate a scatterplot (with optional rolling mean trendline) and render as PNG bytes.
+
+def get_scatterplot(
+    x_values: Sequence,
+    y_series: List[Series],
+    title: str,
+    xlabel: str = "X",
+    ylabel: str = "Y",
+    point_alpha: float = 0.5,
+    rolling_mean_window: int = 0,
+    figsize: Tuple[int, int] = (8, 5),
+) -> bytes:
+    """Render scatter series against shared or per-series x values.
 
     Args:
-        x_wrapper: StatWrapper for x-axis data.
-        y_wrappers: List of StatWrapper instances for y-axis datasets.
-        title: Figure title string.
-        xlabel: Label for x-axis.
-        ylabel: Label for y-axis.
-        point_alpha: Alpha transparency for scatter points.
-        rolling_mean_window: Window size for rolling mean trendline (0 to disable).
-        figsize: Figure width and height tuple.
+        x_values: Either a single sequence of x values shared by every series,
+            or a list holding one sequence per entry of *y_series*.
+        y_series: List of ``(values, label)`` tuples. Entries whose values are
+            None, empty, or of a length different from their x values are
+            skipped.
+        title: Figure title.
+        xlabel: X-axis label.
+        ylabel: Y-axis label.
+        point_alpha: Alpha for scatter points.
+        rolling_mean_window: Window for the rolling-mean trendline; 0 disables it.
+        figsize: Figure width and height.
 
     Returns:
         PNG image bytes.
     """
-    x_data = x_wrapper.arr
-    y_data_lists = [w.arr for w in y_wrappers]
-    labels = [w.name for w in y_wrappers]
-
     plt.figure(figsize=figsize)
 
-    if len(x_data) > 0 and isinstance(x_data[0], (list, np.ndarray)):
-        x_lists = x_data
+    if len(x_values) > 0 and isinstance(x_values[0], (list, np.ndarray)):
+        x_lists = x_values
     else:
-        x_lists = [x_data] * len(y_data_lists)
+        x_lists = [x_values] * len(y_series)
 
-    for x_vals, y_vals, label in zip(x_lists, y_data_lists, labels):
+    drawn = False
+    for x_vals, (y_vals, label) in zip(x_lists, y_series):
         if x_vals is None or y_vals is None:
             continue
         x_arr = np.asarray(x_vals, dtype=float)
@@ -98,6 +122,7 @@ def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], 
             continue
 
         plt.scatter(x_arr, y_arr, alpha=point_alpha, label=label, marker="o", s=15)
+        drawn = True
 
         if rolling_mean_window > 0 and len(x_arr) >= rolling_mean_window:
             sort_idx = np.argsort(x_arr)
@@ -113,28 +138,29 @@ def generate_scatterplot(x_wrapper: StatWrapper, y_wrappers: List[StatWrapper], 
                 linewidth=2,
             )
 
-    plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
-    if labels and any(labels):
+    if drawn:
         plt.legend()
+    plt.title(title)
     plt.grid(True)
 
     return _save_fig_to_png()
 
-def generate_pearson_heatmap(wrappers: List[StatWrapper], title: str) -> bytes:
-    """Compute pairwise Pearson correlations among StatWrappers and render a heatmap.
+
+def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
+    """Compute pairwise Pearson correlations among series and render a heatmap.
 
     Args:
-        wrappers: List of StatWrapper instances.
+        series: List of ``(values, label)`` tuples.
         title: Figure title string.
 
     Returns:
         PNG image bytes.
     """
-    arrays = [w.arr for w in wrappers]
-    names = [w.name for w in wrappers]
-    n = len(wrappers)
+    arrays = [arr for arr, _ in series]
+    names = [label for _, label in series]
+    n = len(series)
     matrix = np.zeros((n, n))
     
     for i in range(n):
