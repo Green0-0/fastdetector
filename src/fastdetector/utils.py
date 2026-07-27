@@ -9,42 +9,74 @@ def load_dataset_auto_shard(
     split: str = "train",
     subset_index: Optional[int] = 0,
 ) -> Dataset:
-    """Load a dataset from the Hugging Face Hub, resolving a shard by index.
+    """Load a dataset from the Hugging Face Hub, resolving a shard by name.
 
-    When ``subset_index`` is not ``None`` the dataset's configs are listed and
-    the config at position ``subset_index`` is loaded. This preserves the
-    sharding/subset-access behavior used throughout the pipeline (each shard
-    is uploaded as a separate HF config named ``shard_<i>``).
+    When ``subset_index`` is not ``None``, the config named
+    ``shard_<subset_index>`` is loaded if it exists (the naming convention the
+    pipeline uploads with). An unsharded dataset (sole ``default`` config) is
+    accepted for index 0. If neither applies, a positional lookup into the
+    config list is attempted with a warning (legacy behavior, unreliable for
+    10+ shards since config names are listed alphabetically), and a
+    :class:`ValueError` is raised for an out-of-range index rather than
+    silently loading the default config.
 
     Args:
         dataset_name: HF Hub dataset repo ID (e.g. "G-reen/cc-2021-rewritten").
         split: Dataset split (default "train").
-        subset_index: Index into the dataset's config list (default 0). If
-            ``None``, the default config is loaded without shard resolution.
+        subset_index: Shard number to load (default 0). If ``None``, the
+            default config is loaded without shard resolution.
 
     Returns:
         The loaded Dataset.
+
+    Raises:
+        ValueError: if ``subset_index`` matches no shard config and is out of
+            range for positional fallback.
     """
     config_name = None
     if subset_index is not None:
         try:
             configs = get_dataset_config_names(dataset_name)
-            if configs and subset_index < len(configs):
-                config_name = configs[subset_index]
-                print(
-                    f"Resolved subset_index {subset_index} to config "
-                    f"'{config_name}' for dataset {dataset_name}"
-                )
-            else:
-                print(
-                    f"Warning: dataset '{dataset_name}' has {len(configs) if configs else 0} "
-                    f"configs; subset_index {subset_index} is out of range. "
-                    f"Falling back to the default config."
-                )
         except Exception as e:
             print(
                 f"Warning: could not list configs for '{dataset_name}': "
                 f"{type(e).__name__}: {e}. Loading the default config."
+            )
+            configs = []
+
+        if f"shard_{subset_index}" in configs:
+            # Exact-name resolution. Positional lookup breaks at >= 10 shards
+            # because get_dataset_config_names returns names alphabetically
+            # (shard_10 sorts before shard_2), so prefer the literal name.
+            config_name = f"shard_{subset_index}"
+            print(
+                f"Resolved subset_index {subset_index} to config "
+                f"'{config_name}' for dataset {dataset_name}"
+            )
+        elif configs == ["default"] and subset_index == 0:
+            # Unsharded dataset: batch 0 maps to the sole default config.
+            print(f"Dataset {dataset_name} is unsharded; loading the default config.")
+        elif configs and subset_index < len(configs):
+            config_name = configs[subset_index]
+            print(
+                f"Warning: no config named 'shard_{subset_index}' on "
+                f"'{dataset_name}'; falling back to positional resolution -> "
+                f"'{config_name}'. Positional order is alphabetical and "
+                f"unreliable with 10+ shards or mixed config names."
+            )
+        elif configs:
+            # A nonzero batch id against a dataset that has no matching shard
+            # is almost always a sharding misconfiguration (e.g. the filter
+            # stage uploaded a single 'default' config but gen is being run
+            # with --batch-id > 0). Silently falling back to the default
+            # config here would make every parallel job process the same
+            # data and upload duplicated shards, so fail instead.
+            raise ValueError(
+                f"Dataset '{dataset_name}' has no config 'shard_{subset_index}' "
+                f"and subset_index {subset_index} is out of range for its "
+                f"{len(configs)} configs ({configs}). If the dataset is "
+                f"unsharded, run with batch id 0 or set output_shards when "
+                f"filtering."
             )
 
     print(f"Loading dataset from Hugging Face Hub: {dataset_name}...")
