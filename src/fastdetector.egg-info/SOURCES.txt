@@ -1,9 +1,0 @@
-README.md
-pyproject.toml
-src/fastdetector/generator.py
-src/fastdetector/prompts.py
-src/fastdetector.egg-info/PKG-INFO
-src/fastdetector.egg-info/SOURCES.txt
-src/fastdetector.egg-info/dependency_links.txt
-src/fastdetector.egg-info/requires.txt
-src/fastdetector.egg-info/top_level.txt
