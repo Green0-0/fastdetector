@@ -5,7 +5,7 @@ validation_size = 0.1
 threshold_type_bin = "f1"
 threshold_type_score = "fpr_0_5pct"
 
-filter_tIn addition to united.com, we provide free access to these select websites. By clicking on a website, you’re leaving the United portal.ype = "OR"
+filter_type = "OR"
 
 [[filter_conditions]]
 column = "pairwise_cosdist"
