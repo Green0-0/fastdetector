@@ -23,8 +23,12 @@ def post_process_response(row: dict) -> dict:
     
     mod_1, mod_2, mod_3, mod_4 = 0, 0, 0, 0
     
-    # 1. If it contains the "---" exactly twice, take the content in between the "---"
-    if resp.count("---") == 2:
+    # 1. If it contains the "---" exactly twice, take the content in between the "---".
+    # Only applies when the original itself contains no "---" (consistent with
+    # steps 2-4): if the source document legitimately uses "---" (frontmatter,
+    # horizontal rules) and the model preserved it, extracting the middle
+    # would mangle a faithful rewrite.
+    if resp.count("---") == 2 and "---" not in orig_text:
         resp = resp.split("---")[1]
         mod_1 = 1
     else:
