@@ -260,8 +260,8 @@ def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional
     emojis = compute_row_emojis(rows, emoji_config)
     row_names = [emojis[r["name"]] + r["name"] for r in rows]
     
-    header = f"| {row_header} | " + " | ".join(c["header"] for c in columns) + " |\\n"
-    sep = "|---|" + "|".join(["---" for _ in columns]) + "|\\n"
+    header = f"| {row_header} | " + " | ".join(c["header"] for c in columns) + " |\n"
+    sep = "|---|" + "|".join(["---" for _ in columns]) + "|\n"
     
     lines = []
     for i, row in enumerate(rows):
@@ -291,7 +291,7 @@ def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional
                 cells.append(fmt.format(value=val))
         lines.append(f"| {row_names[i]} | " + " | ".join(cells) + " |")
         
-    return header + sep + "\\n".join(lines) + "\\n", emojis
+    return header + sep + "\n".join(lines) + "\n", emojis
 
 def get_sweep_plot(
     thresholds: np.ndarray,
