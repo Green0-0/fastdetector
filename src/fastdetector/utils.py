@@ -27,15 +27,8 @@ def load_dataset_auto_shard(
     """Load a dataset from the Hugging Face Hub, resolving a shard by name.
 
     Shards are uploaded as HF configs named ``shard_<i>``, so
-    ``subset_index`` is resolved to the config literally named
+    ``subset_index`` is resolved to the config named
     ``shard_<subset_index>``.
-
-    Resolution is deliberately *not* positional. ``get_dataset_config_names``
-    returns names sorted as strings, so with eleven or more shards the order
-    is ``shard_0, shard_1, shard_10, shard_11, shard_2, ...`` and indexing
-    into that list hands back the wrong shard. Because the stats scripts
-    write their results back to ``shard_<batch_id>``, a mismatched read would
-    silently overwrite a different shard than the one it read.
 
     Args:
         dataset_name: HF Hub dataset repo ID (e.g. "G-reen/cc-2021-rewritten").
@@ -64,12 +57,11 @@ def load_dataset_auto_shard(
             configs = []
 
         if not configs:
-            pass  # nothing to resolve against; fall through to the default config
+            pass
         elif wanted in configs:
             config_name = wanted
             print(f"Resolved shard {subset_index} to config '{config_name}' for dataset {dataset_name}")
         elif len(configs) == 1 and subset_index == 0:
-            # Unsharded upload (filter.py writes a single 'default' config).
             config_name = configs[0]
             print(
                 f"Dataset '{dataset_name}' is not sharded; loading its only "
@@ -122,7 +114,6 @@ def load_dataset_all_shards(
         return load_dataset(dataset_name, split=split)
 
 
-
 def upload_readme(
     dataset_name: str,
     files: Optional[Dict[str, bytes]] = None,
@@ -153,7 +144,7 @@ def upload_readme(
         if text.startswith("---"):
             idx = text.find("\n---", 3)
             if idx != -1:
-                idx += 4 # length of \n---
+                idx += 4
                 return text[:idx] + "\n", text[idx:].lstrip()
         return "", text
 

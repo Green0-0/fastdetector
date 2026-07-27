@@ -1,8 +1,3 @@
-# NOTE: In TOML, every bare key belongs to the most recent table header.
-# All top-level AnalysisConfig fields must therefore appear ABOVE the first
-# [[filter_conditions]] / [[classifiers]] block, or they will be silently
-# parsed as members of that table instead of the root document.
-
 prompt_metadata_column = "prompt"
 model_metadata_column = "generator_model"
 
