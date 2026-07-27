@@ -9,7 +9,7 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
     a. Find an appropriate wheel at https://github.com/mjun0812/flash-attention-prebuild-wheels/
 
     b. Install it (ie: ``uv pip install "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.17/flash_attn-2.8.3+cu130torch2.12-cp312-cp312-linux_x86_64.whl``)
-4. Create a seperate venv for vLLM: ``uv venv .vllm --python 3.12``
+4. Create a seperate venv for vLLM (used by the generation/filtering pipelines; the statistics scripts run in the main venv): ``uv venv .vllm --python 3.12``
 5. Activate it: ``source .vllm/bin/activate``
 6. Install vLLM: https://docs.vllm.ai/en/latest/getting_started/installation/
     - ie: ``uv pip install vllm --torch-backend cu130``
