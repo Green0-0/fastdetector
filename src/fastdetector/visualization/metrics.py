@@ -228,7 +228,11 @@ def compute_classifier_metrics(
             continue
         actual.extend([is_pos] * len(arr))
         y_true.extend([int(is_pos)] * len(arr))
-        y_scores.extend(arr.tolist())
+        # AUROC expects higher scores for the positive class. When
+        # flip_inequality is True (lower score => positive, e.g. a
+        # "lower_is_ai" classifier), negate the scores so the reported
+        # AUROC is not inverted (~1 - true AUROC).
+        y_scores.extend((-arr).tolist() if flip_inequality else arr.tolist())
         predicted.extend(_predict(arr, threshold, flip_inequality).tolist())
 
     actual_arr = np.array(actual, dtype=bool)
