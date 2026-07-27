@@ -179,10 +179,10 @@ def main() -> None:
             port=None,
             parallelization_type=config.parallelization_type,
             max_logprobs=config.top_logprobs_k,
-            gpu_memory_utilization=0.75,
+            gpu_memory_utilization=config.gpu_memory_utilization,
         ) as stat_api_url:
             process_fn = make_logprobs_processor(cols_to_compute, suffix, stat_api_url, config.top_logprobs_k)
-            ds = ds.map(process_fn, batched=True, batch_size=200)
+            ds = ds.map(process_fn, batched=True, batch_size=config.logprob_fetch_batch_size)
 
         for col in cols_to_compute:
             cols_to_remove.extend([
