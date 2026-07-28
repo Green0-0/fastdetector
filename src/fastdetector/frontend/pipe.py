@@ -114,6 +114,8 @@ def run_pipeline(
             venv_path=venv_path,
             parallelization_type=pipe_config.parallelization_type,
             port=None,
+            max_num_seqs=pipe_config.max_num_seqs,
+            max_num_batched_tokens=pipe_config.max_num_batched_tokens,
             **server_kwargs,
         ) as api_url:
             print(f"Using API endpoint: {api_url}")

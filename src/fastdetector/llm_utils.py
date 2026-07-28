@@ -85,6 +85,8 @@ def launch_engine_server(
     parallelization_type: str,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
+    max_num_seqs: int = 256,
+    max_num_batched_tokens: int = 2048,
 ) -> subprocess.Popen:
     """Launch the LLM server with data-parallel size = GPU count.
 
@@ -101,6 +103,10 @@ def launch_engine_server(
         parallelization_type: Parallelization strategy ("data", "tensor", "pipeline").
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).
         max_model_len: Maximum model context length.
+        max_num_seqs: Maximum number of concurrent sequences per engine step.
+        max_num_batched_tokens: Maximum number of batched tokens per engine
+            step (with chunked prefill this may be smaller than
+            max_model_len; larger values trade latency for throughput).
 
     Returns:
         The subprocess.Popen handle once the server is healthy.
@@ -125,8 +131,8 @@ def launch_engine_server(
         "--port", str(port),
         f"--{parallelization_type}-parallel-size", str(gpu_count),
         "--max-model-len", str(max_model_len),
-        "--max-num-seqs", "256",
-        "--max-num-batched-tokens", "2048",
+        "--max-num-seqs", str(max_num_seqs),
+        "--max-num-batched-tokens", str(max_num_batched_tokens),
         "--disable-uvicorn-access-log",
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
@@ -219,6 +225,8 @@ def llm_server_context(
     port: int | None = None,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
+    max_num_seqs: int = 256,
+    max_num_batched_tokens: int = 2048,
 ):
     """Context manager to launch and clean up an LLM server.
 
@@ -235,6 +243,8 @@ def llm_server_context(
         port: Port for the API server. If None, a free port is chosen.
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).
         max_model_len: Maximum model context length.
+        max_num_seqs: Maximum number of concurrent sequences per engine step.
+        max_num_batched_tokens: Maximum number of batched tokens per engine step.
 
     Yields:
         The API base URL string.
@@ -262,6 +272,8 @@ def llm_server_context(
             parallelization_type=parallelization_type,
             gpu_memory_utilization=gpu_memory_utilization, 
             max_model_len=max_model_len,
+            max_num_seqs=max_num_seqs,
+            max_num_batched_tokens=max_num_batched_tokens,
         )
         yield f"http://localhost:{port}/v1"
     finally:

@@ -80,6 +80,11 @@ class PipeConfig(BaseModel):
     max_model_len: Optional[int] = None
     max_input_len: Optional[int] = None
 
+    # Server batching (local engines only). Defaults match the previously
+    # hardcoded values.
+    max_num_seqs: int = 256
+    max_num_batched_tokens: int = 2048
+
     # API settings
     api_url: Optional[str] = None
     api_key_env: Optional[str] = None
