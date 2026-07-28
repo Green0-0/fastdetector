@@ -1,5 +1,4 @@
 import argparse
-from datasets import Dataset
 
 from fastdetector.frontend.toml_config import EditLensStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair

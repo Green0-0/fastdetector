@@ -1,12 +1,10 @@
-from fastdetector.statistics.embeddings_api import batch_soft_ngram_scores
 import argparse
-from datasets import Dataset
 
 from fastdetector.frontend.toml_config import DistanceStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_auto_shard, shard_config_name
 
-from fastdetector.statistics.embeddings_api import batch_gen_embeddings, generate_token_embeddings_pairs, batch_cross_encoder
+from fastdetector.statistics.embeddings_api import batch_gen_embeddings, batch_soft_ngram_scores, generate_token_embeddings_pairs, batch_cross_encoder
 from fastdetector.statistics.statistics_basic import pairwise_jaccards, pairwise_levenshteins
 from fastdetector.statistics.statistics_embedding import pairwise_cosdist, bertscore, moverscore
 

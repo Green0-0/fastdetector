@@ -1,8 +1,8 @@
 import numpy as np
 from datasets import Dataset
-from typing import List, Optional, Tuple, Dict, Callable
+from typing import List, Optional, Callable
 
-from fastdetector.visualization.metrics import compute_threshold_sweep, compute_classifier_metrics, FPR_TARGETS
+from fastdetector.visualization.metrics import compute_threshold_sweep, compute_classifier_metrics
 from fastdetector.visualization.plotting import get_sweep_plot, format_confusion_matrix
 
 MaskFn = Callable[[Dataset], np.ndarray]
