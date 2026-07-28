@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  default-tier:
+    name: default tier (fast, offline, CPU)
+    runs-on: ubuntu-latest
+    env:
+      # CPU wheels only: the CUDA build of torch is several GB and nothing in
+      # the default tier needs it.
+      UV_TORCH_BACKEND: cpu
+      # The default tier must never touch the network. If a test starts
+      # downloading, this makes it fail here instead of on someone's laptop.
+      HF_HUB_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install the project
+        run: uv sync --extra test
+
+      - name: Run the default tier
+        run: uv run pytest -q
+
+      - name: Check the expensive tiers still collect
+        # A broken import or a typo'd marker in the GPU/network tiers would
+        # otherwise only surface on the cluster.
+        run: uv run pytest -m "" --collect-only -q

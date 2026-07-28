@@ -1,0 +1,6 @@
+{
+    "chat_turns": ["nope"],
+    "use_multiturn": true,
+    "examples": [],
+    "metadata": {}
+}

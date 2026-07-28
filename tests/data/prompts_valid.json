@@ -1,0 +1,28 @@
+[
+    {
+        "chat_turns": [
+            "Rewrite the following document:\n{{DOC}}"
+        ],
+        "use_multiturn": true,
+        "examples": [
+            [
+                "Rewrite: hello",
+                "greetings"
+            ]
+        ],
+        "metadata": {
+            "PROMPT_TYPE": "rewrite"
+        }
+    },
+    {
+        "chat_turns": [
+            "Summarise this document:\n{{DOC}}",
+            "Now expand {{RESP_0}} back into a full document."
+        ],
+        "use_multiturn": false,
+        "examples": [],
+        "metadata": {
+            "PROMPT_TYPE": "indirect_reference"
+        }
+    }
+]

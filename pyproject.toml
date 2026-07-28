@@ -35,4 +35,18 @@ test = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "scripts" and "scripts/stats" make the CLI entry points importable so their
+# pure helpers (post-processing, compute plans, readme building) can be tested
+# without running the pipelines.
+pythonpath = ["src", "scripts", "scripts/stats"]
+# Expensive tiers are deselected by default so a bare `pytest` is safe to run
+# on a laptop. A `-m` on the command line REPLACES this one, so
+# `pytest -m gpu` runs exactly the GPU tier.
+addopts = "--strict-markers --strict-config -m 'not gpu and not slow and not network and not vllm'"
+markers = [
+    "gpu: requires a CUDA device (auto-skipped when none is visible)",
+    "slow: takes more than a few seconds",
+    "network: downloads from the HF Hub or otherwise needs the internet",
+    "bigmem: needs a lot of host RAM (see the test for the amount)",
+    "vllm: must run inside the vLLM venv (auto-skipped when vllm is not importable)",
+]

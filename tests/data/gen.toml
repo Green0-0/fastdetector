@@ -1,0 +1,14 @@
+num_samples = 8
+source_column = "collected_subset"
+prompt_file = "tests/data/prompts_valid.json"
+
+[pipeline]
+engine = "vllm"
+model_name = "fake/model"
+parallelization_type = "data"
+temperature = 0.7
+top_p = 0.9
+top_k = 20
+presence_penalty = 1.0
+max_model_len = 2048
+max_input_len = 64

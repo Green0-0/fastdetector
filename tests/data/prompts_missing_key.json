@@ -1,0 +1,9 @@
+[
+    {
+        "chat_turns": [
+            "Rewrite:\n{{DOC}}"
+        ],
+        "use_multiturn": true,
+        "examples": []
+    }
+]

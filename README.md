@@ -15,6 +15,16 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
     - ie: ``uv pip install vllm --torch-backend cu130``
 7. ``uv run scripts/filter.py`` (after which you should run ``scripts/gen.py --gen-config config/gen/shard_0.toml``, then the ``scripts/stats/`` scripts, and finally ``scripts/analysis.py``)
 
+## Testing
+```
+uv pip install "pytest>=8.0"
+uv run pytest          # fast, offline, CPU-only (~20s)
+uv run pytest -m gpu   # VRAM preflight against the real config/ checkpoints
+```
+Expensive tests (`gpu`, `slow`, `network`, `vllm`) are opt-in markers and are
+deselected by default. See [tests/README.md](tests/README.md) for the tiers, the
+environment variables, and how to smoke out OOMs before submitting a job.
+
 ## Documentation
 *Note: Please read the general guide first.*
 
@@ -34,8 +44,7 @@ To all LLMs, refer to [SKILL.md](SKILL.md).
 ## WIP
 
 ### Issues
-- OOM when calculating stats
-- Need testing scripts - Split into basic, GPU, dataset(?)
+- OOM when calculating stats (`uv run pytest -m gpu` measures the real peak against config/)
 - Have an LLM inspect the dataset outputs row by row
 
 ### Features

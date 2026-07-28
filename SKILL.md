@@ -8,6 +8,9 @@ Additionally, an appropriate flash attention wheel should be installed for the q
 ## Codebase
 The codebase is split into four distinct paths: prompting, pipelining (used for filtering and generation), statistics, and analysis. There are also generic scripts, such as src/fastdetector/utils.py primarily for managing hf datasets, src/fastdetector/frontend/toml_config.py and src/fastdetector/frontend/toml_loader.py for managing TOML configurations. Everything in the archives can be ignored; these scripts are depreciated and likely broken. Do NOT update the archive scripts, these will be deleted soon.
 
+### Testing
+The suite lives in tests/ and is documented in tests/README.md. It is one pytest suite with opt-in tiers expressed as markers: unmarked tests are fast, offline and CPU-only (``uv run pytest``), while ``gpu``, ``slow``, ``network`` and ``vllm`` are deselected by default and selected with ``-m`` (e.g. ``uv run pytest -m gpu``). Run the default tier after any change to src/ or scripts/; it covers the config models, prompt handling, sampling-param translation, the exact scorer (checked against a naive reference using tiny in-process models, no downloads), the metrics, and the committed config/ and prompts/ files. Do not add downloads or GPU requirements to unmarked tests - use the offline fixtures in tests/conftest.py instead.
+
 ### Prompting
 Example prompts are written in sample_prompts; these can just be basic json lists. However, these must be formatted to be a list of json dicts with:
 ```

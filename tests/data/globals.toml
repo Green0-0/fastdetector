@@ -1,0 +1,7 @@
+dataset_prefix = "testuser/testds"
+raw_suffix = "raw"
+pre_filter_suffix = "processed"
+post_filter_suffix = "filtered"
+gen_suffix = "rewritten"
+stat_suffix = "stat"
+eval_suffix = "eval"
