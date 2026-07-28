@@ -178,17 +178,36 @@ class DistanceStatConfig(BaseModel):
 
 
 class LLMStatConfig(BaseModel):
-    """Configuration for LLM-based metric extraction (llm_stats.py)."""
+    """Configuration for exact LLM-based metric extraction (llm_stats.py).
+
+    Models are loaded in-process via transformers; metrics are computed from
+    exact full-vocabulary distributions with fused reductions (no logprobs
+    are stored). Multi-GPU/multi-machine parallelism uses batch-id dataset
+    sharding (one process per GPU, pinned via CUDA_VISIBLE_DEVICES).
+    """
     columns_to_score: List[str]
-    parallelization_type: str = "data"
 
-    # Number of dataset rows per Dataset.map batch when fetching logprobs.
-    # Each batch is fired as concurrent API requests, so this also bounds the
-    # effective request concurrency (further capped by the client semaphore).
-    logprob_fetch_batch_size: int = 200
+    # Maximum tokens per text; longer texts are truncated.
+    max_model_len: int = 16000
 
-    # Fraction of GPU memory the stats vLLM server may use (0-1).
-    gpu_memory_utilization: float = 0.75
+    # Cap on padded tokens (batch_size * max_len) per forward pass. Texts are
+    # length-sorted into buckets so padding waste stays low.
+    max_batch_tokens: int = 16384
+
+    # Positions per LM-head/log-softmax reduction chunk. Peak activation
+    # memory scales with head_chunk_size * vocab_size (per co-resident model).
+    head_chunk_size: int = 512
+
+    # Model dtype: "bfloat16", "float16", or "float32". Reductions always run
+    # in float32.
+    dtype: str = "bfloat16"
+
+    # Attention backend. None tries flash_attention_2, then falls back to sdpa.
+    attn_implementation: Optional[str] = None
+
+    # Device to load the model(s) on. With binoculars enabled, both
+    # checkpoints are co-resident on this device.
+    device: str = "cuda"
 
     # LLM & Generation Metrics
     perplexity: bool
@@ -201,11 +220,11 @@ class LLMStatConfig(BaseModel):
     topp_threshold: float = 0.95
     topk_threshold: int = 50
 
-    # LLM Endpoints
+    # Model checkpoints and their aligned output-column suffixes. With
+    # binoculars enabled, the first checkpoint is the observer and the second
+    # the performer, and both must share a tokenizer/vocab.
     llm_checkpoints: List[str]
     col_suffixes: List[str]
-    top_logprobs_k: int
-    llm_vocab_size: Optional[int] = None
 
     @model_validator(mode='after')
     def validate_llm_settings(self) -> 'LLMStatConfig':
@@ -219,6 +238,8 @@ class LLMStatConfig(BaseModel):
         """
         if len(self.llm_checkpoints) != len(self.col_suffixes):
             raise ValueError(f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) must match col_suffixes ({len(self.col_suffixes)})")
+        if len(set(self.col_suffixes)) != len(self.col_suffixes):
+            raise ValueError(f"col_suffixes must be unique, got {self.col_suffixes}")
         if self.binoculars_score and len(self.llm_checkpoints) != 2:
             raise ValueError(f"Binoculars score requires exactly 2 llm_checkpoints, but {len(self.llm_checkpoints)} were provided.")
         return self

@@ -1,138 +1,108 @@
 import argparse
-import json
-from datasets import Dataset
 
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_auto_shard, shard_config_name
-from fastdetector.frontend.engine_config import EngineConfig as Engine
-from fastdetector.llm_utils import llm_server_context
-
-from fastdetector.statistics.logprobs_api import fetch_logprobs_all
-from fastdetector.statistics.statistics_llm import (
-    entropies_approx,
-    perplexities,
-    top_p_outlier_percentages,
-    top_k_outlier_percentages,
-    fastdetectgpt_scores_approx,
-    binoculars_scores_approx,
+from fastdetector.statistics.exact_scorer import (
+    ScorerSettings,
+    TextScores,
+    exact_scorer_context,
 )
+from fastdetector.statistics import statistics_llm
 
-def serialize_top_logprobs(top_logprobs_seq: list) -> list:
-    """Serialize top logprobs dictionaries into JSON strings for dataset storage.
+# (config flag, output column stem) pairs for the per-model metrics.
+PER_MODEL_METRICS = [
+    ("perplexity", "perplexity"),
+    ("entropy", "entropy"),
+    ("topp_outlier", "topp_outlier"),
+    ("topk_outlier", "topk_outlier"),
+    ("fastdetectgpt_score", "fastdetectgpt"),
+]
 
-    Args:
-        top_logprobs_seq: Sequence of top logprob dictionaries.
+# Output column stem -> aggregation over one text's scores for one model.
+METRIC_AGGREGATORS = {
+    "perplexity": lambda s, i: statistics_llm.perplexity(s.token_lps[i]),
+    "entropy": lambda s, i: statistics_llm.mean_entropy(s.entropies[i]),
+    "topp_outlier": lambda s, i: statistics_llm.outlier_percentage(s.topp_outlier[i]),
+    "topk_outlier": lambda s, i: statistics_llm.outlier_percentage(s.topk_outlier[i]),
+    "fastdetectgpt": lambda s, i: statistics_llm.fastdetectgpt_score(
+        s.token_lps[i], s.entropies[i], s.e_lp2[i]
+    ),
+}
 
-    Returns:
-        List of JSON-serialized logprob lists.
-    """
-    return [[json.dumps(d) for d in seq] for seq in top_logprobs_seq]
 
-def deserialize_top_logprobs(serialized_seq: list) -> list:
-    """Deserialize top logprobs JSON strings back into dictionaries.
-
-    Args:
-        serialized_seq: List of JSON-serialized logprob lists.
-
-    Returns:
-        List of deserialized top logprob dictionary sequences.
-    """
-    if not serialized_seq: return []
-    return [[json.loads(d) if isinstance(d, str) else d for d in seq] for seq in serialized_seq]
-
-def make_logprobs_processor(columns_to_score: list[str], suffix: str, stat_api_url: str, top_logprobs_k: int) -> callable:
-    """Build a map function for fetching logprobs across dataset columns.
-
-    Args:
-        columns_to_score: List of column names to score.
-        suffix: Column suffix string.
-        stat_api_url: LLM API base URL.
-        top_logprobs_k: Number of top logprobs to request.
-
-    Returns:
-        Dataset map transformation callable.
-    """
-    def process_logprobs(examples: dict) -> dict:
-        """Fetch logprobs for a batch of examples.
-
-        Args:
-            examples: Dataset batch dictionary.
-
-        Returns:
-            Dictionary containing token and top logprob columns.
-        """
-        res = {}
-        for col in columns_to_score:
-            tok_lps, top_lps = fetch_logprobs_all(examples[col], stat_api_url, top_logprobs_k=top_logprobs_k)
-            res[f"{col}_token_logprobs{suffix}"] = tok_lps
-            res[f"{col}_top_logprobs{suffix}"] = serialize_top_logprobs(top_lps)
-        return res
-    return process_logprobs
-
-def make_llm_metrics_processor(columns_to_score: list[str], llm_checkpoints: list[str], col_suffixes: list[str], config) -> callable:
-    """Build a map function for computing LLM-derived text metrics (perplexity, entropy, outliers, etc.).
+def build_compute_plan(column_names: list[str], config: LLMStatConfig) -> dict[str, set[str]]:
+    """Determine which output columns are missing for each text column.
 
     Args:
-        columns_to_score: List of column names to score.
-        llm_checkpoints: List of model checkpoint identifiers.
-        col_suffixes: List of column suffixes aligned with checkpoints.
-        config: LLMStatConfig object.
+        column_names: Existing dataset column names.
+        config: LLMStatConfig with metric flags, checkpoints, and suffixes.
 
     Returns:
-        Dataset map transformation callable.
+        Mapping of text column -> set of missing output column names. Text
+        columns with nothing missing are omitted.
     """
-    def process_llm_metrics(examples: dict) -> dict:
-        """Compute LLM metrics for a batch of examples from logprob columns.
+    plan: dict[str, set[str]] = {}
+    for col in config.columns_to_score:
+        needed = set()
+        for suffix in config.col_suffixes:
+            for flag, stem in PER_MODEL_METRICS:
+                out_col = f"{col}_{stem}{suffix}"
+                if getattr(config, flag) and out_col not in column_names:
+                    needed.add(out_col)
+        if config.binoculars_score and f"{col}_binoculars" not in column_names:
+            needed.add(f"{col}_binoculars")
+        if needed:
+            plan[col] = needed
+    return plan
 
-        Args:
-            examples: Dataset batch dictionary containing logprob columns.
 
-        Returns:
-            Dictionary containing computed metric columns.
-        """
-        result = {}
-        for idx, _ in enumerate(llm_checkpoints):
-            suffix = col_suffixes[idx]
-            for col in columns_to_score:
-                token_lp_key = f"{col}_token_logprobs{suffix}"
-                top_lp_key = f"{col}_top_logprobs{suffix}"
-                
-                if token_lp_key not in examples or top_lp_key not in examples:
-                    continue
-                    
-                token_lps = examples[token_lp_key]
-                top_lp = deserialize_top_logprobs(examples[top_lp_key])
+def compute_metric_columns(
+    scored: list[TextScores],
+    col: str,
+    needed: set[str],
+    config: LLMStatConfig,
+    suffixes: list[str],
+) -> dict[str, list[float]]:
+    """Aggregate per-text scores into the missing metric columns.
 
-                if config.perplexity and f"{col}_perplexity{suffix}" not in examples:
-                    result[f"{col}_perplexity{suffix}"] = perplexities(token_lps)
-                if config.entropy and f"{col}_entropy{suffix}" not in examples:
-                    result[f"{col}_entropy{suffix}"] = entropies_approx(top_lp, vocab_size=config.llm_vocab_size)
-                if config.topp_outlier and f"{col}_topp_outlier{suffix}" not in examples:
-                    result[f"{col}_topp_outlier{suffix}"] = top_p_outlier_percentages(top_lp, token_lps, config.topp_threshold)
-                if config.topk_outlier and f"{col}_topk_outlier{suffix}" not in examples:
-                    result[f"{col}_topk_outlier{suffix}"] = top_k_outlier_percentages(top_lp, token_lps, config.topk_threshold)
-                if config.fastdetectgpt_score and f"{col}_fastdetectgpt{suffix}" not in examples:
-                    result[f"{col}_fastdetectgpt{suffix}"] = fastdetectgpt_scores_approx(token_lps, top_lp, vocab_size=config.llm_vocab_size)
+    Args:
+        scored: TextScores for every row of the text column, with one entry
+            per scored model, aligned with ``suffixes``.
+        col: Name of the text column being scored.
+        needed: Output column names to compute.
+        config: LLMStatConfig (used for the binoculars flag).
+        suffixes: Column suffixes aligned with the scored models.
 
-        if config.binoculars_score:
-            s1 = col_suffixes[0]
-            s2 = col_suffixes[1]
-            for col in columns_to_score:
-                k1 = f"{col}_token_logprobs{s1}"
-                k2 = f"{col}_token_logprobs{s2}"
-                if k1 in examples and k2 in examples and f"{col}_binoculars" not in examples:
-                    token_lps_m1 = examples[k1]
-                    token_lps_m2 = examples[k2]
-                    lp1 = deserialize_top_logprobs(examples[f"{col}_top_logprobs{s1}"])
-                    lp2 = deserialize_top_logprobs(examples[f"{col}_top_logprobs{s2}"])
-                    result[f"{col}_binoculars"] = binoculars_scores_approx(token_lps_m1, token_lps_m2, lp1, lp2)
+    Returns:
+        Mapping of output column name -> per-row metric values.
+    """
+    result: dict[str, list[float]] = {}
+    for model_idx, suffix in enumerate(suffixes):
+        for _, stem in PER_MODEL_METRICS:
+            out_col = f"{col}_{stem}{suffix}"
+            if out_col not in needed:
+                continue
+            aggregate = METRIC_AGGREGATORS[stem]
+            result[out_col] = [aggregate(scores, model_idx) for scores in scored]
 
-        return result
-    return process_llm_metrics
+    if config.binoculars_score and f"{col}_binoculars" in needed:
+        # Model 0 is the observer, model 1 the performer (checkpoint order).
+        result[f"{col}_binoculars"] = [
+            statistics_llm.binoculars_score(scores.token_lps[1], scores.cross_entropies)
+            for scores in scored
+        ]
+    return result
+
 
 def main() -> None:
-    """Run LLM logprob extraction and text metrics processing pipeline.
+    """Run the exact LLM metrics pipeline (perplexity, entropy, outliers, etc.).
+
+    Models are loaded in-process via transformers and each text column is
+    scored with fused full-vocabulary reductions; no logprobs are persisted.
+    When binoculars_score is enabled, both checkpoints are co-resident and
+    every metric is computed in a single pass over the texts. Otherwise
+    checkpoints are loaded and freed one at a time.
 
     Returns:
         None.
@@ -149,58 +119,68 @@ def main() -> None:
     print(f"Loading {target_dataset} (subset index {args.batch_id})...")
     ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
 
-    cols_to_remove = []
-    
-    for idx, checkpoint in enumerate(config.llm_checkpoints):
-        suffix = config.col_suffixes[idx]
-        
-        cols_to_compute = []
-        for col in config.columns_to_score:
-            missing_any = False
-            if config.perplexity and f"{col}_perplexity{suffix}" not in ds.column_names: missing_any = True
-            if config.entropy and f"{col}_entropy{suffix}" not in ds.column_names: missing_any = True
-            if config.topp_outlier and f"{col}_topp_outlier{suffix}" not in ds.column_names: missing_any = True
-            if config.topk_outlier and f"{col}_topk_outlier{suffix}" not in ds.column_names: missing_any = True
-            if config.fastdetectgpt_score and f"{col}_fastdetectgpt{suffix}" not in ds.column_names: missing_any = True
-            if config.binoculars_score and f"{col}_binoculars" not in ds.column_names: missing_any = True
-            if missing_any:
-                cols_to_compute.append(col)
-                
-        if not cols_to_compute:
-            print(f"Metrics for {checkpoint} already computed for all columns. Skipping...")
-            continue
-            
-        print(f"Launching {checkpoint} to fetch logprobs (Suffix: {suffix})...")
+    missing_cols = [c for c in config.columns_to_score if c not in ds.column_names]
+    if missing_cols:
+        raise ValueError(
+            f"columns_to_score {missing_cols} not found in dataset {target_dataset} "
+            f"(available: {ds.column_names})"
+        )
 
-        with llm_server_context(
-            engine=Engine.VLLM,
-            model_name=checkpoint,
-            venv_path=globals_config.vllm_venv_path,
-            port=None,
-            parallelization_type=config.parallelization_type,
-            max_logprobs=config.top_logprobs_k,
-            gpu_memory_utilization=config.gpu_memory_utilization,
-        ) as stat_api_url:
-            process_fn = make_logprobs_processor(cols_to_compute, suffix, stat_api_url, config.top_logprobs_k)
-            ds = ds.map(process_fn, batched=True, batch_size=config.logprob_fetch_batch_size)
+    plan = build_compute_plan(ds.column_names, config)
+    if not plan:
+        print("All requested metrics already computed for all columns. Nothing to do.")
+        return
 
-        for col in cols_to_compute:
-            cols_to_remove.extend([
-                f"{col}_token_logprobs{suffix}",
-                f"{col}_top_logprobs{suffix}",
-            ])
+    settings = ScorerSettings(
+        topp_threshold=config.topp_threshold,
+        topk_threshold=config.topk_threshold,
+        max_model_len=config.max_model_len,
+        max_batch_tokens=config.max_batch_tokens,
+        head_chunk_size=config.head_chunk_size,
+        dtype=config.dtype,
+        attn_implementation=config.attn_implementation,
+        device=config.device,
+        compute_cross_entropy=config.binoculars_score,
+    )
 
-    metrics_fn = make_llm_metrics_processor(config.columns_to_score, config.llm_checkpoints, config.col_suffixes, config)
-    ds = ds.map(metrics_fn, batched=True, batch_size=100)
-    
-    # Cleanup logprob columns
-    cols_to_remove = [c for c in set(cols_to_remove) if c in ds.column_names]
-    if cols_to_remove:
-        ds = ds.remove_columns(cols_to_remove)
+    new_columns: dict[str, list[float]] = {}
+    if config.binoculars_score:
+        # Binoculars needs both models' distributions at each position, so the
+        # checkpoints are co-resident and everything is computed in one pass.
+        print(f"Loading checkpoints (co-resident): {config.llm_checkpoints}")
+        with exact_scorer_context(config.llm_checkpoints, settings) as scorer:
+            for col, needed in plan.items():
+                print(f"Scoring column '{col}'...")
+                scored = scorer.score_texts(ds[col], progress_label=col)
+                new_columns.update(
+                    compute_metric_columns(scored, col, needed, config, config.col_suffixes)
+                )
+    else:
+        for checkpoint, suffix in zip(config.llm_checkpoints, config.col_suffixes):
+            cols: dict[str, set[str]] = {}
+            for col, needed in plan.items():
+                model_cols = {f"{col}_{stem}{suffix}" for _, stem in PER_MODEL_METRICS} & needed
+                if model_cols:
+                    cols[col] = model_cols
+            if not cols:
+                print(f"Metrics for {checkpoint} already computed for all columns. Skipping...")
+                continue
+            print(f"Loading checkpoint {checkpoint} (suffix: {suffix})...")
+            with exact_scorer_context([checkpoint], settings) as scorer:
+                for col, needed in cols.items():
+                    print(f"Scoring column '{col}'...")
+                    scored = scorer.score_texts(ds[col], progress_label=col)
+                    new_columns.update(
+                        compute_metric_columns(scored, col, needed, config, [suffix])
+                    )
+
+    for name, values in new_columns.items():
+        ds = ds.add_column(name, values)
 
     print(f"Uploading dataset to {target_dataset}...")
     ds.push_to_hub(target_dataset, config_name=shard_config_name(args.batch_id))
     print("Done!")
+
 
 if __name__ == "__main__":
     main()

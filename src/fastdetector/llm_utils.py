@@ -83,7 +83,6 @@ def launch_engine_server(
     port: int,
     venv_path: str,
     parallelization_type: str,
-    max_logprobs: int = 10,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
 ) -> subprocess.Popen:
@@ -100,7 +99,6 @@ def launch_engine_server(
         port: Port for the OpenAI-compatible API server.
         venv_path: Path to the python virtual environment containing the engine executable.
         parallelization_type: Parallelization strategy ("data", "tensor", "pipeline").
-        max_logprobs: Maximum number of top logprobs the server will return.
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).
         max_model_len: Maximum model context length.
 
@@ -130,7 +128,6 @@ def launch_engine_server(
         "--max-num-seqs", "256",
         "--max-num-batched-tokens", "2048",
         "--disable-uvicorn-access-log",
-        "--max-logprobs", str(max_logprobs),
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
 
@@ -220,7 +217,6 @@ def llm_server_context(
     venv_path: str,
     parallelization_type: str,
     port: int | None = None,
-    max_logprobs: int = 10,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
 ):
@@ -237,7 +233,6 @@ def llm_server_context(
         venv_path: Path to the python virtual environment containing the engine executable.
         parallelization_type: Parallelization strategy ("data", "tensor", "pipeline").
         port: Port for the API server. If None, a free port is chosen.
-        max_logprobs: Maximum top-logprobs the server will return.
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).
         max_model_len: Maximum model context length.
 
@@ -265,7 +260,6 @@ def llm_server_context(
             port,
             venv_path=venv_path,
             parallelization_type=parallelization_type,
-            max_logprobs=max_logprobs, 
             gpu_memory_utilization=gpu_memory_utilization, 
             max_model_len=max_model_len,
         )
