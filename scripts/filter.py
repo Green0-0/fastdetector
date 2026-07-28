@@ -125,6 +125,20 @@ def main() -> None:
     filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
 
     if filter_config.output_shards is not None:
+        if filter_config.output_shards < 1:
+            raise ValueError(
+                f"output_shards must be >= 1, got {filter_config.output_shards}."
+            )
+        if len(ds_filtered) < filter_config.output_shards:
+            # shard_size would be 0: every shard except the last would be
+            # empty, and downstream gen.py runs pointed at those shard ids
+            # would process nothing while the last shard silently got all
+            # the rows.
+            raise ValueError(
+                f"Cannot split {len(ds_filtered)} filtered rows into "
+                f"{filter_config.output_shards} shards. Loosen the filter "
+                f"conditions or reduce output_shards."
+            )
         shard_size = len(ds_filtered) // filter_config.output_shards
         shards_to_upload = []
         for i in range(filter_config.output_shards):

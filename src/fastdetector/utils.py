@@ -233,6 +233,11 @@ def apply_filter_conditions(
     if not conditions:
         return dataset
 
+    if filter_type.upper() not in ("AND", "OR"):
+        # Previously any unrecognized value (e.g. a typo like "ANDD") was
+        # silently treated as OR, which can keep far more rows than intended.
+        raise ValueError(f'filter_type must be "AND" or "OR", got {filter_type!r}.')
+
     print("Filtering dataset with parsed conditions:")
     for c in conditions:
         print(c)
