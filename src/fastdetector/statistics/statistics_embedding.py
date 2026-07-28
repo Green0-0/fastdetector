@@ -7,19 +7,22 @@ import ot
 from collections import Counter
 
 def pairwise_cosdist(embeddings_list_a: list[np.ndarray] | np.ndarray, embeddings_list_b: list[np.ndarray] | np.ndarray) -> list[float]:
-    """Compute pairwise cosine similarity between two aligned lists of embeddings.
-    
+    """Compute pairwise cosine distance between two aligned lists of normalized embeddings.
+
+    Distance = 1 - cosine similarity, matching the "lower = more similar"
+    convention of the other pairwise_* metrics.
+
     Args:
         embeddings_list_a: First list/array of normalized embeddings.
         embeddings_list_b: Second list/array of normalized embeddings.
-        
+
     Returns:
-        List of cosine similarities.
+        List of cosine distances.
     """
     embs_a = np.array(embeddings_list_a, dtype=np.float32)
     embs_b = np.array(embeddings_list_b, dtype=np.float32)
-    cossims = 1.0 - np.sum(embs_a * embs_b, axis=1)
-    return cossims.tolist()
+    cosdists = 1.0 - np.sum(embs_a * embs_b, axis=1)
+    return cosdists.tolist()
 
 def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: int = 100) -> list[float]:
     """Compute the average cosine similarity of each embedding against all other embeddings in the same list.
@@ -32,10 +35,11 @@ def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: 
         List of average cosine similarities.
     """
     embs = np.array(embeddings_list, dtype=np.float32)
-    n_items = max(1, len(embs) - 1)
-    if n_items == 0:
+    if len(embs) <= 1:
+        # With 0 or 1 embeddings there are no "other" rows to average over.
         return [0.0] * len(embs)
-        
+    n_items = len(embs) - 1
+
     results = []
     for i in range(0, len(embs), batch_size):
         batch_embs = embs[i:i+batch_size]
