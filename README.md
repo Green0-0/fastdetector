@@ -13,7 +13,7 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
 5. Activate it: ``source .vllm/bin/activate``
 6. Install vLLM: https://docs.vllm.ai/en/latest/getting_started/installation/
     - ie: ``uv pip install vllm --torch-backend cu130``
-7. ``uv run filter.py`` (after which you should run ``gen.py``, then the stats scripts, and finally analysis.py)
+7. ``uv run scripts/filter.py`` (after which you should run ``scripts/gen.py --gen-config config/gen/shard_0.toml``, then the ``scripts/stats/`` scripts, and finally ``scripts/analysis.py``)
 
 ## Documentation
 *Note: Please read the general guide first.*
