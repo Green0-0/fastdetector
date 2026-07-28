@@ -67,6 +67,15 @@ class PromptSet:
             self.clear_test_set()
 
         split_index = int(len(self._train) * (1.0 - test_fraction))
+        if split_index < 1:
+            # int() flooring can otherwise move every prompt into the test
+            # set (e.g. 1 prompt with test_fraction=0.5), after which
+            # next_train() raises "The training set is empty."
+            raise ValueError(
+                f"test_fraction={test_fraction} would leave the training set "
+                f"empty ({len(self._train)} prompt(s) available). Use a "
+                f"smaller fraction or provide more prompts."
+            )
         self._test = self._train[split_index:]
         self._train = self._train[:split_index]
 
