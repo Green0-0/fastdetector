@@ -2,10 +2,15 @@ import argparse
 import json
 import sys
 from huggingface_hub import hf_hub_download
-import math
+
+METRIC_KEYS = ['acc', 'f1', 'auroc', 'tpr', 'fnr', 'fpr', 'precision', 'recall']
 
 def download_summary(repo_id: str) -> dict:
     """Download summary_stats.json from a HuggingFace dataset repo.
+
+    The file is produced by analysis.py and keyed by classifier name:
+    ``{"overall": {clf: metrics}, "prompts": {prompt: {clf: metrics}},
+    "thresholds": {clf: threshold_values}}``.
 
     Args:
         repo_id: HuggingFace dataset repository ID.
@@ -28,13 +33,9 @@ def is_valid(val: any) -> bool:
         val: Value to check.
 
     Returns:
-        True if valid float/int (not NaN/None), False otherwise.
+        True if the value is a finite number, False otherwise.
     """
-    if val is None:
-        return False
-    if isinstance(val, (int, float)) and math.isnan(val):
-        return False
-    return True
+    return isinstance(val, (int, float)) and val == val
 
 def format_single_metric(v1: any, v2: any) -> tuple[str, str, str]:
     """Format metric values from two datasets and compute difference string.
@@ -48,10 +49,10 @@ def format_single_metric(v1: any, v2: any) -> tuple[str, str, str]:
     """
     if not is_valid(v1) and not is_valid(v2):
         return "-", "-", "-"
-    
+
     v1_str = f"{v1:.4f}" if is_valid(v1) else "-"
     v2_str = f"{v2:.4f}" if is_valid(v2) else "-"
-    
+
     if is_valid(v1) and is_valid(v2):
         diff = v2 - v1
         if abs(v1) > 1e-6:
@@ -77,29 +78,20 @@ def generate_metric_table(ds1_name: str, ds2_name: str, m1: dict, m2: dict) -> s
     """
     if m1 is None: m1 = {}
     if m2 is None: m2 = {}
-    
+
     header = f"| Metric | {ds1_name} | {ds2_name} | Diff |\n|---|---|---|---|\n"
     rows = []
-    
-    for key in ['acc', 'f1', 'auroc', 'tpr', 'fnr']:
+
+    for key in METRIC_KEYS:
         v1 = m1.get(key)
         v2 = m2.get(key)
         r1, r2, diff = format_single_metric(v1, v2)
         rows.append(f"| {key.upper()} | {r1} | {r2} | {diff} |")
-        
-    c1 = m1.get('corrs', {})
-    c2 = m2.get('corrs', {})
-    all_corrs = sorted(list(set(c1.keys()).union(set(c2.keys()))))
-    for k in all_corrs:
-        v1 = c1.get(k)
-        v2 = c2.get(k)
-        r1, r2, diff = format_single_metric(v1, v2)
-        rows.append(f"| Corr: {k} | {r1} | {r2} | {diff} |")
-        
+
     return header + "\n".join(rows) + "\n\n"
 
 def generate_markdown(ds1_name: str, ds2_name: str, d1: dict, d2: dict) -> str:
-    """Generate full markdown comparison report between two EditLens summary dicts.
+    """Generate full markdown comparison report between two analysis summary dicts.
 
     Args:
         ds1_name: Name of baseline dataset 1.
@@ -112,13 +104,13 @@ def generate_markdown(ds1_name: str, ds2_name: str, d1: dict, d2: dict) -> str:
     """
     subset_acc_changes = []
     stat_changes = []
-    
-    def process_metrics(subset_name: str, model_type: str, m1: dict, m2: dict) -> None:
+
+    def process_metrics(subset_name: str, clf_name: str, m1: dict, m2: dict) -> None:
         """Helper to collect and rank metric differences for a subset.
 
         Args:
             subset_name: Display name of the subset.
-            model_type: Classifier model type ("Score" or "Bin").
+            clf_name: Classifier name.
             m1: Metrics dict for dataset 1.
             m2: Metrics dict for dataset 2.
 
@@ -127,135 +119,107 @@ def generate_markdown(ds1_name: str, ds2_name: str, d1: dict, d2: dict) -> str:
         """
         if m1 is None: m1 = {}
         if m2 is None: m2 = {}
-        
-        for key in ['acc', 'f1', 'auroc', 'tpr', 'fnr']:
+
+        for key in METRIC_KEYS:
             v1 = m1.get(key)
             v2 = m2.get(key)
             if is_valid(v1) and is_valid(v2):
                 diff = v2 - v1
                 abs_diff = abs(diff)
                 pct_diff = (diff / abs(v1)) * 100 if abs(v1) > 1e-6 else float('nan')
-                stat_changes.append((subset_name, model_type, key.upper(), abs_diff, pct_diff, v1, v2))
-                
-                if key == 'acc':
-                    subset_acc_changes.append((subset_name, model_type, abs_diff, pct_diff, v1, v2))
-                    
-        c1 = m1.get('corrs', {})
-        c2 = m2.get('corrs', {})
-        all_corrs = sorted(list(set(c1.keys()).union(set(c2.keys()))))
-        for k in all_corrs:
-            v1 = c1.get(k)
-            v2 = c2.get(k)
-            if is_valid(v1) and is_valid(v2):
-                diff = v2 - v1
-                abs_diff = abs(diff)
-                pct_diff = (diff / abs(v1)) * 100 if abs(v1) > 1e-6 else float('nan')
-                stat_changes.append((subset_name, model_type, f"Corr: {k}", abs_diff, pct_diff, v1, v2))
+                stat_changes.append((subset_name, clf_name, key.upper(), abs_diff, pct_diff, v1, v2))
 
-    process_metrics("Overall", "Score", d1.get('overall', {}).get('score'), d2.get('overall', {}).get('score'))
-    process_metrics("Overall", "Bin", d1.get('overall', {}).get('bin'), d2.get('overall', {}).get('bin'))
-    
-    categories_info = [('prompts', 'Prompt'), ('models', 'Model'), ('splits', 'Split')]
-    for cat_key, cat_name in categories_info:
-        c1 = d1.get(cat_key, {})
-        c2 = d2.get(cat_key, {})
-        all_keys = sorted(list(set(c1.keys()).union(set(c2.keys()))))
-        for k in all_keys:
-            process_metrics(f"{cat_name}: {k}", "Score", c1.get(k, {}).get('score'), c2.get(k, {}).get('score'))
-            process_metrics(f"{cat_name}: {k}", "Bin", c1.get(k, {}).get('bin'), c2.get(k, {}).get('bin'))
-            
+                if key == 'acc':
+                    subset_acc_changes.append((subset_name, clf_name, abs_diff, pct_diff, v1, v2))
+
+    o1 = d1.get('overall', {})
+    o2 = d2.get('overall', {})
+    all_clfs = sorted(set(o1.keys()).union(o2.keys()))
+    for clf in all_clfs:
+        process_metrics("Overall", clf, o1.get(clf), o2.get(clf))
+
+    p1 = d1.get('prompts', {})
+    p2 = d2.get('prompts', {})
+    all_prompts = sorted(set(p1.keys()).union(p2.keys()))
+    for prompt in all_prompts:
+        clfs = sorted(set(p1.get(prompt, {}).keys()).union(p2.get(prompt, {}).keys()))
+        for clf in clfs:
+            process_metrics(f"Prompt: {prompt}", clf, p1.get(prompt, {}).get(clf), p2.get(prompt, {}).get(clf))
+
     subset_acc_changes.sort(key=lambda x: x[2], reverse=True)
     top_acc = subset_acc_changes[:3]
-    
+
     stat_changes.sort(key=lambda x: x[3], reverse=True)
     top_stat = stat_changes[:3]
 
     md = f"# Comparison: {ds1_name} vs {ds2_name}\n\n"
-    
+
     md += "## Top 3 Noteworthy Subsets by Accuracy Change\n"
     if top_acc:
         for item in top_acc:
-            subset_name, model_type, abs_diff, pct, v1, v2 = item
+            subset_name, clf_name, abs_diff, pct, v1, v2 = item
             diff = v2 - v1
             pct_str = f" ({pct:+.2f}%)" if is_valid(pct) else ""
-            md += f"- **{subset_name} ({model_type})**: {v1:.4f} -> {v2:.4f} ({diff:+.4f}){pct_str}\n"
+            md += f"- **{subset_name} ({clf_name})**: {v1:.4f} -> {v2:.4f} ({diff:+.4f}){pct_str}\n"
     else:
         md += "- No valid accuracy comparisons found.\n"
     md += "\n"
-    
+
     md += "## Top 3 Most Changed Statistics\n"
     if top_stat:
         for item in top_stat:
-            subset_name, model_type, stat_name, abs_diff, pct, v1, v2 = item
+            subset_name, clf_name, stat_name, abs_diff, pct, v1, v2 = item
             diff = v2 - v1
             pct_str = f" ({pct:+.2f}%)" if is_valid(pct) else ""
-            md += f"- **{subset_name} ({model_type}) - {stat_name}**: {v1:.4f} -> {v2:.4f} ({diff:+.4f}){pct_str}\n"
+            md += f"- **{subset_name} ({clf_name}) - {stat_name}**: {v1:.4f} -> {v2:.4f} ({diff:+.4f}){pct_str}\n"
     else:
         md += "- No valid statistics comparisons found.\n"
     md += "\n"
-    
+
     md += "## Overall\n"
-    sm1 = d1.get('overall', {}).get('score')
-    bm1 = d1.get('overall', {}).get('bin')
-    sm2 = d2.get('overall', {}).get('score')
-    bm2 = d2.get('overall', {}).get('bin')
-    
-    md += "### Score Model\n"
-    md += generate_metric_table(ds1_name, ds2_name, sm1, sm2)
-    md += "### Bin Model\n"
-    md += generate_metric_table(ds1_name, ds2_name, bm1, bm2)
-    
-    categories = [('prompts', 'Prompts'), ('models', 'Models'), ('splits', 'Splits')]
-    for cat_key, cat_name in categories:
-        md += f"## {cat_name}\n"
-        c1 = d1.get(cat_key, {})
-        c2 = d2.get(cat_key, {})
-        all_keys = sorted(list(set(c1.keys()).union(set(c2.keys()))))
-        
-        if not all_keys:
-            md += "No data.\n\n"
-            continue
-            
-        for k in all_keys:
-            safe_k = k.replace('|', '-')
-            md += f"### {safe_k}\n"
-            
-            sm1 = c1.get(k, {}).get('score')
-            bm1 = c1.get(k, {}).get('bin')
-            sm2 = c2.get(k, {}).get('score')
-            bm2 = c2.get(k, {}).get('bin')
-            
-            md += "#### Score Model\n"
-            md += generate_metric_table(ds1_name, ds2_name, sm1, sm2)
-            md += "#### Bin Model\n"
-            md += generate_metric_table(ds1_name, ds2_name, bm1, bm2)
-            
+    if not all_clfs:
+        md += "No data.\n\n"
+    for clf in all_clfs:
+        md += f"### {clf}\n"
+        md += generate_metric_table(ds1_name, ds2_name, o1.get(clf), o2.get(clf))
+
+    md += "## Prompts\n"
+    if not all_prompts:
+        md += "No data.\n\n"
+    for prompt in all_prompts:
+        safe_prompt = prompt.replace('|', '-')
+        md += f"### {safe_prompt}\n"
+        clfs = sorted(set(p1.get(prompt, {}).keys()).union(p2.get(prompt, {}).keys()))
+        for clf in clfs:
+            md += f"#### {clf}\n"
+            md += generate_metric_table(ds1_name, ds2_name, p1.get(prompt, {}).get(clf), p2.get(prompt, {}).get(clf))
+
     return md
 
 def main() -> None:
-    """Compare two EditLens summary JSONs and output a markdown report.
+    """Compare two analysis summary JSONs and output a markdown report.
 
     Returns:
         None.
     """
-    parser = argparse.ArgumentParser(description="Compare two EditLens summary JSONs")
+    parser = argparse.ArgumentParser(description="Compare two analysis summary JSONs")
     parser.add_argument("--dataset-1", type=str, required=True, help="First dataset (baseline)")
     parser.add_argument("--dataset-2", type=str, required=True, help="Second dataset")
     parser.add_argument("--output", type=str, default="comparison.md", help="Output file")
     args = parser.parse_args()
-    
+
     print(f"Downloading from {args.dataset_1}...")
     d1 = download_summary(args.dataset_1)
-    
+
     print(f"Downloading from {args.dataset_2}...")
     d2 = download_summary(args.dataset_2)
-    
+
     print(f"Generating markdown...")
     md = generate_markdown(args.dataset_1, args.dataset_2, d1, d2)
-    
+
     with open(args.output, 'w') as f:
         f.write(md)
-        
+
     print(f"Comparison written to {args.output}")
 
 if __name__ == '__main__':
