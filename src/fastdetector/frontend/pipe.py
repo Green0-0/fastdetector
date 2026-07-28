@@ -59,6 +59,26 @@ def run_pipeline(
         else:
             extra_body[param] = val
 
+    # Surface configured sampling params the engine will not receive (e.g.
+    # temperature/top_p with the OAI engine, Aphrodite-only samplers with
+    # vLLM). These were previously dropped silently while the readme still
+    # reported them as if applied.
+    ALL_SAMPLING_PARAMS = [
+        "temperature", "top_p", "top_k", "presence_penalty", "disable_thinking",
+        "top_a", "xtc_probability", "nsigma",
+    ]
+    ignored_params = {
+        p: getattr(pipe_config, p)
+        for p in ALL_SAMPLING_PARAMS
+        if getattr(pipe_config, p, None) is not None and p not in engine.valid_sampling_params
+    }
+    if ignored_params:
+        print(
+            f"WARNING: The following sampling params are set in the config but "
+            f"are not supported by the {engine.value} engine and will be "
+            f"IGNORED: {ignored_params}"
+        )
+
     if extra_body:
         generation_params["extra_body"] = extra_body
 
@@ -159,11 +179,8 @@ def run_pipeline(
     total_runtime = time.time() - start_time
     readme_content = f"""# Auto-Generated FastDetector Dataset
 - Model Name: {pipe_config.model_name}
-- Temperature: {pipe_config.temperature}
-- Top P: {pipe_config.top_p}
-- Top K: {pipe_config.top_k}
-- Presence Penalty: {pipe_config.presence_penalty}
-- Disable Thinking: {pipe_config.disable_thinking}
+- Sampling Params (as sent to the engine): {json.dumps(generation_params)}
+- Ignored Params (unsupported by this engine): {json.dumps(ignored_params) if ignored_params else "None"}
 
 - Prompt File: {prompt_file}
 - Total Train Prompts: {len(prompts.get_train())}
