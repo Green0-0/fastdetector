@@ -9,17 +9,6 @@
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:a5000:1
 
-# Runs every tier the cluster can run: slow, network, and GPU.
-#
-# Submit this before kicking off a long generation or statistics job - the GPU
-# preflight loads the checkpoints named in config/ and measures their real peak
-# VRAM against a worst-case batch, which is what catches an OOM in two minutes
-# instead of three hours.
-#
-#   sbatch slurm/tests/run_tests.sbatch
-#
-# The vLLM tier is run separately at the end, from the engine venv.
-
 set -uo pipefail
 
 # ---- Activate project venv ----

@@ -68,9 +68,6 @@ class PromptSet:
 
         split_index = int(len(self._train) * (1.0 - test_fraction))
         if split_index < 1:
-            # int() flooring can otherwise move every prompt into the test
-            # set (e.g. 1 prompt with test_fraction=0.5), after which
-            # next_train() raises "The training set is empty."
             raise ValueError(
                 f"test_fraction={test_fraction} would leave the training set "
                 f"empty ({len(self._train)} prompt(s) available). Use a "
@@ -124,7 +121,6 @@ class PromptSet:
                 metadata=dict(template.metadata),
             ))
 
-            # NOTE: FOR SOME REASON HF DOESN'T ALLOW EMPTY DICTIONARIES...
             meta = dict(template.metadata)
             if not meta:
                 meta["_dummy"] = True

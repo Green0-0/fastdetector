@@ -15,6 +15,9 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
     - ie: ``uv pip install vllm --torch-backend cu130``
 7. ``uv run scripts/filter.py`` (after which you should run ``scripts/gen.py --gen-config config/gen/shard_0.toml``, then the ``scripts/stats/`` scripts, and finally ``scripts/analysis.py``)
 
+On a Slurm cluster, ``slurm/`` has one job script per stage; the sharded stages are array jobs
+(``sbatch slurm/filter.sbatch``, then ``gen``, ``stats/``, and finally ``analysis``).
+
 ## Testing
 ```
 uv pip install "pytest>=8.0"

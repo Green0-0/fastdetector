@@ -158,7 +158,6 @@ def test_filter_config_defaults():
         prompt_file="prompts/p.json",
         pipeline=PIPELINE_FIELDS,
     )
-    assert config.output_shards is None
     assert config.conditions == []
     assert config.filter_type == "AND"
     assert config.langdetect_threshold is None

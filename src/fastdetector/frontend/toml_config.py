@@ -105,9 +105,6 @@ class FilterConfig(BaseModel):
     prompt_file: str
     pipeline: PipeConfig
 
-    # Number of shards to split the filtered dataset into.
-    # None means don't shard (upload as a single 'default' config).
-    output_shards: Optional[int] = None
     conditions: List[ConditionConfig] = []
     filter_type: str = "AND"
     

@@ -24,6 +24,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the dataset filtering pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--filter-config", type=str, default="config/filter.toml", help="Path to filter.toml")
+    parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
 
     args = parser.parse_args()
 
@@ -33,6 +34,7 @@ def main() -> None:
 
     source_dataset = globals_config.resolve_input_dataset(globals_config.raw_suffix)
     intermediate_dataset = globals_config.resolve_output_dataset(globals_config.pre_filter_suffix)
+    config_name = shard_config_name(args.batch_id)
 
     print(f"Running filtering generation pipeline...")
     ds, gen_readme = run_pipeline(
@@ -42,6 +44,7 @@ def main() -> None:
         num_samples=filter_config.num_samples,
         source_column=filter_config.source_column,
         source_dataset_name=source_dataset,
+        batch_id=args.batch_id,
     )
         
     originals = ds["original"]
@@ -67,20 +70,22 @@ def main() -> None:
     is_str_sub = is_strict_subset(originals, news)
     ds = ds.add_column("is_strict_subset", is_str_sub)
     
+    # Quantiles are taken within this shard, so the quantile-based conditions
+    # below are relative to the rows this run processed, not the whole corpus.
     print("Computing quantiles...")
     for col in ["deviated_lines_proportion", "deviated_words_proportion", "deviated_characters_proportion"]:
         q = quantile(ds[col])
         ds = ds.add_column(f"{col}_quantile", q)
 
     readme_content = gen_readme + f"""
-## Metrics Added (config: default)
+## Metrics Added (config: {config_name})
 - Deviated lines, words, characters (proportion + raw count)
 - Loose and strict subset checks
 - Quantiles for deviated_*_proportion columns
 - Total rows: {len(ds)}
 """
-    print(f"Uploading updated dataset to {intermediate_dataset}...")
-    ds.push_to_hub(intermediate_dataset, config_name="default")
+    print(f"Uploading updated dataset to {intermediate_dataset} (config '{config_name}')...")
+    ds.push_to_hub(intermediate_dataset, config_name=config_name)
     upload_readme(
         dataset_name=intermediate_dataset,
         readme_content=readme_content,
@@ -117,40 +122,18 @@ def main() -> None:
 
     filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
 
-    if filter_config.output_shards is not None:
-        if filter_config.output_shards < 1:
-            raise ValueError(
-                f"output_shards must be >= 1, got {filter_config.output_shards}."
-            )
-        if len(ds_filtered) < filter_config.output_shards:
-            raise ValueError(
-                f"Cannot split {len(ds_filtered)} filtered rows into "
-                f"{filter_config.output_shards} shards. Loosen the filter "
-                f"conditions or reduce output_shards."
-            )
-        shard_size = len(ds_filtered) // filter_config.output_shards
-        shards_to_upload = []
-        for i in range(filter_config.output_shards):
-            start = i * shard_size
-            end = len(ds_filtered) if i == filter_config.output_shards - 1 else (i + 1) * shard_size
-            shards_to_upload.append((ds_filtered.select(range(start, end)), shard_config_name(i)))
-    else:
-        shards_to_upload = [(ds_filtered, "default")]
-
-    shard_names = [name for _, name in shards_to_upload]
     filtered_readme = f"""
 ## Filtering Applied
 - Conditions: {conditions}
 - Filter type: {filter_config.filter_type}
 - Langdetect Threshold: {filter_config.langdetect_threshold}
-- Configs: {shard_names}
+- Config: {config_name}
 - Rows before filter: {len(ds)}
 - Rows after filter: {len(ds_filtered)}
 """
 
-    for dataset_shard, config_name in shards_to_upload:
-        print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(dataset_shard)} samples...")
-        dataset_shard.push_to_hub(filtered_dataset, config_name=config_name)
+    print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(ds_filtered)} samples...")
+    ds_filtered.push_to_hub(filtered_dataset, config_name=config_name)
 
     upload_readme(
         dataset_name=filtered_dataset,

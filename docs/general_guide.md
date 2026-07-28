@@ -23,5 +23,7 @@ These four stages (ignoring prompts) correspond to the following python scripts 
 
 There is also a globals.toml which specifies a naming convention for  huggingface datasets; **you should modify it with your username; you also need the source dataset under your account**.
 
+Stages #1 to #3 take a `--batch-id`: each one processes the dataset shard with that index and writes its results back under the same shard name, so scaling out is one batch-id per machine (and stage #4 reads every shard back). `slurm/` holds a job script per stage, with the sharded ones submitted as array jobs. If you need to start over, `scripts/delete_datasets.py` deletes the datasets a set of stages wrote (it only lists them unless you pass `--yes`).
+
 The configuration parameters are reasonably straightforward, consult your favorite agent or raise an issue for help if absolutely necessary.
 
