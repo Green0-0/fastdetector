@@ -1,5 +1,5 @@
 from pydantic import BaseModel, model_validator
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Union
 
 from fastdetector.frontend.engine_config import EngineConfig
 
@@ -201,8 +201,10 @@ class LLMStatConfig(BaseModel):
 
     Models are loaded in-process via transformers; metrics are computed from
     exact full-vocabulary distributions with fused reductions (no logprobs
-    are stored). Multi-GPU/multi-machine parallelism uses batch-id dataset
-    sharding (one process per GPU, pinned via CUDA_VISIBLE_DEVICES).
+    are stored). Batch-id sharding splits the dataset across machines (one
+    shard per run, as elsewhere in the pipeline); within a run, the
+    checkpoint(s) are replicated onto every configured GPU and all replicas
+    work that single shard in parallel.
     """
     columns_to_score: List[str]
 
@@ -224,9 +226,11 @@ class LLMStatConfig(BaseModel):
     # Attention backend. None tries flash_attention_2, then falls back to sdpa.
     attn_implementation: Optional[str] = None
 
-    # Device to load the model(s) on. With binoculars enabled, both
-    # checkpoints are co-resident on this device.
-    device: str = "cuda"
+    # Devices to score on. "auto" replicates the checkpoint(s) onto every
+    # visible CUDA device (falling back to CPU); an explicit list such as
+    # ["cuda:0", "cuda:1"] selects specific GPUs. With binoculars enabled,
+    # each device holds both checkpoints.
+    devices: Union[str, List[str]] = "auto"
 
     # LLM & Generation Metrics
     perplexity: bool

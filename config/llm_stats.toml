@@ -11,7 +11,11 @@ max_batch_tokens = 16384
 head_chunk_size = 512
 
 dtype = "bfloat16"
-device = "cuda"
+
+# "auto" replicates the checkpoint(s) onto every visible CUDA device and
+# scores this run's dataset shard on all of them in parallel; use an explicit
+# list like ["cuda:0", "cuda:1"] to select specific GPUs.
+devices = "auto"
 # attn_implementation = "sdpa"  # default: try flash_attention_2, fall back to sdpa
 
 perplexity = true
