@@ -4,6 +4,8 @@ model_metadata_column = "generator_model"
 validation_size = 0.1
 threshold_type_bin = "f1"
 threshold_type_score = "fpr_0_5pct"
+# manual_threshold_score = 0.5 # Fixed threshold for threshold_kind = "score" classifiers (skips their sweep)
+# manual_threshold_bin = 0.5 # Fixed threshold for threshold_kind = "bin" classifiers (skips their sweep)
 
 filter_type = "OR"
 
@@ -34,3 +36,4 @@ suffix = "_editlens_score_roberta_large"
 [[classifiers]]
 name = "EditLens Roberta-Large Bucket"
 suffix = "_editlens_bucket_roberta_large"
+threshold_kind = "bin"
