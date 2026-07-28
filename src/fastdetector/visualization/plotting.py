@@ -171,7 +171,7 @@ def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
                 matrix[i, j] = float(np.corrcoef(arrays[i], arrays[j])[0, 1])
                 
     fig, ax = plt.subplots(figsize=(max(6, n), max(6, n)))
-    im = ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
+    ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
     ax.set_xticks(np.arange(n), labels=names)
     ax.set_yticks(np.arange(n), labels=names)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
@@ -359,7 +359,6 @@ def format_confusion_matrix(
     """
     _, _, f1, fpr, tnr = _prf(tp, fp, tn, fn)
     actual_pos = tp + fn
-    actual_neg = tn + fp
     tpr = tp / actual_pos if actual_pos > 0 else 0
     fnr = fn / actual_pos if actual_pos > 0 else 0
 

@@ -1,5 +1,4 @@
 import argparse
-import os
 from langdetect import detect_langs
 from langdetect.lang_detect_exception import LangDetectException
 from fastdetector.frontend.toml_config import FilterConfig
