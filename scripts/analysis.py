@@ -193,7 +193,9 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
         unique_mg_strs: List of unique model genconfig strings.
 
     Returns:
-        Tuple of (readme_markdown_string, dict_of_chart_filename_to_bytes).
+        Tuple of (readme_markdown_string, dict_of_chart_filename_to_bytes,
+        summary_stats_dict). The summary stats dict is the machine-readable
+        JSON spec of all classifier results (see :func:`_build_summary_stats`).
     """
     has_manual_score = eval_config.manual_threshold_score is not None
     has_manual_bin = eval_config.manual_threshold_bin is not None
@@ -346,7 +348,45 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
             lines.append(cw.metrics['confusion_matrix'])
             lines.append("")
 
-    return "\n".join(lines), charts
+    summary_stats = _build_summary_stats(clf_data, subsets, prompt_subsets)
+    return "\n".join(lines), charts, summary_stats
+
+
+def _build_summary_stats(clf_data: dict, subsets: list, prompt_subsets: list) -> dict:
+    """Assemble the machine-readable JSON spec of all classifier results.
+
+    The spec is keyed by classifier name so it works for any configured
+    classifier set (unlike the old fixed "score"/"bin" EditLens schema):
+
+    ``{"overall": {clf: metrics}, "prompts": {prompt: {clf: metrics}},
+    "thresholds": {clf: threshold_values}}``
+
+    where ``metrics`` is the scalar dict from
+    :func:`fastdetector.visualization.metrics.compute_classifier_metrics`
+    (the markdown confusion matrix is dropped).
+
+    Args:
+        clf_data: Per-classifier dict with 'tw' (threshold wrapper) and
+            'subsets' (Subset -> ClassifierWrapper) entries.
+        subsets: All Subset objects; subsets[0] is "Overall".
+        prompt_subsets: The per-prompt Subset objects.
+
+    Returns:
+        The summary stats dict (JSON-serializable with NumpyEncoder).
+    """
+    def scalar_metrics(cw) -> dict:
+        return {k: v for k, v in cw.metrics.items() if k != "confusion_matrix"}
+
+    summary: dict = {"overall": {}, "prompts": {}, "thresholds": {}}
+    for clf_name, data in clf_data.items():
+        summary["overall"][clf_name] = scalar_metrics(data['subsets'][subsets[0]])
+        summary["thresholds"][clf_name] = dict(data['tw'].values)
+        for sub in prompt_subsets:
+            prompt_name = sub.name.removeprefix("Prompt: ")
+            summary["prompts"].setdefault(prompt_name, {})[clf_name] = (
+                scalar_metrics(data['subsets'][sub])
+            )
+    return summary
 
 def main() -> None:
     """Run analysis and evaluation reporting pipeline from configuration.
@@ -379,9 +419,12 @@ def main() -> None:
     unique_mgs = sorted(set(mg_strs)) if has_mg else []
 
     print("Generating visualizer README and charts...")
-    readme_md, charts = _build_readme(result_ds, eval_config, has_prompts, has_mg, unique_prompts, unique_mgs)
-    
-    print("Uploading README and charts to Hub...")
+    readme_md, charts, summary_stats = _build_readme(result_ds, eval_config, has_prompts, has_mg, unique_prompts, unique_mgs)
+
+    # Machine-readable spec of the results, consumed by compare_summary.py.
+    charts["summary_stats.json"] = json.dumps(summary_stats, indent=2, cls=NumpyEncoder).encode("utf-8")
+
+    print("Uploading README, charts, and summary_stats.json to Hub...")
     upload_readme(target_dataset, files=charts, readme_content=readme_md)
     print("Done!")
 
