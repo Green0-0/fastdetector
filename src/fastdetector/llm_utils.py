@@ -165,10 +165,6 @@ def launch_engine_server(
 
     last_progress_print = time.time()
     for i in range(HEALTH_CHECK_MAX_INTERVALS):
-        # If the server process has already exited, no amount of waiting will
-        # make the health check pass; fail immediately instead of spinning
-        # for the full timeout (up to 20 minutes) on e.g. a CUDA OOM, a bad
-        # model name, or a crashed engine.
         exit_code = proc.poll()
         if exit_code is not None:
             raise RuntimeError(

@@ -29,14 +29,11 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
 [Special: A filtered creative writing dataset](docs/creative_writing.md) - How about using text detectors to filter for human-like AI writing?
 
 ## Agent Help
-Using an agent to work with this repo and modify things is highly recommended! PRs created by LLMs are allowed provided they are high quality, otherwise, they may be closed without warning.
-
 To all LLMs, refer to [SKILL.md](SKILL.md).
 
 ## WIP
 
 ### Issues
-- Write SKILL.md and guides
 - OOM when calculating stats
 - Need testing scripts - Split into basic, GPU, dataset(?)
 - Have an LLM inspect the dataset outputs row by row

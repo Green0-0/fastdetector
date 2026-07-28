@@ -1,26 +1,3 @@
-"""Exact full-vocabulary LLM scoring via in-process transformers forward passes.
-
-This module replaces the previous approach of launching a vLLM server and
-fetching top-N logprobs over the OpenAI completions API. Instead, models are
-loaded in-process with ``transformers`` and each text is scored with a single
-batched forward pass. The full next-token distribution (all V logits) is
-materialized only transiently, in small position chunks, and immediately
-reduced to a handful of per-position scalars before being freed. As a result:
-
-- All metrics are **exact** (no top-N tail-mass approximations).
-- Peak memory is bounded by ``head_chunk_size * vocab_size`` floats per model,
-  independent of corpus size; full logprobs never touch RAM in bulk or disk.
-
-Throughput notes: attention runs through FlashAttention 2 when available
-(falling back to SDPA), texts are length-sorted into buckets to minimize
-padding waste, and the LM head + log-softmax + reduction is applied in
-position chunks to avoid materializing a ``[seq_len, vocab]`` logits tensor.
-
-Exactness is verified for standard CausalLM heads (hidden -> lm_head ->
-log_softmax). Architectures that post-process logits outside the head (e.g.
-final logit softcapping) are not supported.
-"""
-
 import gc
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -31,10 +8,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Tolerance (in nats) for outlier comparisons. Log-space is monotonic in
-# probability space, so `token_lp < threshold_lp - LOG_TOLERANCE` collapses
-# only true numerical ties. Matches the historical behaviour of the API-based
-# pathway.
+
 LOG_TOLERANCE = 1e-5
 
 PROGRESS_PRINT_INTERVAL = 500

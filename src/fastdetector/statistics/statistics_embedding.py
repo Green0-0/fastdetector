@@ -1,5 +1,3 @@
-"""Embedding-based text similarity metrics (cosine distance, BERTScore, MoverScore)."""
-
 import math
 import numpy as np
 import torch

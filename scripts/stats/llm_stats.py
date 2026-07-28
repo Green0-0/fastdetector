@@ -145,8 +145,6 @@ def main() -> None:
 
     new_columns: dict[str, list[float]] = {}
     if config.binoculars_score:
-        # Binoculars needs both models' distributions at each position, so the
-        # checkpoints are co-resident and everything is computed in one pass.
         print(f"Loading checkpoints (co-resident): {config.llm_checkpoints}")
         with exact_scorer_context(config.llm_checkpoints, settings) as scorer:
             for col, needed in plan.items():

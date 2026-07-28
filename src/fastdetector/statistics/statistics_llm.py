@@ -1,22 +1,3 @@
-"""Exact LLM-derived text metrics (perplexity, entropy, FastDetectGPT, Binoculars).
-
-Each function aggregates the exact per-position sufficient statistics produced
-by :mod:`fastdetector.statistics.exact_scorer` into a single per-text score.
-Because the scorer reduces the full next-token distribution at forward-pass
-time, no top-N tail-mass approximations are involved anywhere; all values are
-exact up to floating-point precision.
-
-Conventions for degenerate inputs (empty texts / no valid positions), kept
-from the previous implementation for dataset compatibility:
-
-- perplexity: NaN (undefined; 0.0 would read as "perfect prediction").
-- entropy: 0.0.
-- top-p / top-k outlier percentage: NaN (distinguishes "0% outliers" from
-  "metric undefined").
-- FastDetectGPT: 0.0 (also when the total variance is ~0).
-- Binoculars: 0.0 (also when the total cross-entropy is ~0).
-"""
-
 import math
 
 import numpy as np

@@ -51,9 +51,6 @@ def main() -> None:
         ds = ds.add_column("cosdist", pairwise_cosdist(emb_a, emb_b))
 
     # Token Embeddings (BERTScore, Moverscore)
-    # BERTScore produces three columns; treat the metric as computed only if
-    # all of them exist, and drop any partial subset before re-adding so a
-    # rerun can't crash on add_column against a leftover column.
     BERTSCORE_COLS = ["bertscore_precision", "bertscore_recall", "bertscore"]
     needs_bertscore = config.bertscore and any(c not in ds.column_names for c in BERTSCORE_COLS)
     needs_moverscore = config.moverscore and "moverscore" not in ds.column_names

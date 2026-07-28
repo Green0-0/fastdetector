@@ -59,10 +59,6 @@ def run_pipeline(
         else:
             extra_body[param] = val
 
-    # Surface configured sampling params the engine will not receive (e.g.
-    # temperature/top_p with the OAI engine, Aphrodite-only samplers with
-    # vLLM). These were previously dropped silently while the readme still
-    # reported them as if applied.
     ALL_SAMPLING_PARAMS = [
         "temperature", "top_p", "top_k", "presence_penalty", "disable_thinking",
         "top_a", "xtc_probability", "nsigma",
@@ -123,8 +119,6 @@ def run_pipeline(
 
     if engine.is_local_server:
         venv_path = globals_config.vllm_venv_path if engine == EngineConfig.VLLM else globals_config.aphrodite_venv_path
-        # Only forward max_model_len when set; passing None would override the
-        # server default and end up as a literal "--max-model-len None" flag.
         server_kwargs = {}
         if pipe_config.max_model_len is not None:
             server_kwargs["max_model_len"] = pipe_config.max_model_len

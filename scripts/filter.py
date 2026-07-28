@@ -81,12 +81,6 @@ def main() -> None:
 """
     print(f"Uploading updated dataset to {intermediate_dataset}...")
     ds.push_to_hub(intermediate_dataset, config_name="default")
-    # Note: no append_readme_source here. Passing the dataset's own name made
-    # every rerun prepend the dataset's previous README to the new content,
-    # so the README grew and duplicated across runs. upload_readme already
-    # preserves the existing YAML header on its own; readme_content fully
-    # describes this run. (The filtered dataset below intentionally appends
-    # FROM this intermediate README to compose the full pipeline history.)
     upload_readme(
         dataset_name=intermediate_dataset,
         readme_content=readme_content,
@@ -129,10 +123,6 @@ def main() -> None:
                 f"output_shards must be >= 1, got {filter_config.output_shards}."
             )
         if len(ds_filtered) < filter_config.output_shards:
-            # shard_size would be 0: every shard except the last would be
-            # empty, and downstream gen.py runs pointed at those shard ids
-            # would process nothing while the last shard silently got all
-            # the rows.
             raise ValueError(
                 f"Cannot split {len(ds_filtered)} filtered rows into "
                 f"{filter_config.output_shards} shards. Loosen the filter "
