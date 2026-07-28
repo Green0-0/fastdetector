@@ -131,6 +131,11 @@ def upload_readme(
 
     Returns:
         None.
+
+    Raises:
+        RuntimeError: if uploading the README or any associated file fails.
+            (Failing to *download* an existing README/YAML header is still
+            non-fatal; the upload proceeds without it.)
     """
     def _extract_yaml(text: str) -> tuple[str, str]:
         """Extract YAML frontmatter from a markdown string.
@@ -205,7 +210,14 @@ def upload_readme(
                 )
         print("README and files uploaded successfully.")
     except Exception as e:
-        print(f"Error uploading files to HuggingFace Hub: {e}")
+        # Don't swallow the failure: callers (filter.py, gen.py, analysis.py)
+        # run this as the final step of long pipelines, and a printed message
+        # followed by a zero exit code made lost READMEs/charts look like a
+        # successful run.
+        raise RuntimeError(
+            f"Failed to upload README/files to HuggingFace Hub dataset "
+            f"'{dataset_name}': {e}"
+        ) from e
 
 
 def apply_filter_conditions(
