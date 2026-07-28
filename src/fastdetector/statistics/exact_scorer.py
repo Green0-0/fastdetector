@@ -1,7 +1,9 @@
 import gc
+import queue
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Union
 
 import numpy as np
 import torch
@@ -29,7 +31,12 @@ class ScorerSettings:
             always reduced in float32.
         attn_implementation: Attention backend. None tries
             "flash_attention_2" and falls back to "sdpa".
-        device: Device to load models on.
+        devices: Devices to score on. "auto" uses every visible CUDA device
+            (falling back to CPU); otherwise an explicit non-empty list such
+            as ["cuda:0", "cuda:1"]. Each device gets its own replica of the
+            checkpoint(s), and batches are dispatched to replicas in
+            parallel; with cross-entropy enabled, every device holds both
+            checkpoints.
         compute_cross_entropy: Whether to compute the per-position
             observer->performer cross-entropy (requires two models; used by
             the Binoculars score).
@@ -42,14 +49,14 @@ class ScorerSettings:
     head_chunk_size: int = 512
     dtype: str = "bfloat16"
     attn_implementation: Optional[str] = None
-    device: str = "cuda"
+    devices: Union[str, list[str]] = "auto"
     compute_cross_entropy: bool = False
 
     def __post_init__(self) -> None:
-        """Validate threshold and sizing settings.
+        """Validate threshold, sizing, and device settings.
 
         Raises:
-            ValueError: if any threshold or size is out of range.
+            ValueError: if any setting is out of range.
         """
         if not (0 < self.topp_threshold <= 1):
             raise ValueError(f"topp_threshold must be in (0, 1], got {self.topp_threshold}")
@@ -58,6 +65,25 @@ class ScorerSettings:
         for name in ("max_model_len", "max_batch_tokens", "head_chunk_size"):
             if getattr(self, name) < 1:
                 raise ValueError(f"{name} must be >= 1, got {getattr(self, name)}")
+        if isinstance(self.devices, str):
+            if self.devices != "auto":
+                self.devices = [self.devices]
+        elif not self.devices:
+            raise ValueError('devices must be "auto" or a non-empty list of device strings')
+
+    def resolve_devices(self) -> list[str]:
+        """Resolve the devices setting to a concrete device list.
+
+        Returns:
+            The configured device list, or for "auto" every visible CUDA
+            device (respecting CUDA_VISIBLE_DEVICES), falling back to
+            ["cpu"] when no GPU is available.
+        """
+        if isinstance(self.devices, list):
+            return self.devices
+        if torch.cuda.is_available():
+            return [f"cuda:{i}" for i in range(torch.cuda.device_count())]
+        return ["cpu"]
 
 
 @dataclass
@@ -148,12 +174,13 @@ def _resolve_dtype(dtype: str) -> torch.dtype:
     return mapping[dtype]
 
 
-def _load_model(model_name: str, settings: ScorerSettings) -> torch.nn.Module:
+def _load_model(model_name: str, settings: ScorerSettings, device: str) -> torch.nn.Module:
     """Load a CausalLM in eval mode with the best available attention backend.
 
     Args:
         model_name: HuggingFace model ID or local path.
-        settings: Scorer settings (dtype, device, attention backend).
+        settings: Scorer settings (dtype, attention backend).
+        device: Device to place the model on.
 
     Returns:
         The loaded model.
@@ -173,8 +200,8 @@ def _load_model(model_name: str, settings: ScorerSettings) -> torch.nn.Module:
                 dtype=torch_dtype,
                 attn_implementation=attn,
             )
-            print(f"Loaded {model_name} with attn_implementation={attn}.")
-            model.to(settings.device)
+            print(f"Loaded {model_name} on {device} with attn_implementation={attn}.")
+            model.to(device)
             model.eval()
             return model
         except (ImportError, ValueError) as e:
@@ -191,44 +218,63 @@ class ExactScorer:
     persisting either model's distributions. All models are scored against the
     tokenization of the *first* model's tokenizer; when two models are used
     their vocab sizes must match.
+
+    For multi-GPU machines, one replica of the model group is held per device
+    and batches are dispatched to the replicas in parallel, so a single run
+    (one dataset shard) uses every configured GPU.
     """
 
     def __init__(
         self,
-        models: list[torch.nn.Module],
+        replicas: list[list[torch.nn.Module]],
         tokenizer,
         settings: ScorerSettings,
+        devices: list[str],
     ):
         """Initialize the scorer.
 
         Args:
-            models: One or two loaded CausalLM models.
+            replicas: One model group per device; each group holds the same
+                one or two loaded CausalLM models (checkpoint order).
             tokenizer: Tokenizer shared by all models (may be None if only
                 the pre-tokenized ``score_token_lists`` entry point is used).
             settings: Scorer settings.
+            devices: Device of each replica, aligned with ``replicas``.
 
         Raises:
-            ValueError: if the model count is invalid, cross-entropy is
-                requested without exactly two models, or vocab sizes mismatch.
+            ValueError: if the replica/device shapes are invalid, the model
+                count per group is invalid, cross-entropy is requested
+                without exactly two models, or vocab sizes mismatch.
         """
-        if len(models) not in (1, 2):
-            raise ValueError(f"ExactScorer supports 1 or 2 models, got {len(models)}.")
-        if settings.compute_cross_entropy and len(models) != 2:
+        if not replicas or len(replicas) != len(devices):
+            raise ValueError(
+                f"replicas ({len(replicas)}) must be non-empty and aligned "
+                f"with devices ({len(devices)})."
+            )
+        group_sizes = {len(group) for group in replicas}
+        if len(group_sizes) != 1:
+            raise ValueError(f"All replicas must hold the same models, got sizes {group_sizes}.")
+        num_models = group_sizes.pop()
+        if num_models not in (1, 2):
+            raise ValueError(f"ExactScorer supports 1 or 2 models per replica, got {num_models}.")
+        if settings.compute_cross_entropy and num_models != 2:
             raise ValueError("compute_cross_entropy requires exactly 2 models.")
-        if len(models) == 2:
-            vocabs = [m.get_output_embeddings().weight.shape[0] for m in models]
+        if num_models == 2:
+            vocabs = [m.get_output_embeddings().weight.shape[0] for m in replicas[0]]
             if vocabs[0] != vocabs[1]:
                 raise ValueError(
                     f"Vocab size mismatch between co-resident models: {vocabs}. "
                     f"Cross-model scoring requires a shared tokenizer/vocab."
                 )
-        min_vocab = min(m.get_output_embeddings().weight.shape[0] for m in models)
+        min_vocab = min(m.get_output_embeddings().weight.shape[0] for m in replicas[0])
         if settings.topk_threshold > min_vocab:
             raise ValueError(
                 f"topk_threshold ({settings.topk_threshold}) exceeds the model "
                 f"vocab size ({min_vocab})."
             )
-        self.models = models
+        self.replicas = replicas
+        self.devices = devices
+        self.num_models = num_models
         self.tokenizer = tokenizer
         self.settings = settings
 
@@ -279,7 +325,7 @@ class ExactScorer:
         # Compact int64 arrays keep corpus-scale tokenizations cheap in RAM
         # (~8 bytes/token vs ~28 for lists of Python ints).
         token_arrays = [np.asarray(ids, dtype=np.int64) for ids in token_lists]
-        num_models = len(self.models)
+        num_models = self.num_models
         with_ce = self.settings.compute_cross_entropy
         results: list[Optional[TextScores]] = [None] * len(token_arrays)
 
@@ -293,16 +339,63 @@ class ExactScorer:
 
         completed = 0
         total = len(scoreable)
-        for batch_indices in self._plan_batches(scoreable, token_arrays):
-            batch_scores = self._score_batch([token_arrays[i] for i in batch_indices])
-            for i, scores in zip(batch_indices, batch_scores):
-                results[i] = scores
-            completed += len(batch_indices)
+        label = f" [{progress_label}]" if progress_label else ""
+
+        def _report(batch_size: int) -> None:
+            """Print progress roughly every PROGRESS_PRINT_INTERVAL texts.
+
+            Args:
+                batch_size: Number of texts just completed.
+            """
+            nonlocal completed
+            completed += batch_size
             if total and (
-                completed % PROGRESS_PRINT_INTERVAL < len(batch_indices) or completed == total
+                completed % PROGRESS_PRINT_INTERVAL < batch_size or completed == total
             ):
-                label = f" [{progress_label}]" if progress_label else ""
                 print(f"  Progress{label}: {completed}/{total} texts scored", flush=True)
+
+        batches = list(self._plan_batches(scoreable, token_arrays))
+        if len(self.replicas) == 1:
+            for batch_indices in batches:
+                batch_scores = self._score_batch(
+                    [token_arrays[i] for i in batch_indices], replica_idx=0
+                )
+                for i, scores in zip(batch_indices, batch_scores):
+                    results[i] = scores
+                _report(len(batch_indices))
+            return results  # type: ignore[return-value]
+
+        # Multi-GPU: workers check a replica out of the queue per batch, so
+        # load stays balanced even when batch runtimes vary.
+        idle_replicas: queue.SimpleQueue[int] = queue.SimpleQueue()
+        for replica_idx in range(len(self.replicas)):
+            idle_replicas.put(replica_idx)
+
+        def _run_batch(batch_indices: list[int]) -> tuple[list[int], list[TextScores]]:
+            """Score one batch on the next idle replica.
+
+            Args:
+                batch_indices: Text indices forming the batch.
+
+            Returns:
+                The indices with their computed scores.
+            """
+            replica_idx = idle_replicas.get()
+            try:
+                batch_scores = self._score_batch(
+                    [token_arrays[i] for i in batch_indices], replica_idx=replica_idx
+                )
+            finally:
+                idle_replicas.put(replica_idx)
+            return batch_indices, batch_scores
+
+        with ThreadPoolExecutor(max_workers=len(self.replicas)) as executor:
+            futures = [executor.submit(_run_batch, batch) for batch in batches]
+            for future in as_completed(futures):
+                batch_indices, batch_scores = future.result()
+                for i, scores in zip(batch_indices, batch_scores):
+                    results[i] = scores
+                _report(len(batch_indices))
 
         return results  # type: ignore[return-value]
 
@@ -337,17 +430,22 @@ class ExactScorer:
             yield batch
 
     @torch.inference_mode()
-    def _score_batch(self, token_arrays: list[np.ndarray]) -> list[TextScores]:
+    def _score_batch(
+        self, token_arrays: list[np.ndarray], replica_idx: int = 0
+    ) -> list[TextScores]:
         """Run one padded forward pass per model and reduce to TextScores.
 
         Args:
             token_arrays: Token-ID arrays for this batch (each length >= 2).
+            replica_idx: Which replica (device) to score on. Each replica is
+                only ever used by one thread at a time.
 
         Returns:
             One TextScores per input, in batch order.
         """
         settings = self.settings
-        device = settings.device
+        device = self.devices[replica_idx]
+        models = self.replicas[replica_idx]
         lengths = [ids.shape[0] for ids in token_arrays]
         max_len = max(lengths)
         batch_size = len(token_arrays)
@@ -374,7 +472,7 @@ class ExactScorer:
         # Backbone forward per model (padding is right-side, so causal
         # attention never attends to pad tokens at valid positions).
         flat_hiddens = []
-        for model in self.models:
+        for model in models:
             hidden = model.get_decoder()(
                 input_ids=input_ids, attention_mask=attention_mask
             ).last_hidden_state
@@ -383,7 +481,7 @@ class ExactScorer:
 
         per_model_chunks: list[dict[str, list[torch.Tensor]]] = [
             {"token_lps": [], "entropies": [], "e_lp2": [], "topp": [], "topk": []}
-            for _ in self.models
+            for _ in models
         ]
         ce_chunks: list[torch.Tensor] = []
 
@@ -393,8 +491,8 @@ class ExactScorer:
             chunk_p_obs: Optional[torch.Tensor] = None
             chunk_logp_perf: Optional[torch.Tensor] = None
 
-            for model_idx, model in enumerate(self.models):
-                logits = self.models[model_idx].get_output_embeddings()(
+            for model_idx, model in enumerate(models):
+                logits = model.get_output_embeddings()(
                     flat_hiddens[model_idx][start:end]
                 ).float()
                 logp = F.log_softmax(logits, dim=-1)
@@ -467,7 +565,10 @@ class ExactScorer:
 
 @contextmanager
 def exact_scorer_context(checkpoints: list[str], settings: ScorerSettings):
-    """Load models for scoring and free their GPU memory on exit.
+    """Load model replicas for scoring and free their GPU memory on exit.
+
+    One replica of every checkpoint is loaded per resolved device, so a
+    single run can spread its batches across all GPUs of the machine.
 
     Args:
         checkpoints: One or two HuggingFace model IDs / local paths. The
@@ -477,18 +578,22 @@ def exact_scorer_context(checkpoints: list[str], settings: ScorerSettings):
     Yields:
         A ready ExactScorer.
     """
-    models: list[torch.nn.Module] = []
+    devices = settings.resolve_devices()
+    replicas: list[list[torch.nn.Module]] = []
     try:
         tokenizer = AutoTokenizer.from_pretrained(checkpoints[0])
-        for checkpoint in checkpoints:
-            models.append(_load_model(checkpoint, settings))
-        yield ExactScorer(models, tokenizer, settings)
+        print(f"Loading {len(checkpoints)} checkpoint(s) onto {len(devices)} device(s): {devices}")
+        for device in devices:
+            replicas.append(
+                [_load_model(checkpoint, settings, device) for checkpoint in checkpoints]
+            )
+        yield ExactScorer(replicas, tokenizer, settings, devices)
     finally:
         print("Freeing scoring model(s)...")
         # The scorer holds this same list object, so clearing it drops the
         # last references to the models even if the caller still holds the
         # scorer.
-        models.clear()
+        replicas.clear()
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

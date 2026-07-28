@@ -139,7 +139,7 @@ def main() -> None:
         head_chunk_size=config.head_chunk_size,
         dtype=config.dtype,
         attn_implementation=config.attn_implementation,
-        device=config.device,
+        devices=config.devices,
         compute_cross_entropy=config.binoculars_score,
     )
 
