@@ -276,6 +276,11 @@ def compute_editlens_scores(
     bucket_preds = np.argmax(probs, axis=1)
 
     bucket_labels = np.arange(n_buckets)
-    score_preds = (probs @ bucket_labels) / (n_buckets - 1)
+    if n_buckets > 1:
+        score_preds = (probs @ bucket_labels) / (n_buckets - 1)
+    else:
+        # A single-bucket checkpoint has no score range to normalize over;
+        # dividing by (n_buckets - 1) = 0 would yield NaN for every row.
+        score_preds = np.zeros(len(texts), dtype=float)
 
     return bucket_preds.tolist(), score_preds.tolist()
