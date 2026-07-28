@@ -101,7 +101,6 @@ def test_stage_config_validates(repo_root, relative_path, model):
 
 def test_gen_config_validates(gen_config_path):
     config = GenConfig(**load_toml(str(gen_config_path)))
-    assert config.num_samples > 0
     assert config.source_column
     assert config.pipeline.model_name
 

@@ -91,8 +91,12 @@ class PipeConfig(BaseModel):
 
 
 class GenConfig(BaseModel):
-    """Configuration for the generation script (gen.py)."""
-    num_samples: int
+    """Configuration for the generation script (gen.py).
+
+    How many rows a run covers is a property of the shard it reads, decided
+    when the source dataset is sharded (scripts/shard_dataset.py), so there is
+    no sample count here.
+    """
     source_column: str
     prompt_file: str
     pipeline: PipeConfig
@@ -100,7 +104,6 @@ class GenConfig(BaseModel):
 
 class FilterConfig(BaseModel):
     """Configuration for the filtering script (filter.py)."""
-    num_samples: int
     source_column: str
     prompt_file: str
     pipeline: PipeConfig

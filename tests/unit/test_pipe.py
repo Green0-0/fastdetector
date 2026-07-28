@@ -221,6 +221,14 @@ def test_sampling_stops_at_num_samples(pipeline_env):
     assert len(pipeline_env.calls["build_dataset"]["samples"]) == 5
 
 
+def test_no_num_samples_consumes_the_whole_shard(pipeline_env):
+    # What the entrypoints do: the shard already holds exactly the rows this
+    # run is meant to cover, so there is nothing left to cap.
+    pipeline_env.rows = [{"text": f"row {i}"} for i in range(100)]
+    run(pipeline_env, num_samples=None)
+    assert len(pipeline_env.calls["build_dataset"]["samples"]) == 100
+
+
 def test_rows_over_the_token_limit_are_dropped(pipeline_env):
     pipeline_env.rows = [
         {"text": "one two three four five"},

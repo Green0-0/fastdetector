@@ -142,18 +142,16 @@ def test_pipe_config_rejects_unknown_engine():
 
 def test_gen_config_roundtrip():
     config = GenConfig(
-        num_samples=10,
         source_column="text",
         prompt_file="prompts/p.json",
         pipeline=PIPELINE_FIELDS,
     )
     assert config.pipeline.engine is EngineConfig.VLLM
-    assert config.num_samples == 10
+    assert config.source_column == "text"
 
 
 def test_filter_config_defaults():
     config = FilterConfig(
-        num_samples=10,
         source_column="text",
         prompt_file="prompts/p.json",
         pipeline=PIPELINE_FIELDS,
@@ -165,7 +163,6 @@ def test_filter_config_defaults():
 
 def test_filter_config_parses_conditions():
     config = FilterConfig(
-        num_samples=1,
         source_column="text",
         prompt_file="p.json",
         pipeline=PIPELINE_FIELDS,

@@ -35,7 +35,7 @@ def test_load_config_pair_builds_both_models(data_dir):
     assert isinstance(globals_config, GlobalsConfig)
     assert isinstance(gen_config, GenConfig)
     assert gen_config.pipeline.engine is EngineConfig.VLLM
-    assert gen_config.num_samples == 8
+    assert gen_config.source_column == "collected_subset"
     assert globals_config.resolve_output_dataset(globals_config.gen_suffix) == (
         "testuser/testds-rewritten"
     )

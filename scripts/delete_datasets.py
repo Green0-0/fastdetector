@@ -5,9 +5,10 @@ from huggingface_hub import HfApi
 from fastdetector.frontend.toml_config import GlobalsConfig
 from fastdetector.frontend.toml_loader import load_toml
 
-# Pipeline stage -> the globals.toml field naming that stage's dataset.
+# Pipeline stage -> the globals.toml field naming that stage's dataset. Only
+# stages the pipeline *writes* are listed: raw is the one dataset a re-run
+# cannot rebuild, so deleting it stays a deliberate `hf repos delete`.
 STAGE_SUFFIX_FIELDS = {
-    "raw": "raw_suffix",
     "pre_filter": "pre_filter_suffix",
     "post_filter": "post_filter_suffix",
     "gen": "gen_suffix",

@@ -13,7 +13,8 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
 5. Activate it: ``source .vllm/bin/activate``
 6. Install vLLM: https://docs.vllm.ai/en/latest/getting_started/installation/
     - ie: ``uv pip install vllm --torch-backend cu130``
-7. ``uv run scripts/filter.py`` (after which you should run ``scripts/gen.py --gen-config config/gen/shard_0.toml``, then the ``scripts/stats/`` scripts, and finally ``scripts/analysis.py``)
+7. Shard your raw dataset, which is where you choose how much of it to use: ``uv run scripts/shard_dataset.py --num-shards 8 --num-samples 5000000``
+8. ``uv run scripts/filter.py --batch-id 0`` (after which you should run ``scripts/gen.py --gen-config config/gen/shard_0.toml``, then the ``scripts/stats/`` scripts, and finally ``scripts/analysis.py``). Every stage before the analysis takes a ``--batch-id`` naming the shard it processes.
 
 On a Slurm cluster, ``slurm/`` has one job script per stage; the sharded stages are array jobs
 (``sbatch slurm/filter.sbatch``, then ``gen``, ``stats/``, and finally ``analysis``).

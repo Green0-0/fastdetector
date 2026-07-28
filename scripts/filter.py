@@ -41,7 +41,6 @@ def main() -> None:
         globals_config=globals_config,
         pipe_config=filter_config.pipeline,
         prompt_file=filter_config.prompt_file,
-        num_samples=filter_config.num_samples,
         source_column=filter_config.source_column,
         source_dataset_name=source_dataset,
         batch_id=args.batch_id,

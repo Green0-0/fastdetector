@@ -35,15 +35,16 @@ if [[ ! -x .vllm/bin/vllm ]]; then
 fi
 
 BATCH_ID="${SLURM_ARRAY_TASK_ID:-0}"
-if (( BATCH_ID < 0 || BATCH_ID > 7 )); then
-  echo "No per-shard gen config for batch ${BATCH_ID} (expected 0-7)." >&2
+GEN_CONFIG="config/gen/shard_${BATCH_ID}.toml"
+if [[ ! -f "${GEN_CONFIG}" ]]; then
+  echo "No gen config at ${GEN_CONFIG}." >&2
   exit 1
 fi
 
 echo "Generating shard ${BATCH_ID}..."
 python scripts/gen.py \
     --globals-config config/globals.toml \
-    --gen-config "config/gen/shard_${BATCH_ID}.toml" \
+    --gen-config "${GEN_CONFIG}" \
     --batch-id "${BATCH_ID}"
 
 echo "Generation complete for shard ${BATCH_ID}."

@@ -15,10 +15,10 @@ def run_pipeline(
     globals_config: GlobalsConfig,
     pipe_config: PipeConfig,
     prompt_file: str,
-    num_samples: int,
     source_column: str,
     source_dataset_name: str,
     batch_id: int | None = None,
+    num_samples: int | None = None,
 ) -> tuple[Dataset, str]:
     """Run the generation pipeline and return the result dataset.
 
@@ -26,11 +26,14 @@ def run_pipeline(
         globals_config: GlobalsConfig with venv paths, dataset name resolution, etc.
         pipe_config: Pipeline settings (engine, model_name, etc).
         prompt_file: Path to the prompt file.
-        num_samples: Number of samples to process.
         source_column: The dataset column to extract text from.
         source_dataset_name: Dataset to read samples from.
         batch_id: Optional shard index (used for both the source subset_index
             and the target config_name).
+        num_samples: Number of samples to process. ``None`` (the default)
+            processes every row of the shard, which is what the pipeline
+            entrypoints do - how much data a run covers is decided once, when
+            the source dataset is sharded (scripts/shard_dataset.py).
 
     Returns:
         A tuple of (Dataset, readme_content) containing the generated samples and metadata.
@@ -82,7 +85,8 @@ def run_pipeline(
     prompt_list = load_prompts([prompt_file])
     prompts = PromptSet(prompt_list)
 
-    print(f"Streaming {num_samples} samples from {source_dataset_name} (subset index {batch_id})...")
+    sample_target = "all" if num_samples is None else num_samples
+    print(f"Streaming {sample_target} samples from {source_dataset_name} (subset index {batch_id})...")
     ds = load_dataset_auto_shard(source_dataset_name, split="train", subset_index=batch_id)
 
     samples = []
@@ -111,7 +115,7 @@ def run_pipeline(
 
         samples.append(text)
         tokens_or_words_processed += count
-        if len(samples) >= num_samples:
+        if num_samples is not None and len(samples) >= num_samples:
             break
 
     print(f"Dropped {dropped_count} samples over the length limit ({length_limit}).")
@@ -181,7 +185,7 @@ def run_pipeline(
 
 - Source Dataset: {source_dataset_name}
 - Source Column: {source_column}
-- Target Num Samples: {num_samples}
+- Target Num Samples: {sample_target}
 - Dropped Samples (over length limit {length_limit} {unit}): {dropped_count}
 - Failed API Requests: {failed_requests}
 

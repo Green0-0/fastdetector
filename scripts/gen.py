@@ -112,7 +112,6 @@ def main() -> None:
         globals_config=globals_config,
         pipe_config=task_config.pipeline,
         prompt_file=task_config.prompt_file,
-        num_samples=task_config.num_samples,
         source_column=task_config.source_column,
         source_dataset_name=source_dataset,
         batch_id=args.batch_id

@@ -1,4 +1,3 @@
-num_samples = 50000
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset_test.json"
 
