@@ -33,7 +33,7 @@ def perplexity(token_lps: np.ndarray) -> float:
     """
     if token_lps.size == 0:
         return float("nan")
-    avg_logprob = float(np.mean(token_lps))
+    avg_logprob = float(np.mean(token_lps, dtype=np.float64))
     try:
         return math.exp(-avg_logprob)
     except OverflowError:
@@ -51,7 +51,7 @@ def mean_entropy(entropies: np.ndarray) -> float:
     """
     if entropies.size == 0:
         return 0.0
-    return float(np.mean(entropies))
+    return float(np.mean(entropies, dtype=np.float64))
 
 
 def outlier_percentage(outlier_flags: np.ndarray) -> float:
@@ -65,7 +65,7 @@ def outlier_percentage(outlier_flags: np.ndarray) -> float:
     """
     if outlier_flags.size == 0:
         return float("nan")
-    return float(np.mean(outlier_flags))
+    return float(np.mean(outlier_flags, dtype=np.float64))
 
 
 def fastdetectgpt_score(

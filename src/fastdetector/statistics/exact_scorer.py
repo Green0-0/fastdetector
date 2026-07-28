@@ -71,6 +71,20 @@ class ScorerSettings:
     device: str = "cuda"
     compute_cross_entropy: bool = False
 
+    def __post_init__(self) -> None:
+        """Validate threshold and sizing settings.
+
+        Raises:
+            ValueError: if any threshold or size is out of range.
+        """
+        if not (0 < self.topp_threshold <= 1):
+            raise ValueError(f"topp_threshold must be in (0, 1], got {self.topp_threshold}")
+        if self.topk_threshold < 1:
+            raise ValueError(f"topk_threshold must be >= 1, got {self.topk_threshold}")
+        for name in ("max_model_len", "max_batch_tokens", "head_chunk_size"):
+            if getattr(self, name) < 1:
+                raise ValueError(f"{name} must be >= 1, got {getattr(self, name)}")
+
 
 @dataclass
 class TextScores:
@@ -123,6 +137,19 @@ def _empty_scores(num_models: int, with_cross_entropy: bool) -> TextScores:
         topk_outlier=[empty_b.copy() for _ in range(num_models)],
         cross_entropies=empty_f.copy() if with_cross_entropy else None,
     )
+
+
+def _concat_to_numpy(chunks: list[torch.Tensor], dtype) -> np.ndarray:
+    """Concatenate per-chunk 1D reduction tensors into a host numpy array.
+
+    Args:
+        chunks: Per-chunk 1D tensors.
+        dtype: Target numpy dtype.
+
+    Returns:
+        Concatenated numpy array.
+    """
+    return torch.cat(chunks).cpu().numpy().astype(dtype)
 
 
 def _resolve_dtype(dtype: str) -> torch.dtype:
@@ -221,6 +248,12 @@ class ExactScorer:
                     f"Vocab size mismatch between co-resident models: {vocabs}. "
                     f"Cross-model scoring requires a shared tokenizer/vocab."
                 )
+        min_vocab = min(m.get_output_embeddings().weight.shape[0] for m in models)
+        if settings.topk_threshold > min_vocab:
+            raise ValueError(
+                f"topk_threshold ({settings.topk_threshold}) exceeds the model "
+                f"vocab size ({min_vocab})."
+            )
         self.models = models
         self.tokenizer = tokenizer
         self.settings = settings
@@ -240,22 +273,19 @@ class ExactScorer:
         """
         if self.tokenizer is None:
             raise RuntimeError("score_texts requires a tokenizer; use score_token_lists instead.")
-        token_lists: list[list[int]] = []
-        for text in texts:
-            if not text or not text.strip():
-                token_lists.append([])
-                continue
-            token_lists.append(
-                self.tokenizer(
-                    text,
-                    truncation=True,
-                    max_length=self.settings.max_model_len,
-                )["input_ids"]
-            )
+        nonempty = [i for i, text in enumerate(texts) if text and text.strip()]
+        encoded = self.tokenizer(
+            [texts[i] for i in nonempty],
+            truncation=True,
+            max_length=self.settings.max_model_len,
+        )["input_ids"]
+        token_lists: list[np.ndarray] = [np.zeros(0, dtype=np.int64)] * len(texts)
+        for i, ids in zip(nonempty, encoded):
+            token_lists[i] = np.asarray(ids, dtype=np.int64)
         return self.score_token_lists(token_lists, progress_label=progress_label)
 
     def score_token_lists(
-        self, token_lists: list[list[int]], progress_label: str = ""
+        self, token_lists: list, progress_label: str = ""
     ) -> list[TextScores]:
         """Score pre-tokenized texts.
 
@@ -264,29 +294,33 @@ class ExactScorer:
         are returned in the original input order.
 
         Args:
-            token_lists: One token-ID list per text. Lists with fewer than 2
-                tokens yield empty scores (no next-token prediction exists).
+            token_lists: One token-ID sequence (list or int array) per text.
+                Sequences with fewer than 2 tokens yield empty scores (no
+                next-token prediction exists).
             progress_label: Optional label for progress prints.
 
         Returns:
             One TextScores per input, in input order.
         """
+        # Compact int64 arrays keep corpus-scale tokenizations cheap in RAM
+        # (~8 bytes/token vs ~28 for lists of Python ints).
+        token_arrays = [np.asarray(ids, dtype=np.int64) for ids in token_lists]
         num_models = len(self.models)
         with_ce = self.settings.compute_cross_entropy
-        results: list[Optional[TextScores]] = [None] * len(token_lists)
+        results: list[Optional[TextScores]] = [None] * len(token_arrays)
 
         scoreable = []
-        for i, ids in enumerate(token_lists):
-            if len(ids) < 2:
+        for i, ids in enumerate(token_arrays):
+            if ids.shape[0] < 2:
                 results[i] = _empty_scores(num_models, with_ce)
             else:
                 scoreable.append(i)
-        scoreable.sort(key=lambda i: len(token_lists[i]), reverse=True)
+        scoreable.sort(key=lambda i: token_arrays[i].shape[0], reverse=True)
 
         completed = 0
         total = len(scoreable)
-        for batch_indices in self._plan_batches(scoreable, token_lists):
-            batch_scores = self._score_batch([token_lists[i] for i in batch_indices])
+        for batch_indices in self._plan_batches(scoreable, token_arrays):
+            batch_scores = self._score_batch([token_arrays[i] for i in batch_indices])
             for i, scores in zip(batch_indices, batch_scores):
                 results[i] = scores
             completed += len(batch_indices)
@@ -299,16 +333,17 @@ class ExactScorer:
         return results  # type: ignore[return-value]
 
     def _plan_batches(
-        self, sorted_indices: list[int], token_lists: list[list[int]]
+        self, sorted_indices: list[int], token_arrays: list[np.ndarray]
     ) -> Iterator[list[int]]:
         """Greedily group length-sorted texts into padded-token-capped batches.
 
         Because indices arrive sorted by length (descending), the padded cost
-        of a batch is ``len(first_text) * batch_size``.
+        of a batch is ``len(first_text) * batch_size``. A single text longer
+        than ``max_batch_tokens`` still forms its own batch.
 
         Args:
             sorted_indices: Text indices sorted by token count, descending.
-            token_lists: All token-ID lists (indexed by the above).
+            token_arrays: All token-ID arrays (indexed by the above).
 
         Yields:
             Lists of text indices forming one batch each.
@@ -316,7 +351,7 @@ class ExactScorer:
         batch: list[int] = []
         batch_max_len = 0
         for i in sorted_indices:
-            n = len(token_lists[i])
+            n = token_arrays[i].shape[0]
             new_max = max(batch_max_len, n)
             if batch and new_max * (len(batch) + 1) > self.settings.max_batch_tokens:
                 yield batch
@@ -328,40 +363,38 @@ class ExactScorer:
             yield batch
 
     @torch.inference_mode()
-    def _score_batch(self, token_lists: list[list[int]]) -> list[TextScores]:
+    def _score_batch(self, token_arrays: list[np.ndarray]) -> list[TextScores]:
         """Run one padded forward pass per model and reduce to TextScores.
 
         Args:
-            token_lists: Token-ID lists for this batch (each length >= 2).
+            token_arrays: Token-ID arrays for this batch (each length >= 2).
 
         Returns:
             One TextScores per input, in batch order.
         """
         settings = self.settings
         device = settings.device
-        lengths = [len(ids) for ids in token_lists]
+        lengths = [ids.shape[0] for ids in token_arrays]
         max_len = max(lengths)
-        batch_size = len(token_lists)
+        batch_size = len(token_arrays)
 
-        input_ids = torch.zeros((batch_size, max_len), dtype=torch.long)
-        attention_mask = torch.zeros((batch_size, max_len), dtype=torch.long)
-        for row, ids in enumerate(token_lists):
-            input_ids[row, : len(ids)] = torch.tensor(ids, dtype=torch.long)
-            attention_mask[row, : len(ids)] = 1
-        input_ids = input_ids.to(device)
-        attention_mask = attention_mask.to(device)
+        input_ids_np = np.zeros((batch_size, max_len), dtype=np.int64)
+        attention_mask_np = np.zeros((batch_size, max_len), dtype=np.int64)
+        for row, ids in enumerate(token_arrays):
+            input_ids_np[row, : ids.shape[0]] = ids
+            attention_mask_np[row, : ids.shape[0]] = 1
+        input_ids = torch.from_numpy(input_ids_np).to(device)
+        attention_mask = torch.from_numpy(attention_mask_np).to(device)
 
         # Flat indices of every predicting position: position j of row r
         # predicts token j+1, valid for j in [0, len_r - 2].
-        rows, cols, targets = [], [], []
-        for row, ids in enumerate(token_lists):
-            m = len(ids) - 1
-            rows.extend([row] * m)
-            cols.extend(range(m))
-            targets.extend(ids[1:])
-        rows_t = torch.tensor(rows, dtype=torch.long, device=device)
-        cols_t = torch.tensor(cols, dtype=torch.long, device=device)
-        targets_t = torch.tensor(targets, dtype=torch.long, device=device)
+        position_counts = [n - 1 for n in lengths]
+        rows_np = np.repeat(np.arange(batch_size), position_counts)
+        cols_np = np.concatenate([np.arange(m) for m in position_counts])
+        targets_np = np.concatenate([ids[1:] for ids in token_arrays])
+        rows_t = torch.from_numpy(rows_np).to(device)
+        cols_t = torch.from_numpy(cols_np).to(device)
+        targets_t = torch.from_numpy(targets_np).to(device)
         num_positions = rows_t.shape[0]
 
         # Backbone forward per model (padding is right-side, so causal
@@ -400,10 +433,13 @@ class ExactScorer:
                 out["entropies"].append(-(p * logp).sum(dim=-1))
                 out["e_lp2"].append((p * logp.square()).sum(dim=-1))
 
-                kth_lp = torch.topk(logp, settings.topk_threshold, dim=-1).values[:, -1]
+                # One descending sort serves both outlier metrics: the k-th
+                # largest logprob for top-k, and the nucleus boundary for
+                # top-p.
+                sorted_lp, _ = torch.sort(logp, descending=True, dim=-1)
+                kth_lp = sorted_lp[:, settings.topk_threshold - 1]
                 out["topk"].append(token_lp < kth_lp - LOG_TOLERANCE)
 
-                sorted_lp, _ = torch.sort(logp, descending=True, dim=-1)
                 cum = sorted_lp.exp().cumsum(dim=-1)
                 thresholds = torch.full(
                     (end - start, 1), settings.topp_threshold, device=cum.device
@@ -429,29 +465,17 @@ class ExactScorer:
 
         del flat_hiddens
 
-        def _to_numpy(chunks: list[torch.Tensor], dtype) -> np.ndarray:
-            """Concatenate reduction chunks and move them to a numpy array.
-
-            Args:
-                chunks: Per-chunk 1D tensors.
-                dtype: Target numpy dtype.
-
-            Returns:
-                Concatenated numpy array.
-            """
-            return torch.cat(chunks).cpu().numpy().astype(dtype)
-
-        token_lps = [_to_numpy(c["token_lps"], np.float32) for c in per_model_chunks]
-        entropies = [_to_numpy(c["entropies"], np.float32) for c in per_model_chunks]
-        e_lp2 = [_to_numpy(c["e_lp2"], np.float32) for c in per_model_chunks]
-        topp = [_to_numpy(c["topp"], bool) for c in per_model_chunks]
-        topk = [_to_numpy(c["topk"], bool) for c in per_model_chunks]
-        ce = _to_numpy(ce_chunks, np.float32) if settings.compute_cross_entropy else None
+        token_lps = [_concat_to_numpy(c["token_lps"], np.float32) for c in per_model_chunks]
+        entropies = [_concat_to_numpy(c["entropies"], np.float32) for c in per_model_chunks]
+        e_lp2 = [_concat_to_numpy(c["e_lp2"], np.float32) for c in per_model_chunks]
+        topp = [_concat_to_numpy(c["topp"], bool) for c in per_model_chunks]
+        topk = [_concat_to_numpy(c["topk"], bool) for c in per_model_chunks]
+        ce = _concat_to_numpy(ce_chunks, np.float32) if settings.compute_cross_entropy else None
 
         results = []
         offset = 0
-        for ids in token_lists:
-            m = len(ids) - 1
+        for ids in token_arrays:
+            m = ids.shape[0] - 1
             sl = slice(offset, offset + m)
             results.append(
                 TextScores(
@@ -487,8 +511,9 @@ def exact_scorer_context(checkpoints: list[str], settings: ScorerSettings):
         yield ExactScorer(models, tokenizer, settings)
     finally:
         print("Freeing scoring model(s)...")
-        for model in models:
-            del model
+        # The scorer holds this same list object, so clearing it drops the
+        # last references to the models even if the caller still holds the
+        # scorer.
         models.clear()
         gc.collect()
         if torch.cuda.is_available():

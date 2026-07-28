@@ -19,6 +19,17 @@ PER_MODEL_METRICS = [
     ("fastdetectgpt_score", "fastdetectgpt"),
 ]
 
+# Output column stem -> aggregation over one text's scores for one model.
+METRIC_AGGREGATORS = {
+    "perplexity": lambda s, i: statistics_llm.perplexity(s.token_lps[i]),
+    "entropy": lambda s, i: statistics_llm.mean_entropy(s.entropies[i]),
+    "topp_outlier": lambda s, i: statistics_llm.outlier_percentage(s.topp_outlier[i]),
+    "topk_outlier": lambda s, i: statistics_llm.outlier_percentage(s.topk_outlier[i]),
+    "fastdetectgpt": lambda s, i: statistics_llm.fastdetectgpt_score(
+        s.token_lps[i], s.entropies[i], s.e_lp2[i]
+    ),
+}
+
 
 def build_compute_plan(column_names: list[str], config: LLMStatConfig) -> dict[str, set[str]]:
     """Determine which output columns are missing for each text column.
@@ -72,25 +83,8 @@ def compute_metric_columns(
             out_col = f"{col}_{stem}{suffix}"
             if out_col not in needed:
                 continue
-            values = []
-            for scores in scored:
-                if stem == "perplexity":
-                    values.append(statistics_llm.perplexity(scores.token_lps[model_idx]))
-                elif stem == "entropy":
-                    values.append(statistics_llm.mean_entropy(scores.entropies[model_idx]))
-                elif stem == "topp_outlier":
-                    values.append(statistics_llm.outlier_percentage(scores.topp_outlier[model_idx]))
-                elif stem == "topk_outlier":
-                    values.append(statistics_llm.outlier_percentage(scores.topk_outlier[model_idx]))
-                elif stem == "fastdetectgpt":
-                    values.append(
-                        statistics_llm.fastdetectgpt_score(
-                            scores.token_lps[model_idx],
-                            scores.entropies[model_idx],
-                            scores.e_lp2[model_idx],
-                        )
-                    )
-            result[out_col] = values
+            aggregate = METRIC_AGGREGATORS[stem]
+            result[out_col] = [aggregate(scores, model_idx) for scores in scored]
 
     if config.binoculars_score and f"{col}_binoculars" in needed:
         # Model 0 is the observer, model 1 the performer (checkpoint order).
@@ -124,6 +118,13 @@ def main() -> None:
     target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
     print(f"Loading {target_dataset} (subset index {args.batch_id})...")
     ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
+
+    missing_cols = [c for c in config.columns_to_score if c not in ds.column_names]
+    if missing_cols:
+        raise ValueError(
+            f"columns_to_score {missing_cols} not found in dataset {target_dataset} "
+            f"(available: {ds.column_names})"
+        )
 
     plan = build_compute_plan(ds.column_names, config)
     if not plan:
