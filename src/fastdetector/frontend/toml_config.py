@@ -114,6 +114,18 @@ class ClassifierConfig(BaseModel):
     name: str
     suffix: str
     direction: str = "higher_is_ai"
+    # Which of the global threshold settings apply to this classifier:
+    # "score" -> threshold_type_score / manual_threshold_score
+    # "bin"   -> threshold_type_bin / manual_threshold_bin
+    threshold_kind: str = "score"
+
+    @model_validator(mode="after")
+    def _check_threshold_kind(self):
+        if self.threshold_kind not in ("score", "bin"):
+            raise ValueError(
+                f'threshold_kind must be "score" or "bin", got {self.threshold_kind!r}.'
+            )
+        return self
 
 class AnalysisConfig(BaseModel):
     """Configuration for universal evaluation and subset breakdowns (analysis.py)."""
@@ -129,7 +141,9 @@ class AnalysisConfig(BaseModel):
     model_metadata_column: str
 
     # Thresholds & Splits.
-    # Set manual_threshold_* to None to auto-derive from validation sweep.
+    # Each classifier selects its settings via threshold_kind ("score"/"bin").
+    # Set the matching manual_threshold_* to a value to skip the validation
+    # sweep for that classifier and use the fixed threshold instead.
     validation_size: float
     threshold_type_bin: str
     threshold_type_score: str

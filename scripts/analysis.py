@@ -197,9 +197,27 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
         summary_stats_dict). The summary stats dict is the machine-readable
         JSON spec of all classifier results (see :func:`_build_summary_stats`).
     """
-    has_manual_score = eval_config.manual_threshold_score is not None
-    has_manual_bin = eval_config.manual_threshold_bin is not None
-    skip_val = has_manual_score and has_manual_bin
+    # Each classifier uses either the score or bin threshold settings,
+    # selected by its threshold_kind. A manual threshold, where set, applies
+    # to every classifier of that kind; the validation split is only skipped
+    # entirely when *all* configured classifiers have a manual threshold.
+    # (Previously the score settings were applied to every classifier, the
+    # bin fields were never read, and manual_threshold_score was silently
+    # ignored unless manual_threshold_bin happened to also be set.)
+    def _threshold_settings(clf) -> tuple:
+        """Resolve (manual_threshold, threshold_type) for a classifier.
+
+        Args:
+            clf: ClassifierConfig instance.
+
+        Returns:
+            Tuple of (manual_threshold or None, threshold_type string).
+        """
+        if clf.threshold_kind == "bin":
+            return eval_config.manual_threshold_bin, eval_config.threshold_type_bin
+        return eval_config.manual_threshold_score, eval_config.threshold_type_score
+
+    skip_val = all(_threshold_settings(c)[0] is not None for c in eval_config.classifiers)
 
     val_split = None if skip_val else eval_config.validation_size
     test_ds = result_ds
@@ -233,10 +251,11 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
         
         val_arrays, val_classes, val_names = _extract_classifier_data(val_ds, eval_config, clf, None)
         
-        if skip_val:
-            tw = StaticThresholdWrapper(eval_config.manual_threshold_score, flip_class=flip, name=clf.name)
+        manual_threshold, threshold_type = _threshold_settings(clf)
+        if manual_threshold is not None:
+            tw = StaticThresholdWrapper(manual_threshold, flip_class=flip, name=clf.name)
         else:
-            tw = ThresholdWrapper(val_arrays, val_classes, eval_config.threshold_type_score, flip_class=flip, name=clf.name, column_names=val_names)
+            tw = ThresholdWrapper(val_arrays, val_classes, threshold_type, flip_class=flip, name=clf.name, column_names=val_names)
             charts[f"SWEEP_{_safe_name(clf.name)}.png"] = tw.render_sweep_plot()
             
         clf_data[clf.name] = {'tw': tw, 'subsets': {}}
@@ -319,7 +338,9 @@ def _build_readme(result_ds: Dataset, eval_config, has_prompts: bool, has_model_
 
     for clf in eval_config.classifiers:
         lines.append(f"## Classifier {clf.name}")
-        if not skip_val:
+        # Only classifiers without a manual threshold ran a validation sweep
+        # (and therefore have a sweep plot to embed).
+        if _threshold_settings(clf)[0] is None:
             lines.append("### Validation Threshold Stats")
             safe_clf = _safe_name(clf.name)
             lines.append(f"![SWEEP_{safe_clf}](SWEEP_{safe_clf}.png)\n")
