@@ -107,8 +107,9 @@ def launch_engine_server(
 
     Raises:
         ValueError: if the engine is not a local-server engine.
-        RuntimeError: if the server fails to become healthy within the timeout
-            (currently 20 minutes). The subprocess is terminated before raising.
+        RuntimeError: if the server process exits before becoming healthy, or
+            if it fails to become healthy within the timeout (currently 20
+            minutes). On timeout the subprocess is terminated before raising.
     """
     if not engine.is_local_server:
         raise ValueError(
@@ -158,6 +159,17 @@ def launch_engine_server(
 
     last_progress_print = time.time()
     for i in range(HEALTH_CHECK_MAX_INTERVALS):
+        # If the server process has already exited, no amount of waiting will
+        # make the health check pass; fail immediately instead of spinning
+        # for the full timeout (up to 20 minutes) on e.g. a CUDA OOM, a bad
+        # model name, or a crashed engine.
+        exit_code = proc.poll()
+        if exit_code is not None:
+            raise RuntimeError(
+                f"{engine} server process exited with code {exit_code} before "
+                f"becoming healthy. Check the engine logs above for details."
+            )
+
         try:
             r = requests.get(health_url, timeout=2)
             if r.status_code == 200:
