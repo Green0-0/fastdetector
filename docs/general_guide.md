@@ -30,5 +30,7 @@ Stages #2 to #4 take a `--batch-id`: each one processes the shard with that inde
 
 `slurm/` holds a job script per stage, with the sharded ones submitted as array jobs (their `--array` range and your `--num-shards` have to agree). If you need to start over, `scripts/delete_datasets.py` deletes the datasets a set of stages wrote (it only lists them unless you pass `--yes`).
 
+Every GPU stage points its compile caches at node-local disk (`/tmp/fd_$SLURM_JOB_ID`) and deletes them on exit. This is not optional on a cluster whose `$HOME` is NFS: Triton otherwise writes to `$HOME/.triton`, and several array tasks compiling the same kernels into that one shared directory race each other until NFS returns `ESTALE` — which shows up as `Triton compilation failed` / `OSError: [Errno 116] Stale file handle` and kills the worker, looking for all the world like a CUDA problem. It also keeps compile artifacts out of a quota-limited home directory. If your `/tmp` is small or not node-local, override `FD_CACHE_ROOT` in the job scripts.
+
 The configuration parameters are reasonably straightforward, consult your favorite agent or raise an issue for help if absolutely necessary.
 

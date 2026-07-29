@@ -26,6 +26,20 @@ export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:${CPLUS_INCLUDE_PATH:-}
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
+# ---- Compile caches on node-local disk ----
+# Triton defaults to $HOME/.triton. $HOME is NFS here, and concurrent engines
+# compiling the same kernels into one shared directory race each other; NFS
+# answers with ESTALE ("Stale file handle"), which surfaces as a Triton
+# compilation failure and kills the worker. $HOME is also quota-limited, so
+# filling it with compile artifacts is undesirable regardless.
+# SLURM_JOB_ID is distinct per array task, so each task gets its own root.
+FD_CACHE_ROOT="/tmp/fd_${SLURM_JOB_ID:-$$}"
+export TRITON_CACHE_DIR="${FD_CACHE_ROOT}/triton"
+export TORCHINDUCTOR_CACHE_DIR="${FD_CACHE_ROOT}/inductor"
+export VLLM_CACHE_ROOT="${FD_CACHE_ROOT}/vllm"
+mkdir -p "${TRITON_CACHE_DIR}" "${TORCHINDUCTOR_CACHE_DIR}" "${VLLM_CACHE_ROOT}"
+trap 'rm -rf "${FD_CACHE_ROOT}"' EXIT
+
 # ---- vLLM venv (launched as a subprocess by the pipeline) ----
 if [[ ! -x .vllm/bin/vllm ]]; then
   echo "vLLM venv not found at .vllm; see README.md" >&2
