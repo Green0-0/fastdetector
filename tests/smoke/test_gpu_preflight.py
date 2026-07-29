@@ -7,9 +7,26 @@ peak fits inside a fraction of the card.
 
     pytest -m "gpu and slow"
 
+What this does and does not prove
+---------------------------------
+The synthetic batches below are built to be the worst case the *configuration*
+allows: every text is padded to the configured sequence cap and there are as
+many of them as the batch size permits. That is the shape that OOMs, because
+``SentenceTransformer.encode`` sorts inputs by length and pads each batch to its
+longest member, so the longest rows in a shard end up batched together.
+
+It is still synthetic. A green run here means "this config fits when saturated",
+not "this shard fits" -- token counts, and therefore activation sizes, depend on
+what the text actually is. Set ``FASTDETECTOR_TEST_PREFLIGHT_DATASET`` to push
+the longest rows of a real shard through instead, which is the only check that
+observes the true worst case.
+
 Knobs:
     ``FASTDETECTOR_TEST_VRAM_BUDGET`` - allowed fraction of total VRAM (default 0.9)
     ``FASTDETECTOR_TEST_CUDA_DEVICE`` - device to report against (default cuda:0)
+    ``FASTDETECTOR_TEST_PREFLIGHT_DATASET`` - real dataset to sample (default: unset, skips)
+    ``FASTDETECTOR_TEST_PREFLIGHT_SHARD`` - which shard/batch-id to sample (default 0)
+    ``FASTDETECTOR_TEST_PREFLIGHT_ROWS`` - how many of the longest rows to use (default 8)
 """
 
 import os
@@ -102,6 +119,103 @@ def worst_case_token_lists(settings: ScorerSettings, vocab_size: int) -> list[np
     return [
         rng.integers(0, vocab_size, size=length, dtype=np.int64) for _ in range(count)
     ]
+
+
+def saturating_texts(count: int, max_tokens: int) -> list[str]:
+    """Build ``count`` texts that each fill ``max_tokens`` after truncation.
+
+    The point is padding, not length: a batch is padded to its longest member,
+    so a batch of saturated texts costs far more than the nominal-length batch
+    the preflight used to build. Roughly two words per token target guarantees
+    the tokenizer truncates rather than falls short.
+
+    Args:
+        count: Number of texts (i.e. the configured batch size).
+        max_tokens: Sequence cap each text should reach.
+
+    Returns:
+        A list of ``count`` identical over-long texts.
+    """
+    return ["word " * (2 * max_tokens)] * count
+
+
+def configured_sequence_cap(config, attribute: str, fallback: int = 8192) -> int:
+    """Resolve the sequence cap a distance-stats pass will actually apply.
+
+    Reads the cap off the config if present, and otherwise falls back rather
+    than assuming the checkpoint's own limit (40960 for the Qwen3 models),
+    which would make the preflight allocate far past anything the stage does.
+
+    Args:
+        config: The loaded ``DistanceStatConfig``.
+        attribute: Config field holding the cap.
+        fallback: Used when the config does not carry the field or leaves it unset.
+
+    Returns:
+        The effective sequence cap in tokens.
+    """
+    return getattr(config, attribute, None) or fallback
+
+
+def _cap_kwarg(config, attribute: str, kwarg: str) -> dict:
+    """Forward a configured cap only if this checkout supports it.
+
+    The caps are added by the sequence-length PR; keeping this optional means
+    the preflight works on a checkout with or without that change, rather than
+    failing with an unexpected keyword argument.
+
+    Args:
+        config: The loaded ``DistanceStatConfig``.
+        attribute: Config field holding the cap.
+        kwarg: Keyword name the helper expects.
+
+    Returns:
+        A dict suitable for ``**`` expansion: empty when unsupported.
+    """
+    value = getattr(config, attribute, None)
+    return {kwarg: value} if value is not None else {}
+
+
+def longest_real_rows(config, count: int):
+    """Return the longest ``count`` (human, ai) pairs from a real shard.
+
+    Skips unless ``FASTDETECTOR_TEST_PREFLIGHT_DATASET`` names a dataset. This
+    is the check that would have caught the original gap: the synthetic batch
+    models the configuration, this one observes the data.
+
+    Args:
+        config: The loaded ``DistanceStatConfig``, for the column names.
+        count: How many of the longest rows to take.
+
+    Returns:
+        Tuple of (human_texts, ai_texts).
+    """
+    name = os.environ.get("FASTDETECTOR_TEST_PREFLIGHT_DATASET")
+    if not name:
+        pytest.skip("set FASTDETECTOR_TEST_PREFLIGHT_DATASET to sample a real shard")
+
+    from fastdetector.utils import load_dataset_auto_shard
+
+    shard = int(os.environ.get("FASTDETECTOR_TEST_PREFLIGHT_SHARD", "0"))
+    dataset = load_dataset_auto_shard(name, split="train", subset_index=shard)
+
+    for column in (config.human_column, config.ai_column):
+        if column not in dataset.column_names:
+            pytest.skip(f"'{name}' has no column '{column}'")
+
+    human = dataset[config.human_column]
+    ai = dataset[config.ai_column]
+    pairs = sorted(
+        zip(human, ai), key=lambda pair: len(pair[0] or "") + len(pair[1] or ""), reverse=True
+    )[:count]
+    if not pairs:
+        pytest.skip(f"'{name}' shard {shard} is empty")
+
+    print(
+        f"\n[preflight] longest {len(pairs)} rows of {name} shard {shard}: "
+        f"{[len(a or '') + len(b or '') for a, b in pairs]} chars"
+    )
+    return [a or "" for a, b in pairs], [b or "" for a, b in pairs]
 
 
 # --------------------------------------------------------------------------
@@ -269,17 +383,20 @@ def test_distance_stats_embedding_model_fits_in_vram(repo_root):
     if not (config.cosdist or config.softngram):
         pytest.skip("no embedding metric is enabled in config/distance_stats.toml")
 
-    long_text = "The committee approved the proposal after a careful debate. " * 200
+    cap = configured_sequence_cap(config, "embedding_max_seq_length")
+    texts = saturating_texts(config.embedding_batch_size, cap)
+
     reset_peaks()
     embeddings = batch_gen_embeddings(
-        [long_text] * config.embedding_batch_size,
+        texts,
         model_name=config.embedding_model,
         batch_size=config.embedding_batch_size,
+        **_cap_kwarg(config, "embedding_max_seq_length", "max_seq_length"),
     )
 
     assert embeddings.shape[0] == config.embedding_batch_size
     assert np.allclose(np.linalg.norm(embeddings, axis=1), 1.0, atol=1e-2)
-    assert_within_budget("distance_stats (embedding model)")
+    assert_within_budget(f"distance_stats (embeddings, {config.embedding_batch_size}x{cap} tokens)")
 
 
 @pytest.mark.bigmem
@@ -293,13 +410,15 @@ def test_distance_stats_token_embedding_model_fits_in_vram(repo_root):
     if not (config.bertscore or config.moverscore):
         pytest.skip("no token-level metric is enabled in config/distance_stats.toml")
 
-    long_text = "The committee approved the proposal after a careful debate. " * 200
-    count = config.token_embedding_batch_size * 2
+    # This pass truncates at 512 internally, so saturating past that is what a
+    # full batch of long documents costs.
+    texts = saturating_texts(config.token_embedding_batch_size * 2, 512)
+
     reset_peaks()
     chunks = list(
         generate_token_embeddings_pairs(
-            [long_text] * count,
-            [long_text] * count,
+            texts,
+            texts,
             model_name=config.token_embedding_model,
             batch_size=config.token_embedding_batch_size,
             chunk_size=config.token_embedding_chunk_size,
@@ -307,4 +426,73 @@ def test_distance_stats_token_embedding_model_fits_in_vram(repo_root):
     )
 
     assert chunks
-    assert_within_budget("distance_stats (token embedding model)")
+    assert_within_budget("distance_stats (token embeddings, saturated batch)")
+
+
+@pytest.mark.bigmem
+@pytest.mark.network
+def test_distance_stats_reranker_fits_in_vram(repo_root):
+    """The reranker is the other pass with no cap of its own.
+
+    It was missing from the preflight entirely, despite being one of the two
+    stages measured OOMing on the A5000.
+    """
+    from fastdetector.statistics.embeddings_api import batch_cross_encoder
+
+    config = DistanceStatConfig(
+        **load_toml(str(repo_root / "config" / "distance_stats.toml"))
+    )
+    if not config.reranker:
+        pytest.skip("reranker is not enabled in config/distance_stats.toml")
+
+    cap = configured_sequence_cap(config, "reranker_max_length")
+    texts = saturating_texts(config.reranker_batch_size, cap)
+
+    reset_peaks()
+    scores = batch_cross_encoder(
+        texts,
+        texts,
+        model_name=config.reranker_model,
+        batch_size=config.reranker_batch_size,
+        **_cap_kwarg(config, "reranker_max_length", "max_length"),
+    )
+
+    assert len(scores) == len(texts)
+    assert_within_budget(f"distance_stats (reranker, {config.reranker_batch_size}x{cap} tokens)")
+
+
+# --------------------------------------------------------------------------
+# Against real data
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.bigmem
+@pytest.mark.network
+def test_distance_stats_embeddings_fit_the_longest_real_rows(repo_root):
+    """Push the longest rows of an actual shard through the embedding pass.
+
+    The synthetic batch models the configuration; this observes the data. It is
+    the check that would have caught a preflight passing an hour before the
+    stage OOMed on the same hardware and the same config.
+    """
+    from fastdetector.statistics.embeddings_api import batch_gen_embeddings
+
+    config = DistanceStatConfig(
+        **load_toml(str(repo_root / "config" / "distance_stats.toml"))
+    )
+    if not config.cosdist:
+        pytest.skip("cosdist is not enabled in config/distance_stats.toml")
+
+    count = int(os.environ.get("FASTDETECTOR_TEST_PREFLIGHT_ROWS", "8"))
+    human, ai = longest_real_rows(config, count)
+
+    reset_peaks()
+    for texts in (human, ai):
+        batch_gen_embeddings(
+            texts,
+            model_name=config.embedding_model,
+            batch_size=config.embedding_batch_size,
+            **_cap_kwarg(config, "embedding_max_seq_length", "max_seq_length"),
+        )
+
+    assert_within_budget("distance_stats (embeddings, longest real rows)")

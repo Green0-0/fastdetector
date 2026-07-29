@@ -88,6 +88,26 @@ pytest -m "gpu and slow" tests/smoke/test_gpu_preflight.py -s
 `-s` shows the headroom line even when the test passes. Tune the allowance with
 `FASTDETECTOR_TEST_VRAM_BUDGET` (default `0.9`).
 
+**What a green preflight does and does not prove.** The synthetic batches are
+saturated: every text is padded to the configured sequence cap and there are as
+many of them as the batch size allows. That is the shape that OOMs, because
+`SentenceTransformer.encode` sorts by length and pads each batch to its longest
+member, so the longest rows in a shard get batched together.
+
+It is still synthetic. Passing means *this config fits when saturated*, not
+*this shard fits* — token counts, and so activation sizes, depend on the actual
+text. To check the data rather than the configuration, point the preflight at a
+real shard:
+
+```bash
+FASTDETECTOR_TEST_PREFLIGHT_DATASET=G-reen/cc-2021-stat \
+  pytest -m "gpu and slow" tests/smoke/test_gpu_preflight.py -s
+```
+
+That pulls the longest `FASTDETECTOR_TEST_PREFLIGHT_ROWS` rows (default 8) of
+shard `FASTDETECTOR_TEST_PREFLIGHT_SHARD` (default 0) and runs those. It skips
+when the variable is unset, so it costs nothing by default.
+
 `tests/smoke/test_pipeline_smoke.py` is the equivalent for generation: it boots
 the real engine from `config/gen/shard_0.toml` and runs documents through
 `run_pipeline` end to end.
@@ -106,6 +126,9 @@ the real engine from `config/gen/shard_0.toml` and runs documents through
 | `FASTDETECTOR_TEST_GEN_CONFIG` | `config/gen/shard_0.toml` | which gen config the pipeline smoke test boots |
 | `FASTDETECTOR_TEST_FILTER_ENGINE` | *(unset - test skips)* | also boot the filter model |
 | `FASTDETECTOR_TEST_VRAM_BUDGET` | `0.9` | allowed fraction of VRAM in the preflight |
+| `FASTDETECTOR_TEST_PREFLIGHT_DATASET` | *(unset - test skips)* | real dataset whose longest rows the preflight samples |
+| `FASTDETECTOR_TEST_PREFLIGHT_SHARD` | `0` | which shard/batch-id to sample |
+| `FASTDETECTOR_TEST_PREFLIGHT_ROWS` | `8` | how many of the longest rows to use |
 | `FASTDETECTOR_TEST_CUDA_DEVICE` | `cuda:0` | device the GPU tier reports against |
 | `FASTDETECTOR_TEST_OFFLINE` | *(unset)* | set to `1` to skip every `network` test |
 | `VLLM_VENV_PATH` | `vllm_venv_path` in `globals.toml`, else `.vllm` | engine venv the `vllm` tier looks for a binary in |
