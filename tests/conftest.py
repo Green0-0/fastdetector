@@ -56,11 +56,39 @@ def _network_disabled() -> str | None:
     return None
 
 
-def _vllm_available() -> bool:
-    """Return True if the vllm package is importable in the running interpreter."""
-    import importlib.util
+def _engine_venv_path() -> Path:
+    """Return the engine venv the pipeline would launch its server from.
 
-    return importlib.util.find_spec("vllm") is not None
+    Resolution order matches the pipeline's own: the ``VLLM_VENV_PATH``
+    override, then ``vllm_venv_path`` in globals.toml, then the ``.vllm``
+    default. Relative paths are anchored to the repository root so the gate
+    does not depend on the working directory.
+
+    Returns:
+        Absolute path to the engine venv.
+    """
+    venv = os.environ.get("VLLM_VENV_PATH")
+    if not venv:
+        try:
+            from fastdetector.frontend.toml_loader import load_toml
+
+            venv = load_toml(str(REPO_ROOT / "config" / "globals.toml")).get(
+                "vllm_venv_path"
+            )
+        except Exception:
+            venv = None
+    path = Path(venv or ".vllm")
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _engine_binary_available() -> bool:
+    """Return True if a populated engine venv exists on disk.
+
+    The pipeline never imports vllm -- ``llm_server_context`` launches
+    ``<venv>/bin/vllm`` as a subprocess -- so an executable binary, not an
+    importable package, is what the ``vllm`` tier actually requires.
+    """
+    return os.access(_engine_venv_path() / "bin" / "vllm", os.X_OK)
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
@@ -78,8 +106,8 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
         reason = _network_disabled()
         if reason:
             pytest.skip(f"network tests disabled ({reason})")
-    if "vllm" in item.keywords and not _vllm_available():
-        pytest.skip("vllm is not importable (run this tier from the .vllm venv)")
+    if "vllm" in item.keywords and not _engine_binary_available():
+        pytest.skip(f"no engine binary at {_engine_venv_path() / 'bin' / 'vllm'}")
 
 
 # --------------------------------------------------------------------------

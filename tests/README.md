@@ -24,7 +24,7 @@ filter, so selecting a tier is a single flag.
 | `network` | Downloads from the HF Hub. | `pytest -m network` |
 | `gpu` | Needs a CUDA device. | `pytest -m gpu` |
 | `bigmem` | Needs a lot of host RAM. | `pytest -m "gpu and bigmem"` |
-| `vllm` | Must run inside the vLLM venv. | `source .vllm/bin/activate && pytest -m vllm` |
+| `vllm` | Boots the real engine binary from `.vllm`. | `pytest -m vllm` |
 
 Combine them like any other marker expression:
 
@@ -36,7 +36,16 @@ pytest -m ""                       # absolutely everything
 Markers declare *intent*; a second mechanism (`pytest_runtest_setup` in
 `tests/conftest.py`) checks the *environment*. A `gpu` test explicitly selected
 on a CPU-only box **skips with a reason** rather than erroring, and the same
-goes for `vllm` outside the engine venv and `network` when `HF_HUB_OFFLINE=1`.
+goes for `vllm` with no engine binary on disk and `network` when
+`HF_HUB_OFFLINE=1`.
+
+Every tier, `vllm` included, runs from the **main** venv. The pipeline never
+imports `vllm`: `llm_server_context` launches `<vllm_venv_path>/bin/vllm` as a
+subprocess, so the tier needs that binary to exist, not the package to be
+importable. `.vllm` holds the engine but not the project's own dependencies, so
+running the suite from inside it cannot even import `tests/conftest.py`. The
+venv is located from `VLLM_VENV_PATH`, then `vllm_venv_path` in `globals.toml`,
+then `.vllm`.
 
 ## Layout
 
@@ -99,6 +108,7 @@ the real engine from `config/gen/shard_0.toml` and runs documents through
 | `FASTDETECTOR_TEST_VRAM_BUDGET` | `0.9` | allowed fraction of VRAM in the preflight |
 | `FASTDETECTOR_TEST_CUDA_DEVICE` | `cuda:0` | device the GPU tier reports against |
 | `FASTDETECTOR_TEST_OFFLINE` | *(unset)* | set to `1` to skip every `network` test |
+| `VLLM_VENV_PATH` | `vllm_venv_path` in `globals.toml`, else `.vllm` | engine venv the `vllm` tier looks for a binary in |
 
 Point the model variables at the production checkpoints to smoke those instead
 of the tiny defaults:
