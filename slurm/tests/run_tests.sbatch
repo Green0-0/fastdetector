@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fastdetector_tests
-#SBATCH --output=fastdetector_tests_%j.out
-#SBATCH --error=fastdetector_tests_%j.err
+#SBATCH --output=slurm/logs/%x_%j.out
+#SBATCH --error=slurm/logs/%x_%j.err
 #SBATCH --time=02:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
