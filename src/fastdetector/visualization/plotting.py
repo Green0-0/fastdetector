@@ -169,8 +169,41 @@ def get_scatterplot(
     return _save_fig_to_png()
 
 
+#: Physical size of one heatmap cell, in inches. The figure grows with the
+#: number of statistics instead of shrinking their labels, so a 6-variable and
+#: a 40-variable heatmap are equally readable once opened at full size.
+HEATMAP_CELL_INCHES = 0.62
+
+#: Past this many statistics even a cell-sized figure cannot carry a number per
+#: cell, so the annotations are dropped and the colours carry the reading.
+HEATMAP_MAX_ANNOTATED = 60
+
+
+def _format_correlation(value: float) -> str:
+    """Render a correlation for display inside a heatmap cell.
+
+    Space in a cell is the binding constraint, so the redundant leading zero
+    goes ("-.85", not "-0.85") and a perfect correlation is just "1".
+
+    Args:
+        value: Correlation coefficient, possibly NaN.
+
+    Returns:
+        Compact label, or ``"n/a"`` when the pair had nothing to correlate.
+    """
+    if value != value:
+        return "n/a"
+    if abs(value) >= 0.995:
+        return "1" if value > 0 else "-1"
+    return f"{value:.2f}".replace("0.", ".", 1)
+
+
 def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
     """Compute pairwise Pearson correlations among series and render a heatmap.
+
+    Only the lower triangle is drawn: the upper half is its mirror image, and
+    dropping it halves what the reader has to scan and leaves room for the
+    coefficient in every remaining cell.
 
     Args:
         series: List of ``(values, label)`` tuples.
@@ -187,7 +220,8 @@ def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
     # Columns that are the same length, complete and non-constant correlate in
     # one vectorised call; with a few dozen statistics over millions of rows
     # the pairwise loop below is minutes of work, and this is the common case.
-    length = len(arrays[0]) if arrays else 0
+    lengths = [len(arr) for arr in arrays]
+    length = max(set(lengths), key=lengths.count) if lengths else 0
     clean = [
         i for i, arr in enumerate(arrays)
         if len(arr) == length and len(arr) > 1
@@ -212,28 +246,47 @@ def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
                 continue
             matrix[i, j] = float(np.corrcoef(a, b)[0, 1])
 
-    # Keep the figure legible whether it holds 4 statistics or 40: past a few
-    # dozen cells the per-cell numbers are unreadable, so drop them and let the
-    # colour bar carry the scale.
-    size = min(24.0, max(6.0, 0.55 * n + 3.0))
-    fig, ax = plt.subplots(figsize=(size, size))
-    image = ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
-    fig.colorbar(image, ax=ax, shrink=0.75, label="Pearson r")
+    # The upper triangle repeats the lower one; blank it so the eye only has
+    # half a matrix to read. The diagonal stays as a visual anchor for finding
+    # a row's own label.
+    shown = np.where(np.triu(np.ones((n, n), dtype=bool), k=1), np.nan, matrix)
 
-    tick_size = 10 if n <= 20 else max(5, int(200 / n))
-    ax.set_xticks(np.arange(n), labels=names, fontsize=tick_size)
-    ax.set_yticks(np.arange(n), labels=names, fontsize=tick_size)
+    size = max(6.0, HEATMAP_CELL_INCHES * n + 3.0)
+    fig, ax = plt.subplots(figsize=(size, size))
+    colours = plt.get_cmap("coolwarm").copy()
+    colours.set_bad("white")
+    image = ax.imshow(shown, cmap=colours, vmin=-1, vmax=1)
+
+    # Chrome scales with the figure: fixed point sizes vanish once the canvas
+    # is 25 inches across.
+    chrome = max(10.0, 0.45 * size)
+    bar = fig.colorbar(image, ax=ax, shrink=0.6)
+    bar.set_label("Pearson r", fontsize=chrome)
+    bar.ax.tick_params(labelsize=chrome)
+
+    ax.set_xticks(np.arange(n), labels=names, fontsize=10)
+    ax.set_yticks(np.arange(n), labels=names, fontsize=10)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
-    if n <= 20:
-        for i in range(n):
-            for j in range(n):
-                val = matrix[i, j]
-                text_color = "w" if abs(val) > 0.5 else "black"
-                ax.text(j, i, f"{val:.2f}", ha="center", va="center",
-                        color=text_color, fontsize=tick_size)
+    # Hairlines between cells: without them a block of similar correlations
+    # reads as one smear.
+    ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="white", linewidth=0.5)
+    ax.tick_params(which="minor", length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
 
-    ax.set_title(title)
+    if n <= HEATMAP_MAX_ANNOTATED:
+        for i in range(n):
+            for j in range(i + 1):
+                value = matrix[i, j]
+                # White on the saturated ends, black in the pale middle.
+                colour = "white" if abs(value) > 0.55 else "black"
+                ax.text(j, i, _format_correlation(value), ha="center", va="center",
+                        color="darkgray" if value != value else colour, fontsize=9)
+
+    ax.set_title(title, fontsize=chrome * 1.4, pad=12)
     fig.tight_layout()
     buf = io.BytesIO()
     plt.savefig(buf, format="png", bbox_inches="tight", dpi=150)

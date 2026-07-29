@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from fastdetector.visualization.plotting import (
+    _format_correlation,
     compute_row_emojis,
     format_confusion_matrix,
     generate_pearson_heatmap,
@@ -307,6 +308,59 @@ def test_pearson_heatmap_returns_png_bytes():
 def test_pearson_heatmap_handles_an_empty_series():
     series = [(np.array([]), "empty"), (np.linspace(0, 1, 10), "b")]
     assert generate_pearson_heatmap(series, "Title").startswith(PNG_MAGIC)
+
+
+def test_pearson_heatmap_handles_a_constant_and_a_partly_missing_series():
+    rng = np.random.default_rng(0)
+    partly = rng.normal(size=50)
+    partly[:5] = np.nan
+    series = [
+        (rng.normal(size=50), "ok"),
+        (np.full(50, 0.5), "constant"),
+        (partly, "partly missing"),
+    ]
+    assert generate_pearson_heatmap(series, "Title").startswith(PNG_MAGIC)
+
+
+def test_pearson_heatmap_grows_with_the_number_of_statistics():
+    # Labels and per-cell numbers keep a fixed point size, so the canvas is
+    # what has to grow - a 36-statistic heatmap squeezed into 6 inches is the
+    # unreadable smear this replaced.
+    rng = np.random.default_rng(0)
+    few = [(rng.normal(size=50), f"s{i}") for i in range(4)]
+    many = [(rng.normal(size=50), f"s{i}") for i in range(30)]
+    assert len(generate_pearson_heatmap(many, "T")) > len(generate_pearson_heatmap(few, "T"))
+
+
+def test_pearson_heatmap_of_a_single_series():
+    assert generate_pearson_heatmap([(np.linspace(0, 1, 10), "only")], "T").startswith(PNG_MAGIC)
+
+
+def test_pearson_heatmap_with_no_series():
+    assert generate_pearson_heatmap([], "T").startswith(PNG_MAGIC)
+
+
+# --------------------------------------------------------------------------
+# _format_correlation
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (0.8523, ".85"),
+        (-0.8523, "-.85"),
+        (0.0, ".00"),
+        (-0.004, "-.00"),
+        (1.0, "1"),
+        (0.9999, "1"),
+        (-1.0, "-1"),
+        (float("nan"), "n/a"),
+    ],
+)
+def test_correlations_are_formatted_for_a_narrow_cell(value, expected):
+    # The leading zero is dropped because cell width is the binding constraint.
+    assert _format_correlation(value) == expected
 
 
 def test_sweep_plot_returns_png_bytes():
