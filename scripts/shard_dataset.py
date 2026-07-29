@@ -4,7 +4,7 @@ from datasets import Dataset, load_dataset
 
 from fastdetector.frontend.toml_config import GlobalsConfig
 from fastdetector.frontend.toml_loader import load_toml
-from fastdetector.utils import shard_config_name
+from fastdetector.utils import push_shard, shard_config_name
 
 
 def take(dataset: Dataset, num_samples: int | None) -> Dataset:
@@ -133,7 +133,7 @@ def main() -> None:
     for index, shard in iter_shards(ds, args.num_shards, contiguous=args.contiguous):
         config_name = shard_config_name(index)
         print(f"Pushing {len(shard)} rows to '{target_dataset}' (config '{config_name}')...")
-        shard.push_to_hub(target_dataset, config_name=config_name)
+        push_shard(shard, target_dataset, config_name=config_name)
 
     if target_dataset != globals_config.resolve_input_dataset(globals_config.raw_suffix):
         print(

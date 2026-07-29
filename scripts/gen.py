@@ -3,7 +3,7 @@ import argparse
 from fastdetector.frontend.toml_config import GenConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_readme, shard_config_name
+from fastdetector.utils import push_shard, shard_config_name, upload_readme
 
 
 def post_process_response(row: dict) -> dict:
@@ -145,11 +145,11 @@ def main() -> None:
     config_name = shard_config_name(args.batch_id)
 
     print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
-    result_ds.push_to_hub(target_dataset, config_name=config_name)
+    push_shard(result_ds, target_dataset, config_name=config_name)
     upload_readme(dataset_name=target_dataset, readme_content=readme_content)
 
     print(f"Pushing cloned dataset to '{stat_dataset}' (config '{config_name}') with a stub readme...")
-    result_ds.push_to_hub(stat_dataset, config_name=config_name)
+    push_shard(result_ds, stat_dataset, config_name=config_name)
     stub_readme = "# WIP Fastdetector dataset\nWaiting for statistics to finish generating...\n"
     upload_readme(dataset_name=stat_dataset, readme_content=stub_readme)
 

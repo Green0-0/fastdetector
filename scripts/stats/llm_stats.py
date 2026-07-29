@@ -2,7 +2,7 @@ import argparse
 
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard, shard_config_name
+from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
 from fastdetector.statistics.exact_scorer import (
     ScorerSettings,
     TextScores,
@@ -176,7 +176,7 @@ def main() -> None:
         ds = ds.add_column(name, values)
 
     print(f"Uploading dataset to {target_dataset}...")
-    ds.push_to_hub(target_dataset, config_name=shard_config_name(args.batch_id))
+    push_shard(ds, target_dataset, config_name=shard_config_name(args.batch_id))
     print("Done!")
 
 

@@ -4,7 +4,7 @@ from langdetect.lang_detect_exception import LangDetectException
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
-from fastdetector.utils import upload_readme, apply_filter_conditions, shard_config_name
+from fastdetector.utils import apply_filter_conditions, push_shard, shard_config_name, upload_readme
 
 from fastdetector.statistics.statistics_basic import (
     deviated_lines,
@@ -84,7 +84,7 @@ def main() -> None:
 - Total rows: {len(ds)}
 """
     print(f"Uploading updated dataset to {intermediate_dataset} (config '{config_name}')...")
-    ds.push_to_hub(intermediate_dataset, config_name=config_name)
+    push_shard(ds, intermediate_dataset, config_name=config_name)
     upload_readme(
         dataset_name=intermediate_dataset,
         readme_content=readme_content,
@@ -132,7 +132,7 @@ def main() -> None:
 """
 
     print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(ds_filtered)} samples...")
-    ds_filtered.push_to_hub(filtered_dataset, config_name=config_name)
+    push_shard(ds_filtered, filtered_dataset, config_name=config_name)
 
     upload_readme(
         dataset_name=filtered_dataset,
