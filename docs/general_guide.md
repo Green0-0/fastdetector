@@ -32,3 +32,5 @@ Stages #2 to #4 take a `--batch-id`: each one processes the shard with that inde
 
 The configuration parameters are reasonably straightforward, consult your favorite agent or raise an issue for help if absolutely necessary.
 
+One that is worth knowing about explicitly: `distance_stats.toml` sets `embedding_max_seq_length` and `reranker_max_length` (both `8192` by default). Left unset, the Qwen3 embedding and reranker passes inherit the checkpoints' own 40960-token limit, and because `SentenceTransformer.encode` sorts inputs by length and pads each batch to its longest member, a single runaway generation drags its whole batch's memory up with it — which is how this stage OOMs on a 24 GiB card. Raise the caps if you have the VRAM, but note this is a semantic choice as well as a memory one: text beyond the cap is truncated and so does not contribute to the metric.
+
