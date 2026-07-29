@@ -25,7 +25,13 @@ def _extract(ds: Dataset, column: str, mask_fn: Optional[MaskFn]) -> np.ndarray:
     return arr
 
 class StatWrapper:
-    """Wrapper computing basic summary statistics (mean, std, min, max) for a dataset column."""
+    """Wrapper computing univariate summary statistics for a dataset column.
+
+    Non-finite entries (``None``, NaN, ``inf`` - a metric that errored out or
+    was never computed for that row) are counted in ``invalid`` and excluded
+    from every other statistic, so one failed row cannot turn a whole column's
+    mean into NaN.
+    """
 
     def __init__(self, ds: Dataset, column: str, name: str, mask_fn: Optional[MaskFn] = None) -> None:
         """Initialize StatWrapper.
@@ -39,11 +45,26 @@ class StatWrapper:
         self.name = name
         self.column = column
         self.arr = _extract(ds, column, mask_fn)
-        self.mean = float(np.mean(self.arr)) if len(self.arr) > 0 else float('nan')
-        self.std = float(np.std(self.arr)) if len(self.arr) > 0 else float('nan')
-        self.min = float(np.min(self.arr)) if len(self.arr) > 0 else float('nan')
-        self.max = float(np.max(self.arr)) if len(self.arr) > 0 else float('nan')
-        self.values = {"mean": self.mean, "std": self.std, "min": self.min, "max": self.max}
+        self.finite = self.arr[np.isfinite(self.arr)]
+
+        self.count = int(self.arr.size)
+        self.invalid = int(self.arr.size - self.finite.size)
+
+        has_values = self.finite.size > 0
+        self.mean = float(np.mean(self.finite)) if has_values else float('nan')
+        self.median = float(np.median(self.finite)) if has_values else float('nan')
+        self.std = float(np.std(self.finite)) if has_values else float('nan')
+        self.min = float(np.min(self.finite)) if has_values else float('nan')
+        self.max = float(np.max(self.finite)) if has_values else float('nan')
+        self.values = {
+            "count": self.count,
+            "mean": self.mean,
+            "median": self.median,
+            "std": self.std,
+            "min": self.min,
+            "max": self.max,
+            "invalid": self.invalid,
+        }
 
 class ThresholdWrapper:
     """Wrapper that sweeps thresholds and extracts optimal decision thresholds."""

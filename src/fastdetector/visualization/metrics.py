@@ -213,9 +213,9 @@ def compute_classifier_metrics(
         flip_inequality: If True, values <= threshold are positive.
 
     Returns:
-        Dict with keys: ``acc``, ``f1``, ``auroc``, ``tpr``, ``fnr``,
-        ``fpr``, ``tnr``, ``precision``, ``recall``, ``TP``, ``FP``,
-        ``TN``, ``FN``.
+        Dict with keys: ``n`` (scored rows), ``acc``, ``f1``, ``auroc``,
+        ``tpr``, ``fnr``, ``fpr``, ``tnr``, ``precision``, ``recall``,
+        ``TP``, ``FP``, ``TN``, ``FN``.
     """
     actual: list[bool] = []
     predicted: list[bool] = []
@@ -254,6 +254,9 @@ def compute_classifier_metrics(
         auroc = float("nan")
 
     return {
+        # Subset tables are read row by row, so they have to say how many rows
+        # each number was computed from.
+        "n": total,
         "acc": acc,
         "f1": f1,
         "auroc": auroc,

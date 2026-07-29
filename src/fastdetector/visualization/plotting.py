@@ -35,12 +35,31 @@ def _save_fig_to_png() -> bytes:
     return buf.read()
 
 
+def _finite(values) -> np.ndarray:
+    """Return *values* as a float array with non-finite entries dropped.
+
+    Statistic columns carry NaNs wherever a metric errored out or was never
+    computed; matplotlib cannot bin those, and a single NaN poisons the
+    min/max used to derive shared bin edges.
+
+    Args:
+        values: Any array-like of numbers, or None.
+
+    Returns:
+        A 1-D float array holding only the finite entries.
+    """
+    if values is None:
+        return np.array([], dtype=float)
+    arr = np.asarray(values, dtype=float).ravel()
+    return arr[np.isfinite(arr)]
+
+
 def get_histogram(series: List[Series], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
     """Render overlaid histograms, one per series, sharing a single set of bin edges.
 
     Args:
         series: List of ``(values, label)`` tuples. Entries whose values are
-            None are skipped.
+            None, empty, or entirely non-finite are skipped.
         title: Figure title.
         bins: Number of histogram bins.
         figsize: Figure width and height.
@@ -50,12 +69,14 @@ def get_histogram(series: List[Series], title: str, bins: int = 50, figsize: Tup
     """
     plt.figure(figsize=figsize)
 
-    all_values = [
-        v for arr, _ in series if arr is not None
-        for v in np.asarray(arr, dtype=float).tolist()
-    ]
-    if all_values:
-        lo, hi = float(min(all_values)), float(max(all_values))
+    finite_series = [(_finite(arr), label) for arr, label in series]
+
+    all_values = np.concatenate([arr for arr, _ in finite_series if arr.size]) if any(
+        arr.size for arr, _ in finite_series
+    ) else np.array([])
+
+    if all_values.size:
+        lo, hi = float(np.min(all_values)), float(np.max(all_values))
         if lo == hi:
             pad = abs(lo) * 1e-6 + 1e-6
             lo, hi = lo - pad, hi + pad
@@ -64,8 +85,8 @@ def get_histogram(series: List[Series], title: str, bins: int = 50, figsize: Tup
         shared_edges = np.linspace(0.0, 1.0, bins + 1)
 
     drawn = False
-    for arr, label in series:
-        if arr is not None:
+    for arr, label in finite_series:
+        if arr.size:
             plt.hist(arr, bins=shared_edges, alpha=0.5, label=label)
             drawn = True
 
@@ -158,18 +179,27 @@ def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
     Returns:
         PNG image bytes.
     """
-    arrays = [arr for arr, _ in series]
+    arrays = [np.asarray(arr, dtype=float).ravel() for arr, _ in series]
     names = [label for _, label in series]
     n = len(series)
     matrix = np.zeros((n, n))
-    
+
     for i in range(n):
         for j in range(n):
-            if len(arrays[i]) == 0 or len(arrays[j]) == 0:
+            # Correlate over the rows where *both* statistics are present:
+            # a column with a handful of failed rows would otherwise blank out
+            # its entire row and column of the heatmap.
+            if len(arrays[i]) != len(arrays[j]) or len(arrays[i]) == 0:
+                matrix[i, j] = float("nan")
+                continue
+            both = np.isfinite(arrays[i]) & np.isfinite(arrays[j])
+            a, b = arrays[i][both], arrays[j][both]
+            if a.size < 2 or np.std(a) == 0 or np.std(b) == 0:
                 matrix[i, j] = float("nan")
             else:
-                matrix[i, j] = float(np.corrcoef(arrays[i], arrays[j])[0, 1])
-                
+                matrix[i, j] = float(np.corrcoef(a, b)[0, 1])
+
+
     fig, ax = plt.subplots(figsize=(max(6, n), max(6, n)))
     ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
     ax.set_xticks(np.arange(n), labels=names)

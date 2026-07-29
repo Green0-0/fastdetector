@@ -161,9 +161,16 @@ class AnalysisConfig(BaseModel):
 
     # Distance Metrics for Correlation/Plots
     distance_metrics: List[str] = []
-    
+
     # Classifiers to Evaluate
     classifiers: List[ClassifierConfig] = []
+
+    # Per-classifier bin breakdown: every row is placed in one of num_bins
+    # equal-count (quantile) bins of bin_column, and each classifier is scored
+    # per bin. This is what shows whether detection only works on the heavily
+    # rewritten rows. bin_column defaults to the first distance metric.
+    bin_column: Optional[str] = None
+    num_bins: int = 4
 
 
 class DistanceStatConfig(BaseModel):

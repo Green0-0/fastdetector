@@ -75,14 +75,25 @@ def test_stat_wrapper_summarises_a_column(dataset):
     assert stat.name == "Score"
     assert stat.column == "score"
     assert stat.mean == pytest.approx(1.5)
+    assert stat.median == pytest.approx(1.5)
     assert stat.min == 0.0
     assert stat.max == 3.0
     assert stat.std == pytest.approx(np.std([0.0, 1.0, 2.0, 3.0]))
+    assert stat.count == 4
+    assert stat.invalid == 0
 
 
 def test_stat_wrapper_exposes_its_values_for_the_table_builder(dataset):
     stat = StatWrapper(dataset, "score", "Score")
-    assert set(stat.values) == {"mean", "std", "min", "max"}
+    assert set(stat.values) == {
+        "count",
+        "mean",
+        "median",
+        "std",
+        "min",
+        "max",
+        "invalid",
+    }
     assert stat.values["mean"] == stat.mean
 
 
@@ -93,7 +104,24 @@ def test_stat_wrapper_respects_a_mask(dataset):
 
 def test_stat_wrapper_of_an_empty_subset_is_all_nan(dataset):
     stat = StatWrapper(dataset, "score", "Score", mask_fn=group_mask("zzz"))
-    assert all(math.isnan(value) for value in stat.values.values())
+    assert stat.count == 0
+    assert stat.invalid == 0
+    assert math.isnan(stat.mean)
+    assert math.isnan(stat.median)
+    assert math.isnan(stat.std)
+    assert math.isnan(stat.min)
+    assert math.isnan(stat.max)
+
+
+def test_stat_wrapper_counts_and_excludes_invalid_rows():
+    # A metric that errored out on some rows must not turn the whole column's
+    # mean into NaN - it has to be counted and skipped.
+    dataset = Dataset.from_dict({"score": [1.0, None, 3.0, float("nan")]})
+    stat = StatWrapper(dataset, "score", "Score")
+    assert stat.count == 4
+    assert stat.invalid == 2
+    assert stat.mean == pytest.approx(2.0)
+    assert stat.max == 3.0
 
 
 # --------------------------------------------------------------------------

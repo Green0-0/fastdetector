@@ -19,6 +19,13 @@ distance_metrics = [
     "softngram"
 ]
 
+# Per-classifier bin breakdown: rows are split into num_bins equal-count
+# (quantile) bins of bin_column and every classifier is scored per bin, which
+# is what shows whether detection only works on the heavily rewritten rows.
+# bin_column defaults to the first distance metric above.
+# bin_column = "cosdist"
+num_bins = 4
+
 [[filter_conditions]]
 column = "cosdist"
 operator = ">="

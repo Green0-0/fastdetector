@@ -229,6 +229,7 @@ def test_metrics_report_every_documented_key():
         [HUMAN, AI], [False, True], threshold=0.5, flip_inequality=False
     )
     assert set(metrics) == {
+        "n",
         "acc",
         "f1",
         "auroc",
