@@ -49,5 +49,5 @@ markers = [
     "slow: takes more than a few seconds",
     "network: downloads from the HF Hub or otherwise needs the internet",
     "bigmem: needs a lot of host RAM (see the test for the amount)",
-    "vllm: must run inside the vLLM venv (auto-skipped when vllm is not importable)",
+    "vllm: boots the real engine binary (auto-skipped when the engine venv is not populated)",
 ]

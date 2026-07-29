@@ -5,13 +5,14 @@ handful of samples through ``run_pipeline``. It is the preflight for a
 generation job: if the model does not fit, the flags are wrong, or the prompt
 file does not render, it fails here in minutes rather than after a queue wait.
 
-Run it from the engine venv, which is the only place ``vllm`` imports::
+Run it from the main venv like every other tier::
 
-    source .vllm/bin/activate && pytest -m vllm
+    pytest -m vllm
 
-The engine binary itself is resolved from ``vllm_venv_path`` in globals.toml,
-so the test also works from the main venv if you drop the ``vllm`` marker
-filter and have that venv populated.
+Nothing here imports ``vllm``: the engine binary is resolved from
+``vllm_venv_path`` in globals.toml (or ``VLLM_VENV_PATH``) and launched as a
+subprocess, so the tier needs a populated engine venv on disk rather than an
+importable package. It skips cleanly when there is no binary.
 """
 
 import os
