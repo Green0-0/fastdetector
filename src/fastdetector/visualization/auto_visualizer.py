@@ -18,7 +18,9 @@ def _extract(ds: Dataset, column: str, mask_fn: Optional[MaskFn]) -> np.ndarray:
     Returns:
         Numpy float array of extracted column values.
     """
-    arr = np.array(ds[column], dtype=float)
+    # asarray, not array: callers never mutate the result, so a column that is
+    # already a float array (see analysis.ColumnCache) is used without copying.
+    arr = np.asarray(ds[column], dtype=float)
     if mask_fn is not None:
         mask = np.asarray(mask_fn(ds), dtype=bool)
         arr = arr[mask]

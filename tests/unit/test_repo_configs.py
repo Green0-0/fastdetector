@@ -298,6 +298,87 @@ def test_analysis_base_columns_match_the_scored_columns(repo_root):
     assert set(analysis.base_columns) <= set(editlens.columns_to_score)
 
 
+def committed_stat_columns(repo_root) -> set[str]:
+    """Every statistic column the committed stats configs would write.
+
+    Mirrors the naming in scripts/stats/: distance metrics are bare column
+    names, EditLens appends its configured suffix, and llm_stats writes
+    ``<column>_<metric><col_suffix>`` plus a suffix-less binoculars column.
+    """
+    from llm_stats import PER_MODEL_METRICS
+
+    distance = DistanceStatConfig(**load_toml(str(repo_root / "config" / "distance_stats.toml")))
+    llm = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
+    editlens = EditLensStatConfig(**load_toml(str(repo_root / "config" / "editlens_stats.toml")))
+
+    columns = set()
+    for flag in ("jaccard_1", "jaccard_2", "jaccard_3", "levenshtein",
+                 "moverscore", "cosdist", "softngram", "reranker"):
+        if getattr(distance, flag):
+            columns.add(flag)
+    if distance.bertscore:
+        columns |= {"bertscore", "bertscore_precision", "bertscore_recall"}
+
+    for col in editlens.columns_to_score:
+        columns |= {
+            f"{col}_editlens_score{editlens.suffix}",
+            f"{col}_editlens_bucket{editlens.suffix}",
+        }
+
+    for col in llm.columns_to_score:
+        for suffix in llm.col_suffixes:
+            for flag, stem in PER_MODEL_METRICS:
+                if getattr(llm, flag):
+                    columns.add(f"{col}_{stem}{suffix}")
+        if llm.binoculars_score:
+            columns.add(f"{col}_binoculars")
+    return columns
+
+
+def test_analysis_evaluates_every_statistic_the_pipeline_computes(repo_root):
+    # The report only covers what analysis.toml names, so a statistic computed
+    # by the stats stage and never listed here is one nobody ever sees.
+    analysis = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
+    computed = committed_stat_columns(repo_root)
+
+    reported = set(analysis.distance_metrics)
+    for clf in analysis.classifiers:
+        reported |= {f"{base}{clf.suffix}" for base in analysis.base_columns}
+
+    assert computed <= reported, f"not evaluated by analysis.toml: {sorted(computed - reported)}"
+
+
+def test_analysis_classifier_columns_are_scored_columns(repo_root):
+    # The converse: a classifier suffix that matches nothing the stats stage
+    # writes is a typo, and shows up as a skipped classifier at analysis time.
+    analysis = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
+    computed = committed_stat_columns(repo_root)
+
+    for clf in analysis.classifiers:
+        columns = {f"{base}{clf.suffix}" for base in analysis.base_columns}
+        assert columns <= computed, f"{clf.name} reads columns nothing writes: {sorted(columns - computed)}"
+
+
+def test_analysis_bin_column_is_a_computed_statistic(repo_root):
+    analysis = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
+    if analysis.bin_column is not None:
+        assert analysis.bin_column in committed_stat_columns(repo_root)
+
+
+def test_llm_classifier_directions_follow_the_detectors(repo_root):
+    # Perplexity, entropy and outlier rates are all lower for machine text,
+    # and binoculars scores it lower too; only FastDetectGPT's curvature is
+    # higher. A flipped direction silently inverts that classifier's AUROC.
+    analysis = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
+    lower_is_ai_stems = ("_perplexity", "_entropy", "_topp_outlier", "_topk_outlier", "_binoculars")
+
+    for clf in analysis.classifiers:
+        if clf.suffix.startswith(lower_is_ai_stems):
+            assert clf.direction == "lower_is_ai", clf.name
+        elif clf.suffix.startswith("_fastdetectgpt"):
+            assert clf.direction == "higher_is_ai", clf.name
+
+
 # --------------------------------------------------------------------------
 # Prompt sets
 # --------------------------------------------------------------------------

@@ -182,36 +182,57 @@ def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
     arrays = [np.asarray(arr, dtype=float).ravel() for arr, _ in series]
     names = [label for _, label in series]
     n = len(series)
-    matrix = np.zeros((n, n))
+    matrix = np.full((n, n), np.nan)
 
+    # Columns that are the same length, complete and non-constant correlate in
+    # one vectorised call; with a few dozen statistics over millions of rows
+    # the pairwise loop below is minutes of work, and this is the common case.
+    length = len(arrays[0]) if arrays else 0
+    clean = [
+        i for i, arr in enumerate(arrays)
+        if len(arr) == length and len(arr) > 1
+        and np.isfinite(arr).all() and np.std(arr) > 0
+    ]
+    if len(clean) > 1:
+        matrix[np.ix_(clean, clean)] = np.corrcoef(np.vstack([arrays[i] for i in clean]))
+
+    remaining = set(range(n)) - set(clean)
     for i in range(n):
         for j in range(n):
+            if i not in remaining and j not in remaining:
+                continue
             # Correlate over the rows where *both* statistics are present:
             # a column with a handful of failed rows would otherwise blank out
             # its entire row and column of the heatmap.
             if len(arrays[i]) != len(arrays[j]) or len(arrays[i]) == 0:
-                matrix[i, j] = float("nan")
                 continue
             both = np.isfinite(arrays[i]) & np.isfinite(arrays[j])
             a, b = arrays[i][both], arrays[j][both]
             if a.size < 2 or np.std(a) == 0 or np.std(b) == 0:
-                matrix[i, j] = float("nan")
-            else:
-                matrix[i, j] = float(np.corrcoef(a, b)[0, 1])
+                continue
+            matrix[i, j] = float(np.corrcoef(a, b)[0, 1])
 
+    # Keep the figure legible whether it holds 4 statistics or 40: past a few
+    # dozen cells the per-cell numbers are unreadable, so drop them and let the
+    # colour bar carry the scale.
+    size = min(24.0, max(6.0, 0.55 * n + 3.0))
+    fig, ax = plt.subplots(figsize=(size, size))
+    image = ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
+    fig.colorbar(image, ax=ax, shrink=0.75, label="Pearson r")
 
-    fig, ax = plt.subplots(figsize=(max(6, n), max(6, n)))
-    ax.imshow(matrix, cmap="coolwarm", vmin=-1, vmax=1)
-    ax.set_xticks(np.arange(n), labels=names)
-    ax.set_yticks(np.arange(n), labels=names)
+    tick_size = 10 if n <= 20 else max(5, int(200 / n))
+    ax.set_xticks(np.arange(n), labels=names, fontsize=tick_size)
+    ax.set_yticks(np.arange(n), labels=names, fontsize=tick_size)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-    
-    for i in range(n):
-        for j in range(n):
-            val = matrix[i, j]
-            text_color = "w" if abs(val) > 0.5 else "black"
-            ax.text(j, i, f"{val:.2f}", ha="center", va="center", color=text_color)
-            
+
+    if n <= 20:
+        for i in range(n):
+            for j in range(n):
+                val = matrix[i, j]
+                text_color = "w" if abs(val) > 0.5 else "black"
+                ax.text(j, i, f"{val:.2f}", ha="center", va="center",
+                        color=text_color, fontsize=tick_size)
+
     ax.set_title(title)
     fig.tight_layout()
     buf = io.BytesIO()

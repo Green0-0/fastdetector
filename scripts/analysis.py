@@ -172,6 +172,42 @@ def compute_quantile_bins(values: np.ndarray, num_bins: int, column: str) -> tup
     ])
     return row_labels, labels
 
+class ColumnCache:
+    """A read-only Dataset view that materialises each column exactly once.
+
+    The report reads the same handful of columns hundreds of times over (once
+    per classifier x subset x chart), and ``Dataset.__getitem__`` rebuilds the
+    whole column on every access - row by row through the indices mapping once
+    the dataset has been split, which is O(rows) Python-level work per read.
+    Profiling a 13-classifier report over 20k rows showed 3 million such row
+    extractions and five minutes of runtime; caching makes it seconds.
+
+    Only the read paths the report uses are implemented: column access,
+    ``column_names`` and ``len``.
+    """
+
+    def __init__(self, ds: Dataset) -> None:
+        """Wrap *ds*, caching nothing until a column is asked for.
+
+        Args:
+            ds: The dataset to read through.
+        """
+        self._ds = ds
+        self._columns: dict[str, np.ndarray] = {}
+
+    @property
+    def column_names(self) -> list[str]:
+        """The wrapped dataset's column names."""
+        return self._ds.column_names
+
+    def __len__(self) -> int:
+        return len(self._ds)
+
+    def __getitem__(self, column: str) -> np.ndarray:
+        if column not in self._columns:
+            self._columns[column] = np.asarray(self._ds[column])
+        return self._columns[column]
+
 def _column_equals_mask(column: str, value: str):
     """Build a masking function that filters rows where dataset[column] == value.
 
@@ -182,8 +218,13 @@ def _column_equals_mask(column: str, value: str):
     Returns:
         Mask function returning boolean numpy array.
     """
-    def mask_fn(ds: Dataset) -> np.ndarray:
-        return np.array(ds[column]) == value
+    cache: dict[int, np.ndarray] = {}
+
+    def mask_fn(ds) -> np.ndarray:
+        key = id(ds)
+        if key not in cache:
+            cache[key] = np.asarray(ds[column]) == value
+        return cache[key]
     return mask_fn
 
 def _safe_name(name: str) -> str:
@@ -209,6 +250,46 @@ def _anchor(title: str) -> str:
     """
     slug = re.sub(r"[^\w\s-]", "", title.lower())
     return re.sub(r"[\s_]+", "-", slug.strip())
+
+def _build_table_of_contents(body: str) -> list[str]:
+    """Build a nested table of contents from the headings *body* actually has.
+
+    Reading the headings back out of the rendered markdown (rather than
+    listing them a second time by hand) is what keeps every entry a working
+    link: a section that is renamed, added or skipped changes its own entry.
+    Repeated headings get the ``-1``, ``-2`` ... anchor suffixes markdown
+    renderers assign them, in document order.
+
+    Args:
+        body: The rendered markdown body, below the introduction.
+
+    Returns:
+        List of markdown list items: ``##`` headings numbered at the top
+        level, ``###`` headings indented beneath them.
+    """
+    seen: dict[str, int] = {}
+    entries: list[str] = []
+    section_number = 0
+
+    for line in body.split("\n"):
+        match = re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+        if match is None:
+            continue
+        level, title = len(match.group(1)), match.group(2)
+
+        anchor = _anchor(title)
+        occurrence = seen.get(anchor, 0)
+        seen[anchor] = occurrence + 1
+        if occurrence:
+            anchor = f"{anchor}-{occurrence}"
+
+        if level == 2:
+            section_number += 1
+            entries.append(f"{section_number}. [{title}](#{anchor})")
+        else:
+            entries.append(f"    - [{title}](#{anchor})")
+
+    return entries
 
 def _fmt(value, spec: str = ".4f") -> str:
     """Format a metric for prose, rendering missing/NaN values as ``n/a``.
@@ -351,6 +432,43 @@ def _threshold_description(eval_config, clf) -> str:
         return f"pinned manually at {manual:g}"
     return f"swept for `{threshold_type}` on the validation split"
 
+def select_available(ds: Dataset, eval_config) -> tuple[list, list, list, list]:
+    """Split the configured metrics and classifiers into present and missing.
+
+    A config that names every statistic the pipeline can compute is the useful
+    default, but any given dataset has only the ones whose stats stage was
+    actually run (and whose flags were enabled). Rather than crashing on the
+    first absent column, the report evaluates what is there and states what it
+    skipped, so a missing stage is visible instead of silently unreported.
+
+    Args:
+        ds: The evaluation Dataset.
+        eval_config: AnalysisConfig instance.
+
+    Returns:
+        Tuple of (distance_metrics, missing_distance_metrics, classifiers,
+        skipped_classifiers), where skipped_classifiers maps a classifier name
+        to the columns it needed and the dataset does not have.
+    """
+    metrics, missing_metrics = [], []
+    for m in eval_config.distance_metrics:
+        (metrics if m in ds.column_names else missing_metrics).append(m)
+
+    classifiers: list = []
+    skipped: dict[str, list[str]] = {}
+    for clf in eval_config.classifiers:
+        absent = [
+            f"{base}{clf.suffix}"
+            for base in eval_config.base_columns
+            if f"{base}{clf.suffix}" not in ds.column_names
+        ]
+        if absent:
+            skipped[clf.name] = absent
+        else:
+            classifiers.append(clf)
+
+    return metrics, missing_metrics, classifiers, skipped
+
 def _rank_subsets(subset_metrics: dict, subsets: list, stat: str = "auroc") -> list:
     """Rank subsets by a metric, best first, dropping subsets without a value.
 
@@ -423,6 +541,8 @@ def _build_run_configuration(eval_config, run_info: dict) -> list[str]:
         f" (validation_size = {eval_config.validation_size})",
         f"- Base Columns: {column_roles}",
         f"- Distance Metrics: {', '.join(f'`{m}`' for m in run_info['distance_metrics']) or 'None'}",
+        f"- Distance Metrics Skipped (not in this dataset):"
+        f" {', '.join(f'`{m}`' for m in run_info['missing_metrics']) or 'None'}",
         f"- Threshold Types: score = `{eval_config.threshold_type_score}`,"
         f" bin = `{eval_config.threshold_type_bin}`",
         f"- Manual Thresholds: score = {eval_config.manual_threshold_score},"
@@ -435,6 +555,15 @@ def _build_run_configuration(eval_config, run_info: dict) -> list[str]:
         "- Classifiers:",
     ]
     for clf in eval_config.classifiers:
+        missing = run_info["skipped_classifiers"].get(clf.name)
+        if missing:
+            # Naming the absent columns is the whole point: it says which
+            # statistics stage has not been run for this dataset.
+            lines.append(
+                f"    - ~~**{clf.name}**~~ - SKIPPED, the dataset has no"
+                f" `{'`, `'.join(missing)}` column(s)"
+            )
+            continue
         lines.append(
             f"    - **{clf.name}** - columns `*{clf.suffix}`, direction"
             f" `{clf.direction}`, threshold kind `{clf.threshold_kind}`"
@@ -568,7 +697,15 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         summary_stats_dict). The summary stats dict is the machine-readable
         JSON spec of all classifier results (see :func:`_build_summary_stats`).
     """
-    skip_val = all(_threshold_settings(eval_config, c)[0] is not None for c in eval_config.classifiers)
+    distance_metrics, missing_metrics, classifiers, skipped_classifiers = select_available(
+        result_ds, eval_config
+    )
+    for metric in missing_metrics:
+        print(f"Notice: distance metric '{metric}' is not in the dataset; skipping it.")
+    for name, columns in skipped_classifiers.items():
+        print(f"Notice: classifier '{name}' needs missing columns {columns}; skipping it.")
+
+    skip_val = all(_threshold_settings(eval_config, c)[0] is not None for c in classifiers)
 
     val_split = None if skip_val else eval_config.validation_size
     test_ds = result_ds
@@ -577,6 +714,9 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         splits = result_ds.train_test_split(test_size=val_split, seed=42)
         test_ds = splits["train"]
         val_ds = splits["test"]
+
+    test_ds = ColumnCache(test_ds)
+    val_ds = ColumnCache(val_ds)
 
     overall = Subset("Overall", None)
     prompt_subsets = [
@@ -594,18 +734,12 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
     # ---------------------------------------------------------------- stats
     # "Statistics of interest" = every column the report does arithmetic on:
     # the distance metrics plus each classifier's score column per base column.
-    dist_wrappers = [
-        StatWrapper(test_ds, m, name=m)
-        for m in eval_config.distance_metrics
-        if m in test_ds.column_names
-    ]
+    dist_wrappers = [StatWrapper(test_ds, m, name=m) for m in distance_metrics]
 
     clf_stat_wrappers = []
-    for clf in eval_config.classifiers:
+    for clf in classifiers:
         for i, base_col in enumerate(eval_config.base_columns):
             col = f"{base_col}{clf.suffix}"
-            if col not in test_ds.column_names:
-                continue
             if eval_config.fixed_classes is not None:
                 role = "AI" if eval_config.fixed_classes[i] else "Human"
             else:
@@ -616,7 +750,7 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
 
     # ---------------------------------------------------------- classifiers
     clf_data: dict[str, dict] = {}
-    for index, clf in enumerate(eval_config.classifiers):
+    for index, clf in enumerate(classifiers):
         flip = (clf.direction == "lower_is_ai")
         manual_threshold, threshold_type = _threshold_settings(eval_config, clf)
 
@@ -701,11 +835,6 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         )
         univariate.append("")
         univariate.append(table.rstrip())
-        univariate.append("")
-        charts["UNIVARIATE.png"] = get_histogram(
-            [(w.arr, w.name) for w in all_variables], title="All Variables of Interest"
-        )
-        univariate.append("![UNIVARIATE](UNIVARIATE.png)")
     else:
         univariate.append("No statistics of interest were found in this dataset.")
     sections.append(("Univariate Analysis", univariate))
@@ -743,13 +872,13 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
     sections.append(("Histogram, Distances", distances))
 
     classification: list[str] = []
-    if eval_config.classifiers:
+    if classifiers:
         classification.append(
             "Human and AI score distributions for each classifier, overlaid, over"
             " the whole evaluation split."
         )
         classification.append("")
-        for clf in eval_config.classifiers:
+        for clf in classifiers:
             classification.append(
                 classifier_histogram(
                     clf, overall, f"CLF_HIST_{_safe_name(clf.name)}.png",
@@ -761,13 +890,13 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
     sections.append(("Histogram, Classification", classification))
 
     comparison: list[str] = []
-    if eval_config.classifiers:
+    if classifiers:
         rows = [
             {
                 "name": clf.name,
                 "cells": [clf_data[clf.name]["subsets"][overall], clf_data[clf.name]["tw"]],
             }
-            for clf in eval_config.classifiers
+            for clf in classifiers
         ]
         table, _ = generate_table(
             rows, COMPARISON_COLUMNS, row_header="Classifier",
@@ -789,7 +918,7 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
     sections.append(("Classifiers Comparison Table", comparison))
 
     thresholds: list[str] = []
-    swept = [c for c in eval_config.classifiers if _threshold_settings(eval_config, c)[0] is None]
+    swept = [c for c in classifiers if _threshold_settings(eval_config, c)[0] is None]
     if swept:
         thresholds.append(
             f"Accuracy against threshold on the {len(val_ds):,}-row validation"
@@ -807,7 +936,7 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         )
     sections.append(("Classifier Thresholds", thresholds))
 
-    for clf in eval_config.classifiers:
+    for clf in classifiers:
         subset_metrics = clf_data[clf.name]["subsets"]
         body: list[str] = [
             f"Threshold {_threshold_description(eval_config, clf)}"
@@ -815,7 +944,7 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
             f" `*{clf.suffix}` ({clf.direction})."
         ]
 
-        body.append("\n### By Prompt Subset")
+        body.append(f"\n### {clf.name}: By Prompt Subset")
         prompt_rows = [{"name": overall.name, "cells": [subset_metrics[overall]]}]
         prompt_rows += [
             {"name": sub.name.removeprefix("Prompt: "), "cells": [subset_metrics[sub]]}
@@ -827,7 +956,7 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         )
         body.append(table.rstrip())
 
-        body.append("\n### By Bin")
+        body.append(f"\n### {clf.name}: By Bin")
         if bin_subsets:
             bin_rows = [{"name": overall.name, "cells": [subset_metrics[overall]]}]
             bin_rows += [
@@ -845,7 +974,7 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
                 " Set `bin_column` in the analysis config to enable it."
             )
 
-        body.append("\n### Score Histograms per Prompt Subset")
+        body.append(f"\n### {clf.name}: Score Histograms per Prompt Subset")
         if prompt_subsets:
             for sub in prompt_subsets:
                 body.append(
@@ -859,14 +988,14 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
             body.append("No prompt metadata was found, so there are no prompt subsets.")
 
         if dist_wrappers and prompt_subsets:
-            body.append("\n### Distance Histograms per Prompt Subset")
+            body.append(f"\n### {clf.name}: Distance Histograms per Prompt Subset")
             body.extend(distance_histograms_by_subset(prompt_subsets, "DIST_BY_PROMPT", "Prompt Subset"))
 
         sections.append((f"Classifier Report: {clf.name}", body))
 
     manual: list[str] = []
-    if eval_config.classifiers:
-        first = eval_config.classifiers[0]
+    if classifiers:
+        first = classifiers[0]
         subset_metrics = clf_data[first.name]["subsets"]
         manual.append(
             f"This section is hardcoded: it reports the *first* configured"
@@ -916,10 +1045,19 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         "rows_test": len(test_ds),
         "rows_val": 0 if skip_val else len(val_ds),
         "distance_metrics": [w.name for w in dist_wrappers],
+        "missing_metrics": missing_metrics,
+        "skipped_classifiers": skipped_classifiers,
         "unique_prompts": unique_prompts,
         "unique_models": unique_mg_strs,
         "bin_count": len(bin_labels),
     }
+
+    body_lines: list[str] = []
+    for title, body in sections:
+        body_lines.append(f"## {title}")
+        body_lines.extend(body)
+        body_lines.append("")
+    body_md = "\n".join(body_lines)
 
     lines = ["# Auto-Generated FastDetector Dataset", ""]
     lines.extend(_build_run_configuration(eval_config, run_info))
@@ -932,14 +1070,9 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
     )
     lines.append("")
     lines.append("## Table of Contents")
-    for i, (title, _) in enumerate(sections, start=1):
-        lines.append(f"{i}. [{title}](#{_anchor(title)})")
+    lines.extend(_build_table_of_contents(body_md))
     lines.append("")
-
-    for title, body in sections:
-        lines.append(f"## {title}")
-        lines.extend(body)
-        lines.append("")
+    lines.append(body_md)
 
     summary_stats = _build_summary_stats(clf_data, overall, prompt_subsets, bin_subsets, model_subsets)
     return "\n".join(lines), charts, summary_stats

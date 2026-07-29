@@ -8,6 +8,7 @@ import pytest
 from datasets import Dataset
 
 from analysis import (
+    ColumnCache,
     NumpyEncoder,
     Subset,
     _anchor,
@@ -18,6 +19,7 @@ from analysis import (
     _parse_genparams,
     _safe_name,
     compute_quantile_bins,
+    select_available,
     extract_model_genconfig,
     extract_prompt_types,
 )
@@ -395,6 +397,141 @@ def test_summary_is_json_serialisable(summary_inputs):
 
 
 # --------------------------------------------------------------------------
+# ColumnCache
+# --------------------------------------------------------------------------
+
+
+class CountingDataset:
+    """Stand-in that records how often each column is materialised."""
+
+    def __init__(self, columns: dict):
+        self._columns = columns
+        self.reads: list[str] = []
+
+    @property
+    def column_names(self):
+        return list(self._columns)
+
+    def __len__(self):
+        return len(next(iter(self._columns.values())))
+
+    def __getitem__(self, column):
+        self.reads.append(column)
+        return self._columns[column]
+
+
+def test_column_cache_reads_each_column_once():
+    # datasets.Dataset rebuilds the column row by row on every access, and the
+    # report reads the same few columns hundreds of times.
+    source = CountingDataset({"score": [0.1, 0.2, 0.3]})
+    cache = ColumnCache(source)
+
+    first, second = cache["score"], cache["score"]
+    assert source.reads == ["score"]
+    assert first is second
+    assert first.tolist() == [0.1, 0.2, 0.3]
+
+
+def test_column_cache_passes_through_the_dataset_shape():
+    source = CountingDataset({"score": [0.1, 0.2], "group": ["a", "b"]})
+    cache = ColumnCache(source)
+    assert cache.column_names == ["score", "group"]
+    assert len(cache) == 2
+
+
+def test_column_cache_serves_the_extraction_helpers(scored_dataset):
+    # The wrapper has to be a drop-in for the Dataset in _extract_classifier_data.
+    config = make_analysis_config()
+    clf = ClassifierConfig(name="Score", suffix="_score")
+    direct, _, _ = _extract_classifier_data(scored_dataset, config, clf, None)
+    cached, _, _ = _extract_classifier_data(ColumnCache(scored_dataset), config, clf, None)
+    assert [a.tolist() for a in cached] == [a.tolist() for a in direct]
+
+
+def test_masks_are_computed_once_per_dataset():
+    source = CountingDataset({"group": ["x", "y", "x"]})
+    cache = ColumnCache(source)
+    mask = _column_equals_mask("group", "x")
+
+    assert mask(cache).tolist() == [True, False, True]
+    assert mask(cache).tolist() == [True, False, True]
+    assert source.reads == ["group"]
+
+
+# --------------------------------------------------------------------------
+# select_available
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def partly_scored_dataset() -> Dataset:
+    """A dataset where only some of the configured statistics were computed."""
+    return Dataset.from_dict(
+        {
+            "cosdist": [0.1, 0.2],
+            "original_score": [0.1, 0.2],
+            "final_response_score": [0.8, 0.9],
+        }
+    )
+
+
+def test_available_metrics_and_classifiers_are_kept(partly_scored_dataset):
+    config = make_analysis_config(
+        distance_metrics=["cosdist"],
+        classifiers=[ClassifierConfig(name="Score", suffix="_score")],
+    )
+    metrics, missing, classifiers, skipped = select_available(partly_scored_dataset, config)
+    assert metrics == ["cosdist"]
+    assert missing == []
+    assert [c.name for c in classifiers] == ["Score"]
+    assert skipped == {}
+
+
+def test_uncomputed_statistics_are_skipped_rather_than_raising(partly_scored_dataset):
+    # A config naming every statistic the pipeline can compute must still work
+    # on a dataset whose llm_stats stage has not been run.
+    config = make_analysis_config(
+        distance_metrics=["cosdist", "moverscore"],
+        classifiers=[
+            ClassifierConfig(name="Score", suffix="_score"),
+            ClassifierConfig(name="Binoculars", suffix="_binoculars", direction="lower_is_ai"),
+        ],
+    )
+    metrics, missing, classifiers, skipped = select_available(partly_scored_dataset, config)
+    assert metrics == ["cosdist"]
+    assert missing == ["moverscore"]
+    assert [c.name for c in classifiers] == ["Score"]
+    assert skipped == {"Binoculars": ["original_binoculars", "final_response_binoculars"]}
+
+
+def test_a_classifier_scored_for_only_one_class_is_skipped():
+    # Half a classifier cannot be evaluated: there would be no human column to
+    # compare the AI scores against.
+    dataset = Dataset.from_dict({"original_score": [0.1], "final_response_other": [0.2]})
+    config = make_analysis_config(classifiers=[ClassifierConfig(name="Score", suffix="_score")])
+    _, _, classifiers, skipped = select_available(dataset, config)
+    assert classifiers == []
+    assert skipped == {"Score": ["final_response_score"]}
+
+
+def test_skipped_statistics_are_named_in_the_readme(partly_scored_dataset, report_run_info):
+    config = make_analysis_config(
+        distance_metrics=["cosdist", "moverscore"],
+        classifiers=[
+            ClassifierConfig(name="Score", suffix="_score"),
+            ClassifierConfig(name="Binoculars", suffix="_binoculars", direction="lower_is_ai"),
+        ],
+    )
+    readme, _, summary = _build_readme(
+        partly_scored_dataset, config, {**report_run_info, "bin_column": None}, [], [], []
+    )
+    assert "- Distance Metrics Skipped (not in this dataset): `moverscore`" in readme
+    assert "~~**Binoculars**~~ - SKIPPED" in readme
+    assert "original_binoculars" in readme
+    assert set(summary["overall"]) == {"Score"}
+
+
+# --------------------------------------------------------------------------
 # compute_quantile_bins
 # --------------------------------------------------------------------------
 
@@ -555,12 +692,59 @@ def test_readme_has_every_section_in_order(report):
     assert positions == sorted(positions)
 
 
+def heading_anchors(readme: str) -> list[str]:
+    """The anchors a markdown renderer assigns to this document's headings."""
+    seen, anchors = {}, []
+    for line in readme.split("\n"):
+        match = re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
+        if match is None:
+            continue
+        anchor = _anchor(match.group(2))
+        occurrence = seen.get(anchor, 0)
+        seen[anchor] = occurrence + 1
+        anchors.append(f"{anchor}-{occurrence}" if occurrence else anchor)
+    return anchors
+
+
 def test_table_of_contents_links_to_every_section(report):
     readme, _, _ = report
-    toc = readme.split("## Table of Contents")[1].split("## Univariate")[0]
+    toc = readme.split("## Table of Contents")[1].split("\n## ")[0]
     for heading in EXPECTED_SECTIONS:
         title = heading.removeprefix("## ")
         assert f"[{title}](#{_anchor(title)})" in toc
+
+
+def test_table_of_contents_nests_every_subsection(report):
+    readme, _, _ = report
+    toc = readme.split("## Table of Contents")[1].split("\n## ")[0]
+    for title in ("Score: By Prompt Subset", "Score: By Bin"):
+        assert f"    - [{title}](#{_anchor(title)})" in toc
+
+
+def test_every_table_of_contents_link_resolves_to_a_heading(report):
+    # A table of contents whose links land nowhere is worse than none.
+    readme, _, _ = report
+    toc = readme.split("## Table of Contents")[1].split("\n## ")[0]
+    linked = re.findall(r"\[[^\]]+\]\(#([^)]+)\)", toc)
+    anchors = heading_anchors(readme)
+
+    assert linked, "the table of contents has no links"
+    assert set(linked) <= set(anchors), sorted(set(linked) - set(anchors))
+    # Every heading below the table of contents is listed, in document order.
+    assert linked == [a for a in anchors if a != "table-of-contents"]
+
+
+def test_heading_anchors_are_unique(report):
+    readme, _, _ = report
+    anchors = heading_anchors(readme)
+    assert len(anchors) == len(set(anchors))
+
+
+def test_univariate_section_has_no_histogram(report):
+    readme, charts, _ = report
+    univariate = readme.split("## Univariate Analysis")[1].split("## Correlation")[0]
+    assert "![" not in univariate
+    assert "UNIVARIATE.png" not in charts
 
 
 def test_every_embedded_chart_is_uploaded(report):
@@ -594,12 +778,12 @@ def test_comparison_table_reports_auroc_and_tpr_at_the_threshold(report):
 def test_classifier_report_breaks_down_by_prompt_and_by_bin(report):
     readme, _, _ = report
     body = readme.split("## Classifier Report: Score")[1].split("## Manually Specified")[0]
-    assert "### By Prompt Subset" in body
-    assert "### By Bin" in body
+    assert "### Score: By Prompt Subset" in body
+    assert "### Score: By Bin" in body
     for name in ("Overall", "rewrite", "revise", "cosdist low", "cosdist high"):
         assert f"| {name} |" in body or f" {name} |" in body
-    assert "### Score Histograms per Prompt Subset" in body
-    assert "### Distance Histograms per Prompt Subset" in body
+    assert "### Score: Score Histograms per Prompt Subset" in body
+    assert "### Score: Distance Histograms per Prompt Subset" in body
 
 
 def test_manual_section_reports_the_first_classifier_per_generator(report):

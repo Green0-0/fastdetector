@@ -14,16 +14,28 @@ fixed_classes = [false, true]
 # auto_class_column = "label" # Automatically determine the class using the value from this column
 # ai_label = "AI" # The string value that indicates the AI class
 
+# Pairwise human-vs-AI distances, written by stats/distance_stats.py. Listing
+# one that this dataset does not have is not an error: analysis.py reports it
+# as skipped, so a stats stage you have not run yet is visible in the readme.
 distance_metrics = [
+    "jaccard_1",
+    "jaccard_2",
+    "jaccard_3",
+    "levenshtein",
+    "softngram",
     "cosdist",
-    "softngram"
+    "bertscore",
+    "bertscore_precision",
+    "bertscore_recall",
+    "moverscore",
+    "reranker"
 ]
 
 # Per-classifier bin breakdown: rows are split into num_bins equal-count
 # (quantile) bins of bin_column and every classifier is scored per bin, which
 # is what shows whether detection only works on the heavily rewritten rows.
 # bin_column defaults to the first distance metric above.
-# bin_column = "cosdist"
+bin_column = "cosdist"
 num_bins = 4
 
 [[filter_conditions]]
@@ -36,6 +48,13 @@ column = "softngram"
 operator = ">="
 value = 0.06
 
+# --------------------------------------------------------------------------
+# Classifiers. Each one scores every base column with `<base_column><suffix>`,
+# so the human and AI sides are compared with the same detector. `direction`
+# says which side of the threshold is AI; getting it wrong inverts AUROC.
+# --------------------------------------------------------------------------
+
+# EditLens (stats/editlens_stats.py, suffix from editlens_stats.toml).
 [[classifiers]]
 name = "EditLens Roberta-Large Score"
 suffix = "_editlens_score_roberta_large"
@@ -44,3 +63,67 @@ suffix = "_editlens_score_roberta_large"
 name = "EditLens Roberta-Large Bucket"
 suffix = "_editlens_bucket_roberta_large"
 threshold_kind = "bin"
+
+# LLM statistics (stats/llm_stats.py). Column names are
+# `<base_column>_<metric><col_suffix>` for the per-model metrics and
+# `<base_column>_binoculars` for binoculars, so these suffixes have to track
+# `col_suffixes` in llm_stats.toml.
+
+# Machine text is more predictable to the scoring model, so it sits at lower
+# perplexity, lower next-token entropy and fewer top-p/top-k outliers.
+[[classifiers]]
+name = "Perplexity (Llama-3.2-3B-Instruct)"
+suffix = "_perplexity_llama_instruct"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Perplexity (Llama-3.2-3B)"
+suffix = "_perplexity_llama_base"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Entropy (Llama-3.2-3B-Instruct)"
+suffix = "_entropy_llama_instruct"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Entropy (Llama-3.2-3B)"
+suffix = "_entropy_llama_base"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Top-p Outliers (Llama-3.2-3B-Instruct)"
+suffix = "_topp_outlier_llama_instruct"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Top-p Outliers (Llama-3.2-3B)"
+suffix = "_topp_outlier_llama_base"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Top-k Outliers (Llama-3.2-3B-Instruct)"
+suffix = "_topk_outlier_llama_instruct"
+direction = "lower_is_ai"
+
+[[classifiers]]
+name = "Top-k Outliers (Llama-3.2-3B)"
+suffix = "_topk_outlier_llama_base"
+direction = "lower_is_ai"
+
+# FastDetectGPT curvature: machine text scores higher (Bao et al., ICLR 2024).
+[[classifiers]]
+name = "FastDetectGPT (Llama-3.2-3B-Instruct)"
+suffix = "_fastdetectgpt_llama_instruct"
+
+[[classifiers]]
+name = "FastDetectGPT (Llama-3.2-3B)"
+suffix = "_fastdetectgpt_llama_base"
+
+# Binoculars: log(PPL) / cross-PPL over the observer/performer pair, and
+# machine text scores lower (Hans et al., 2024). One column per base column,
+# with no per-model suffix.
+[[classifiers]]
+name = "Binoculars"
+suffix = "_binoculars"
+direction = "lower_is_ai"
