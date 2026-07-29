@@ -2,7 +2,7 @@ import argparse
 
 from fastdetector.frontend.toml_config import DistanceStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard, shard_config_name
+from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
 
 from fastdetector.statistics.embeddings_api import batch_gen_embeddings, batch_soft_ngram_scores, generate_token_embeddings_pairs, batch_cross_encoder
 from fastdetector.statistics.statistics_basic import pairwise_jaccards, pairwise_levenshteins
@@ -84,7 +84,7 @@ def main() -> None:
         ds = ds.add_column("reranker", scores)
 
     print(f"Uploading dataset to {target_dataset}...")
-    ds.push_to_hub(target_dataset, config_name=shard_config_name(args.batch_id))
+    push_shard(ds, target_dataset, config_name=shard_config_name(args.batch_id))
     print("Done!")
 
 if __name__ == "__main__":

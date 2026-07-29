@@ -2,7 +2,7 @@ import argparse
 
 from fastdetector.frontend.toml_config import EditLensStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard, shard_config_name
+from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
 
 from fastdetector.modeling.editlens import (
     infer_n_buckets,
@@ -50,7 +50,7 @@ def main() -> None:
         
 
     print(f"Uploading dataset to {target_dataset}...")
-    ds.push_to_hub(target_dataset, config_name=shard_config_name(args.batch_id))
+    push_shard(ds, target_dataset, config_name=shard_config_name(args.batch_id))
     print("Done!")
 
 if __name__ == "__main__":

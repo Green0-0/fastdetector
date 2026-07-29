@@ -1,7 +1,16 @@
+import random
+import time
 from typing import Dict, Optional
 
 from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub.errors import HfHubHTTPError
 from datasets import Dataset, load_dataset, get_dataset_config_names, concatenate_datasets
+
+#: Hub statuses that mean "another commit is in flight, try again". 409 is a
+#: commit already in progress; 412 is a failed precondition because the branch
+#: moved under us. Both clear on their own. Everything else (401, 413, ...)
+#: is a permanent condition that waiting cannot fix, so it propagates.
+_RETRYABLE_PUSH_STATUS = frozenset({409, 412})
 
 
 def shard_config_name(shard_index: int) -> str:
@@ -17,6 +26,63 @@ def shard_config_name(shard_index: int) -> str:
         The config name, e.g. ``"shard_3"``.
     """
     return f"shard_{shard_index}"
+
+
+def push_shard(
+    dataset: Dataset,
+    dataset_name: str,
+    config_name: Optional[str] = None,
+    max_attempts: int = 8,
+    base_delay: float = 15.0,
+    max_delay: float = 300.0,
+) -> None:
+    """Push one shard to the Hub, retrying while the repo is contended.
+
+    Every stage fans out over shards but writes them back into a single Hub
+    repo, and the Hub serialises commits per repo. Array tasks that finish
+    together therefore collide with 409 (a commit is already in progress) or
+    412 (the branch moved under us). The cost of not handling this is
+    disproportionate: a stage that has already spent hours computing throws
+    that work away over transient contention.
+
+    The backoff is exponential with jitter. Jitter is not decoration here --
+    without it, tasks that lost the same race wake up together and collide
+    again, which is exactly how the observed 5-task rerun lost all 5 within
+    13 seconds.
+
+    Args:
+        dataset: The dataset to upload.
+        dataset_name: Target Hub repo id.
+        config_name: Config (shard) name to write under.
+        max_attempts: Total attempts, including the first.
+        base_delay: Seconds before the first retry; doubles thereafter.
+        max_delay: Ceiling on the pre-jitter delay.
+
+    Returns:
+        None.
+
+    Raises:
+        HfHubHTTPError: on a non-contention status, or when the attempts run
+            out. Failing loudly is intentional: a silently dropped shard is
+            worse than a failed job, because the gap only surfaces at analysis
+            time.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            dataset.push_to_hub(dataset_name, config_name=config_name)
+            return
+        except HfHubHTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status not in _RETRYABLE_PUSH_STATUS or attempt == max_attempts:
+                raise
+            delay = min(base_delay * 2 ** (attempt - 1), max_delay) * (0.5 + random.random())
+            print(
+                f"Push to '{dataset_name}' (config '{config_name}') hit HTTP "
+                f"{status} - another commit is in progress. Retrying in "
+                f"{delay:.1f}s (attempt {attempt}/{max_attempts})...",
+                flush=True,
+            )
+            time.sleep(delay)
 
 
 def load_dataset_auto_shard(
