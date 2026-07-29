@@ -57,20 +57,27 @@ echo "=============================================================="
 pytest -m "gpu and not vllm" -s || status=1
 
 # ---- vLLM tier ----
+# Runs from the MAIN venv, and never writes to the engine venv.
+#
+# The engine venv lives on NFS and running vLLM engines execute out of it.
+# Rewriting it mid-run invalidates their open file handles, which surfaces as
+# ESTALE inside Triton compilation and kills the engine -- so a routine test
+# run would silently destroy unrelated multi-hour production jobs.
+#
+# Nothing here needs to be installed anyway: the pipeline does not import
+# vllm, it launches <VLLM_VENV_PATH>/bin/vllm as a subprocess. The tier
+# therefore gates on that binary existing, not on a package being importable.
 VLLM_VENV_PATH="${VLLM_VENV_PATH:-${PWD}/.vllm}"
-if [[ -d "${VLLM_VENV_PATH}" ]]; then
+export VLLM_VENV_PATH
+if [[ -x "${VLLM_VENV_PATH}/bin/vllm" ]]; then
   echo
   echo "=============================================================="
   echo "vLLM tier (boots the configured engine end to end)"
   echo "=============================================================="
-  deactivate
-  source "${VLLM_VENV_PATH}/bin/activate"
-  # pytest lives in the main venv; install it here too if it is missing.
-  python -c "import pytest" 2>/dev/null || uv pip install "pytest>=8.0"
-  python -m pytest -q -m vllm || status=1
+  pytest -q -m vllm || status=1
 else
   echo
-  echo "vLLM venv not found at ${VLLM_VENV_PATH}; skipping the vllm tier." >&2
+  echo "No engine binary at ${VLLM_VENV_PATH}/bin/vllm; skipping the vllm tier." >&2
 fi
 
 echo
