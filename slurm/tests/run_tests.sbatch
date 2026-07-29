@@ -17,9 +17,9 @@ source .venv/bin/activate
 # ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/
 export PATH=$CUDA_HOME/bin:$PATH
-export CPATH=$CUDA_HOME/include:$CPATH
-export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:$CPLUS_INCLUDE_PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+export CPATH=$CUDA_HOME/include:${CPATH:-}
+export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:${CPLUS_INCLUDE_PATH:-}
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 
 export PYTHONUNBUFFERED=1
 
