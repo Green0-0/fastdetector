@@ -46,8 +46,8 @@ def main() -> None:
 
     # Embeddings (Cosine Sim)
     if config.cosdist and "cosdist" not in ds.column_names:
-        emb_a = batch_gen_embeddings(ds[col_a], model_name=config.embedding_model, batch_size=config.embedding_batch_size)
-        emb_b = batch_gen_embeddings(ds[col_b], model_name=config.embedding_model, batch_size=config.embedding_batch_size)
+        emb_a = batch_gen_embeddings(ds[col_a], model_name=config.embedding_model, batch_size=config.embedding_batch_size, max_seq_length=config.embedding_max_seq_length)
+        emb_b = batch_gen_embeddings(ds[col_b], model_name=config.embedding_model, batch_size=config.embedding_batch_size, max_seq_length=config.embedding_max_seq_length)
         ds = ds.add_column("cosdist", pairwise_cosdist(emb_a, emb_b))
 
     # Token Embeddings (BERTScore, Moverscore)
@@ -80,7 +80,7 @@ def main() -> None:
 
     # Reranker
     if config.reranker and "reranker" not in ds.column_names:
-        scores = batch_cross_encoder(ds[col_a], ds[col_b], model_name=config.reranker_model, batch_size=config.reranker_batch_size)
+        scores = batch_cross_encoder(ds[col_a], ds[col_b], model_name=config.reranker_model, batch_size=config.reranker_batch_size, max_length=config.reranker_max_length)
         ds = ds.add_column("reranker", scores)
 
     print(f"Uploading dataset to {target_dataset}...")

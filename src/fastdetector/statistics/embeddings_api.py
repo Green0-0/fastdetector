@@ -1,5 +1,5 @@
 from fastdetector.statistics.statistics_basic import extract_ngrams
-from typing import Dict
+from typing import Dict, Optional
 import gc
 
 import numpy as np
@@ -70,6 +70,7 @@ def batch_gen_embeddings(
     texts: list[str],
     model_name: str = "Qwen/Qwen3-Embedding-4B",
     batch_size: int = 4,
+    max_seq_length: Optional[int] = None,
 ) -> np.ndarray:
     """Generate normalized embeddings for a list of texts.
 
@@ -77,11 +78,19 @@ def batch_gen_embeddings(
         texts: List of strings.
         model_name: HuggingFace model identifier.
         batch_size: Batch size for inference.
+        max_seq_length: Truncate inputs to this many tokens. ``None`` inherits
+            the checkpoint's own limit, which is 40960 tokens for
+            ``Qwen3-Embedding-4B``. Because ``SentenceTransformer.encode``
+            sorts by length and pads each batch to its longest member, leaving
+            this unset lets one runaway generation set the memory cost of its
+            whole batch.
 
     Returns:
         Numpy array of normalized embeddings (shape: [len(texts), D]).
     """
     model = SentenceTransformer(model_name, trust_remote_code=True, **_build_kwargs(model_name))
+    if max_seq_length is not None:
+        model.max_seq_length = max_seq_length
     embeddings = model.encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
     _release_model(model)
     return embeddings
@@ -93,6 +102,7 @@ def batch_cross_encoder(
     model_name: str = "Qwen/Qwen3-Reranker-4B",
     batch_size: int = 2,
     as_distance: bool = True,
+    max_length: Optional[int] = None,
 ) -> list[float]:
     """Compute cross-encoder scores for aligned pairs of texts.
 
@@ -104,11 +114,18 @@ def batch_cross_encoder(
         as_distance: If True, negate the scores so they behave like distances
             (lower = more similar), matching the convention of the other
             ``pairwise_*`` metrics.
+        max_length: Truncate pairs to this many tokens. ``None`` inherits the
+            checkpoint's own limit, which is 40960 tokens for
+            ``Qwen3-Reranker-4B``; see :func:`batch_gen_embeddings` for why
+            that is expensive under length-sorted batching.
 
     Returns:
         List of cross-encoder scores (negated if as_distance=True).
     """
-    model = CrossEncoder(model_name, trust_remote_code=True, **_build_kwargs(model_name))
+    ce_kwargs = dict(_build_kwargs(model_name))
+    if max_length is not None:
+        ce_kwargs["max_length"] = max_length
+    model = CrossEncoder(model_name, trust_remote_code=True, **ce_kwargs)
     pairs = list(zip(texts_a, texts_b))
     scores = model.predict(pairs, batch_size=batch_size)
     _release_model(model)
