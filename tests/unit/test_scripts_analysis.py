@@ -706,9 +706,18 @@ def heading_anchors(readme: str) -> list[str]:
     return anchors
 
 
+def test_contents_heading_avoids_the_name_the_hub_strips(report):
+    # The Hugging Face card renderer drops a section headed exactly "Table of
+    # Contents" - heading and list - so the readme rendered on the Hub had no
+    # contents at all until this was renamed.
+    readme, _, _ = report
+    assert "\n## Contents\n" in readme
+    assert "Table of Contents" not in readme
+
+
 def test_table_of_contents_links_to_every_section(report):
     readme, _, _ = report
-    toc = readme.split("## Table of Contents")[1].split("\n## ")[0]
+    toc = readme.split("## Contents")[1].split("\n## ")[0]
     for heading in EXPECTED_SECTIONS:
         title = heading.removeprefix("## ")
         assert f"[{title}](#{_anchor(title)})" in toc
@@ -716,7 +725,7 @@ def test_table_of_contents_links_to_every_section(report):
 
 def test_table_of_contents_nests_every_subsection(report):
     readme, _, _ = report
-    toc = readme.split("## Table of Contents")[1].split("\n## ")[0]
+    toc = readme.split("## Contents")[1].split("\n## ")[0]
     for title in ("Score: By Prompt Subset", "Score: By Bin"):
         assert f"    - [{title}](#{_anchor(title)})" in toc
 
@@ -724,14 +733,14 @@ def test_table_of_contents_nests_every_subsection(report):
 def test_every_table_of_contents_link_resolves_to_a_heading(report):
     # A table of contents whose links land nowhere is worse than none.
     readme, _, _ = report
-    toc = readme.split("## Table of Contents")[1].split("\n## ")[0]
+    toc = readme.split("## Contents")[1].split("\n## ")[0]
     linked = re.findall(r"\[[^\]]+\]\(#([^)]+)\)", toc)
     anchors = heading_anchors(readme)
 
     assert linked, "the table of contents has no links"
     assert set(linked) <= set(anchors), sorted(set(linked) - set(anchors))
     # Every heading below the table of contents is listed, in document order.
-    assert linked == [a for a in anchors if a != "table-of-contents"]
+    assert linked == [a for a in anchors if a != "contents"]
 
 
 def test_heading_anchors_are_unique(report):

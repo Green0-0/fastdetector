@@ -5,7 +5,7 @@ in this order:
 
 1. the run configuration the script was invoked with, then a data-derived
    summary of what the report contains,
-2. a table of contents,
+2. a contents list (headed "Contents" - see _build_readme),
 3. univariate stats and correlations over every statistic of interest,
 4. distance and classifier histograms over the whole dataset,
 5. a classifier comparison table and the threshold sweeps behind it,
@@ -252,7 +252,7 @@ def _anchor(title: str) -> str:
     return re.sub(r"[\s_]+", "-", slug.strip())
 
 def _build_table_of_contents(body: str) -> list[str]:
-    """Build a nested table of contents from the headings *body* actually has.
+    """Build the nested contents list from the headings *body* actually has.
 
     Reading the headings back out of the rendered markdown (rather than
     listing them a second time by hand) is what keeps every entry a working
@@ -1069,7 +1069,13 @@ def _build_readme(result_ds: Dataset, eval_config, run_info: dict, unique_prompt
         )
     )
     lines.append("")
-    lines.append("## Table of Contents")
+    # NOT "Table of Contents": the Hugging Face card renderer silently strips a
+    # section whose heading is exactly that (it is boilerplate in the Hub's own
+    # dataset-card template), heading and list both, so the readme rendered on
+    # the Hub had no contents at all. Verified against the rendered pages of
+    # squad and glue, which lose theirs the same way, while cards heading the
+    # same list "Contents" keep it. Renaming this back will delete it again.
+    lines.append("## Contents")
     lines.extend(_build_table_of_contents(body_md))
     lines.append("")
     lines.append(body_md)
