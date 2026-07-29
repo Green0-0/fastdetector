@@ -31,7 +31,7 @@ def shard_config_name(shard_index: int) -> str:
 def push_shard(
     dataset: Dataset,
     dataset_name: str,
-    config_name: Optional[str] = None,
+    config_name: str = "default",
     max_attempts: int = 8,
     base_delay: float = 15.0,
     max_delay: float = 300.0,
@@ -53,7 +53,12 @@ def push_shard(
     Args:
         dataset: The dataset to upload.
         dataset_name: Target Hub repo id.
-        config_name: Config (shard) name to write under.
+        config_name: Config (shard) name to write under. Defaults to
+            ``"default"`` to mirror ``push_to_hub``. It must not be ``None``:
+            ``push_to_hub`` does not treat that as "unset" but carries it
+            through to the data directory it derives from this name, so a
+            caller that omitted it would upload under a broken path rather
+            than fall back.
         max_attempts: Total attempts, including the first.
         base_delay: Seconds before the first retry; doubles thereafter.
         max_delay: Ceiling on the pre-jitter delay.

@@ -158,3 +158,25 @@ def test_unrelated_exceptions_propagate_immediately(no_sleep):
     with pytest.raises(ValueError):
         push_shard(dataset, "user/ds")
     assert len(dataset.calls) == 1
+
+
+def test_the_default_config_name_matches_push_to_hub(no_sleep):
+    """Omitting ``config_name`` must forward what ``push_to_hub`` would default to.
+
+    ``push_to_hub`` does not read ``None`` as "unset": it derives the uploaded
+    data directory from this value (``"default"`` maps to ``data/``), so a
+    ``None`` default here would upload under a broken path instead of quietly
+    falling back. Pinning it against the real signature means a change to the
+    Hub client's default surfaces here rather than in a failed nightly push.
+    """
+    import inspect
+
+    from datasets import Dataset
+
+    upstream_default = inspect.signature(Dataset.push_to_hub).parameters["config_name"].default
+    helper_default = inspect.signature(push_shard).parameters["config_name"].default
+    assert helper_default == upstream_default
+
+    dataset = _FakeDataset()
+    push_shard(dataset, "user/ds")
+    assert dataset.calls == [("user/ds", upstream_default)]
