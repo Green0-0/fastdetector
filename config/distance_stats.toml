@@ -6,12 +6,8 @@ reranker_batch_size = 2
 softngram_phrase_batch_size = 2048
 token_embedding_chunk_size = 100
 
-# Sequence-length caps for the Qwen3 embedding/reranker passes. Unset, these
-# inherit the checkpoints' own 40960-token limit, and one runaway generation
-# drags its whole (length-sorted, padded) batch up with it. Texts longer than
-# the cap are truncated, so this changes their metric values as well as the
-# memory cost.
 embedding_max_seq_length = 8192
+token_embedding_max_length = 8192
 reranker_max_length = 8192
 
 jaccard_1 = true

@@ -57,7 +57,7 @@ def main() -> None:
     needs_moverscore = config.moverscore and "moverscore" not in ds.column_names
     
     if needs_bertscore or needs_moverscore:
-        generator = generate_token_embeddings_pairs(ds[col_a], ds[col_b], model_name=config.token_embedding_model, batch_size=config.token_embedding_batch_size, chunk_size=config.token_embedding_chunk_size)
+        generator = generate_token_embeddings_pairs(ds[col_a], ds[col_b], model_name=config.token_embedding_model, batch_size=config.token_embedding_batch_size, chunk_size=config.token_embedding_chunk_size, max_length=config.token_embedding_max_length)
         
         all_b_prec, all_b_rec, all_b_f1, all_m_scores = [], [], [], []
         for embs_a, toks_a, embs_b, toks_b in generator:

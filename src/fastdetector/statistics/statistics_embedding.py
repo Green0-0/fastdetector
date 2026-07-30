@@ -31,7 +31,6 @@ def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: 
     """
     embs = np.array(embeddings_list, dtype=np.float32)
     if len(embs) <= 1:
-        # With 0 or 1 embeddings there are no "other" rows to average over.
         return [0.0] * len(embs)
     n_items = len(embs) - 1
 
@@ -39,7 +38,7 @@ def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: 
     for i in range(0, len(embs), batch_size):
         batch_embs = embs[i:i+batch_size]
         sims = batch_embs @ embs.T
-        sum_sims = np.sum(sims, axis=1) - 1.0  # subtract self similarity
+        sum_sims = np.sum(sims, axis=1) - 1.0
         results.extend((sum_sims / n_items).tolist())
     return results
 
@@ -131,7 +130,7 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
             f1s.append(1.0)
             continue
             
-        sim_matrix = torch.mm(edit, src.t())  # M x NN
+        sim_matrix = torch.mm(edit, src.t())
         
         if src_tokens_list is not None and edit_tokens_list is not None:
             w_src = _get_idf_weights(src_tokens_list[i], src_idf)

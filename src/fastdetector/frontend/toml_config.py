@@ -166,8 +166,9 @@ class DistanceStatConfig(BaseModel):
     softngram_phrase_batch_size: int = 2048
     token_embedding_chunk_size: int = 100
 
-    # Sequence-length caps for the Qwen3 embedding/reranker passes.
+    # Sequence-length caps.
     embedding_max_seq_length: Optional[int] = None
+    token_embedding_max_length: Optional[int] = None
     reranker_max_length: Optional[int] = None
 
     # Basic Similarity Metrics

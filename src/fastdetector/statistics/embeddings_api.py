@@ -111,6 +111,7 @@ def generate_token_embeddings_pairs(
     model_name: str = "answerdotai/ModernBERT-base",
     batch_size: int = 4,
     chunk_size: int = 100,
+    max_length: Optional[int] = None,
 ):
     """Extract normalized token-level embeddings and token lists for paired texts.
 
@@ -120,6 +121,7 @@ def generate_token_embeddings_pairs(
         model_name: HuggingFace model identifier.
         batch_size: Inference batch size.
         chunk_size: Number of texts per yielded chunk.
+        max_length: Maximum token length for tokenizer truncation.
 
     Yields:
         Tuple of (embs_a, toks_a, embs_b, toks_b) for each chunk.
@@ -137,7 +139,10 @@ def generate_token_embeddings_pairs(
         all_tokens = []
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
-            inputs = tokenizer(batch_texts, padding=True, return_tensors="pt", truncation=True, max_length=512)
+            tok_kwargs = {"padding": True, "return_tensors": "pt"}
+            if max_length is not None:
+                tok_kwargs.update(truncation=True, max_length=max_length)
+            inputs = tokenizer(batch_texts, **tok_kwargs)
             if torch.cuda.is_available():
                 inputs = {k: v.cuda() for k, v in inputs.items()}
             with torch.no_grad():
