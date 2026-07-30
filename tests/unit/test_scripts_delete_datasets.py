@@ -1,6 +1,6 @@
 import pytest
 
-from delete_datasets import STAGE_DATASET_FIELDS, resolve_targets
+from delete_datasets import NON_RAW_DATASET_FIELDS, resolve_non_raw_datasets
 from fastdetector.frontend.toml_config import GlobalsConfig
 
 FIELDS = dict(
@@ -14,22 +14,18 @@ FIELDS = dict(
 )
 
 
-def test_stages_resolve_to_prefixed_names():
+def test_resolve_non_raw_datasets_returns_all_non_raw_datasets():
     config = GlobalsConfig(**FIELDS)
-    assert resolve_targets(config, ["stat", "eval"]) == [
+    assert resolve_non_raw_datasets(config) == [
+        "user/corpus-processed",
+        "user/corpus-filtered",
+        "user/corpus-rewritten",
         "user/corpus-stat",
         "user/corpus-eval",
     ]
 
 
-def test_every_stage_maps_to_a_globals_field():
+def test_every_non_raw_field_is_in_globals_config():
     config = GlobalsConfig(**FIELDS)
-    # A stage naming a field GlobalsConfig does not have would only fail at
-    # deletion time, against a half-resolved name.
-    for stage in STAGE_DATASET_FIELDS:
-        assert resolve_targets(config, [stage])
-
-
-def test_unknown_stage_is_rejected():
-    with pytest.raises(ValueError, match="Unknown stage"):
-        resolve_targets(GlobalsConfig(**FIELDS), ["classifier"])
+    for field in NON_RAW_DATASET_FIELDS:
+        assert hasattr(config, field)

@@ -28,7 +28,7 @@ There is also a globals.toml which specifies traditional dataset paths and an op
 
 Stages #2 to #4 take a `--batch-id`: each one processes the shard with that index and writes its results back under the same shard name, so scaling out is one batch-id per machine (and stage #5 reads every shard back). Nothing else decides how much data a run covers — no config file carries a sample count, and each stage processes every row of the shard it is handed, so `--num-samples` at stage #1 is the single place that is set.
 
-`slurm/` holds a job script per stage, with the sharded ones submitted as array jobs (their `--array` range and your `--num-shards` have to agree). If you need to start over, `scripts/delete_datasets.py` deletes the datasets a set of stages wrote (it only lists them unless you pass `--yes`).
+`slurm/` holds a job script per stage, with the sharded ones submitted as array jobs (their `--array` range and your `--num-shards` have to agree). If you need to start over, `scripts/delete_datasets.py` iterates over non-raw datasets in your config and prompts for deletion.
 
 Every GPU stage points its compile caches at node-local disk (`/tmp/fd_$SLURM_JOB_ID`) and deletes them on exit. This is not optional on a cluster whose `$HOME` is NFS: Triton otherwise writes to `$HOME/.triton`, and several array tasks compiling the same kernels into that one shared directory race each other until NFS returns `ESTALE` — which shows up as `Triton compilation failed` / `OSError: [Errno 116] Stale file handle` and kills the worker, looking for all the world like a CUDA problem. It also keeps compile artifacts out of a quota-limited home directory. If your `/tmp` is small or not node-local, override `FD_CACHE_ROOT` in the job scripts.
 
