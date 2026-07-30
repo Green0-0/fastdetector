@@ -29,21 +29,10 @@ def _build_kwargs(model_name: str) -> Dict:
 def _release_model(model) -> None:
     """Move a model off the GPU, drop it, and reclaim CUDA memory.
 
-    ``del model`` alone cannot free anything: it drops this function's
-    parameter, not the caller's reference, and transformers models sit in
-    reference cycles that a ``gc.collect()`` in the same frame will not
-    break. The checkpoint therefore stayed resident, and the next stage in
-    ``distance_stats.py`` loaded its own multi-GiB checkpoint on top of it.
-
     Moving the parameters to host memory first frees the CUDA allocations
-    regardless of what Python still holds, which is what makes the release
-    unconditional.
-
-    The outer object is tried first because ``torch.nn.Module.to`` is
-    recursive and therefore moves every parameter, including heads that live
-    outside a wrapped ``.model``. ``CrossEncoder`` is the fallback case: in
-    older sentence-transformers releases it is a plain class holding the
-    transformer in ``.model`` rather than a ``Module`` of its own.
+    regardless of Python reference cycles. The outer object is tried first
+    because ``torch.nn.Module.to`` is recursive. ``CrossEncoder`` is handled
+    via fallback if it wraps its module in ``.model``.
 
     Args:
         model: PyTorch / SentenceTransformer / CrossEncoder object to release.

@@ -175,12 +175,8 @@ def compute_quantile_bins(values: np.ndarray, num_bins: int, column: str) -> tup
 class ColumnCache:
     """A read-only Dataset view that materialises each column exactly once.
 
-    The report reads the same handful of columns hundreds of times over (once
-    per classifier x subset x chart), and ``Dataset.__getitem__`` rebuilds the
-    whole column on every access - row by row through the indices mapping once
-    the dataset has been split, which is O(rows) Python-level work per read.
-    Profiling a 13-classifier report over 20k rows showed 3 million such row
-    extractions and five minutes of runtime; caching makes it seconds.
+    Caching column extractions avoids rebuilding columns repeatedly when
+    generating multi-classifier subset reports.
 
     Only the read paths the report uses are implemented: column access,
     ``column_names`` and ``len``.

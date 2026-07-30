@@ -40,15 +40,10 @@ def push_shard(
 
     Every stage fans out over shards but writes them back into a single Hub
     repo, and the Hub serialises commits per repo. Array tasks that finish
-    together therefore collide with 409 (a commit is already in progress) or
-    412 (the branch moved under us). The cost of not handling this is
-    disproportionate: a stage that has already spent hours computing throws
-    that work away over transient contention.
+    together may collide with 409 or 412 status codes.
 
-    The backoff is exponential with jitter. Jitter is not decoration here --
-    without it, tasks that lost the same race wake up together and collide
-    again, which is exactly how the observed 5-task rerun lost all 5 within
-    13 seconds.
+    The backoff is exponential with jitter to prevent competing workers from
+    colliding repeatedly on retries.
 
     Args:
         dataset: The dataset to upload.
@@ -281,10 +276,6 @@ def upload_readme(
                 )
         print("README and files uploaded successfully.")
     except Exception as e:
-        # Don't swallow the failure: callers (filter.py, gen.py, analysis.py)
-        # run this as the final step of long pipelines, and a printed message
-        # followed by a zero exit code made lost READMEs/charts look like a
-        # successful run.
         raise RuntimeError(
             f"Failed to upload README/files to HuggingFace Hub dataset "
             f"'{dataset_name}': {e}"
