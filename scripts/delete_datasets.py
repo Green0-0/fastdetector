@@ -8,25 +8,22 @@ from fastdetector.frontend.toml_loader import load_toml
 # Pipeline stage -> the globals.toml field naming that stage's dataset. Only
 # stages the pipeline *writes* are listed: raw is the one dataset a re-run
 # cannot rebuild, so deleting it stays a deliberate `hf repos delete`.
-STAGE_SUFFIX_FIELDS = {
-    "pre_filter": "pre_filter_suffix",
-    "post_filter": "post_filter_suffix",
-    "gen": "gen_suffix",
-    "stat": "stat_suffix",
-    "eval": "eval_suffix",
+STAGE_DATASET_FIELDS = {
+    "pre_filter": "pre_filter_dataset",
+    "post_filter": "post_filter_dataset",
+    "gen": "gen_dataset",
+    "stat": "stat_dataset",
+    "eval": "eval_dataset",
 }
+STAGE_SUFFIX_FIELDS = STAGE_DATASET_FIELDS
 
 
 def resolve_targets(globals_config: GlobalsConfig, stages: list[str]) -> list[str]:
     """Resolve pipeline stage names to the dataset repo IDs they write.
 
-    Names are resolved exactly as the pipeline resolves them, so an
-    override_dataset_output in globals.toml collapses every stage onto the same
-    repo; duplicates are dropped rather than deleted twice.
-
     Args:
         globals_config: The loaded globals config.
-        stages: Stage names, each a key of STAGE_SUFFIX_FIELDS.
+        stages: Stage names, each a key of STAGE_DATASET_FIELDS.
 
     Returns:
         The repo IDs to delete, in the order the stages were given.
@@ -36,12 +33,12 @@ def resolve_targets(globals_config: GlobalsConfig, stages: list[str]) -> list[st
     """
     targets = []
     for stage in stages:
-        field = STAGE_SUFFIX_FIELDS.get(stage)
+        field = STAGE_DATASET_FIELDS.get(stage)
         if field is None:
             raise ValueError(
-                f"Unknown stage {stage!r}. Valid stages: {sorted(STAGE_SUFFIX_FIELDS)}"
+                f"Unknown stage {stage!r}. Valid stages: {sorted(STAGE_DATASET_FIELDS)}"
             )
-        name = globals_config.resolve_output_dataset(getattr(globals_config, field))
+        name = globals_config.resolve_dataset(getattr(globals_config, field))
         if name not in targets:
             targets.append(name)
     return targets
@@ -64,7 +61,7 @@ def main() -> None:
         type=str,
         nargs="+",
         required=True,
-        choices=sorted(STAGE_SUFFIX_FIELDS),
+        choices=sorted(STAGE_DATASET_FIELDS),
         help="Pipeline stages whose datasets should be deleted.",
     )
     parser.add_argument(

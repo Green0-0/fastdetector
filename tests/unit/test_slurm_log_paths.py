@@ -1,14 +1,3 @@
-"""Job scripts must write their logs into ``slurm/logs/``.
-
-`slurm/tests/run_tests.sbatch` used a bare ``fastdetector_tests_%j.out``, so
-test output accumulated in the working directory -- the repo root. `.gitignore`
-covers ``*.out``/``*.err``, so this never showed up in ``git status``; it just
-quietly littered the checkout while every other stage's output went to one
-place.
-
-Textual checks, so they run in the default tier without Slurm.
-"""
-
 import re
 
 import pytest

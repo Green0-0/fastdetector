@@ -1,11 +1,3 @@
-"""The scoring stack against real checkpoints downloaded from the Hub.
-
-Defaults are deliberately tiny so this tier stays runnable on a laptop; point
-the environment variables at the production checkpoints to smoke-test those::
-
-    FASTDETECTOR_TEST_MODEL=unsloth/Llama-3.2-3B-Instruct pytest -m "network"
-"""
-
 import math
 import os
 
@@ -44,6 +36,7 @@ def cpu_settings() -> ScorerSettings:
 def test_scoring_real_texts_with_a_real_checkpoint(
     hub_model_id, cpu_settings, skip_if_unreachable
 ):
+    """Test scoring real text strings with a model checkpoint."""
     try:
         with exact_scorer_context([hub_model_id], cpu_settings) as scorer:
             scored = scorer.score_texts(TEXTS)
@@ -63,6 +56,7 @@ def test_scoring_real_texts_with_a_real_checkpoint(
 def test_metrics_computed_from_real_scores_are_finite(
     hub_model_id, cpu_settings, skip_if_unreachable
 ):
+    """Test that metrics derived from real model scores produce finite values."""
     try:
         with exact_scorer_context([hub_model_id], cpu_settings) as scorer:
             scored = scorer.score_texts(TEXTS[:2])
@@ -84,6 +78,7 @@ def test_metrics_computed_from_real_scores_are_finite(
 def test_binoculars_needs_two_co_resident_checkpoints(
     hub_model_id, skip_if_unreachable
 ):
+    """Test Binoculars scoring requiring two co-resident model checkpoints."""
     # Scoring a model against itself makes the cross-entropy equal the entropy,
     # which is the degenerate but well-defined case; what matters here is that
     # two checkpoints load together and produce an aligned cross-entropy array.
@@ -148,6 +143,7 @@ def test_the_configured_production_checkpoints_share_a_vocabulary(
 def test_the_configured_editlens_checkpoint_loads_and_scores(
     repo_root, skip_if_unreachable
 ):
+    """Test loading and scoring with the configured EditLens checkpoint."""
     from fastdetector.frontend.toml_config import EditLensStatConfig
     from fastdetector.frontend.toml_loader import load_toml
     from fastdetector.modeling.editlens import (

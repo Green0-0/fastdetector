@@ -1,10 +1,3 @@
-"""Engine subprocess management.
-
-The health-check loop is exercised for real against a stub "engine" binary: a
-throwaway script that serves ``/v1/models``. The polling constants are patched
-down so the timeout path takes milliseconds instead of twenty minutes.
-"""
-
 import json
 import os
 import socket
@@ -88,6 +81,8 @@ def stub_engine(tmp_path, monkeypatch):
     monkeypatch.setattr(llm_utils, "HEALTH_CHECK_MAX_INTERVALS", 200)
 
     class Stub:
+        """Helper recording execution environment and venv path for stub engine."""
+
         venv_path = str(tmp_path / "venv")
 
         @staticmethod
@@ -103,6 +98,7 @@ def stub_engine(tmp_path, monkeypatch):
 
 
 def test_get_free_port_returns_a_bindable_port():
+    """Test that get_free_port returns a valid, bindable local port number."""
     port = get_free_port()
     assert isinstance(port, int)
     assert 1024 < port < 65536
@@ -111,6 +107,7 @@ def test_get_free_port_returns_a_bindable_port():
 
 
 def test_get_free_port_usually_differs_between_calls():
+    """Test that get_free_port generates varied port numbers across calls."""
     ports = {get_free_port() for _ in range(5)}
     assert len(ports) > 1
 
@@ -125,11 +122,13 @@ def test_get_free_port_usually_differs_between_calls():
     [("0", 1), ("0,1", 2), ("0,1,2,3", 4), (" 0 , 1 ", 2), ("0,1,", 2)],
 )
 def test_get_gpu_count_parses_cuda_visible_devices(monkeypatch, visible, expected):
+    """Test parsing of CUDA_VISIBLE_DEVICES environment variable string."""
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", visible)
     assert get_gpu_count() == expected
 
 
 def test_get_gpu_count_requires_the_variable_to_be_set(monkeypatch):
+    """Test that get_gpu_count raises RuntimeError if CUDA_VISIBLE_DEVICES is unset."""
     monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
     with pytest.raises(RuntimeError, match="not set"):
         get_gpu_count()
@@ -137,6 +136,7 @@ def test_get_gpu_count_requires_the_variable_to_be_set(monkeypatch):
 
 @pytest.mark.parametrize("visible", ["", " ", ","])
 def test_get_gpu_count_rejects_an_empty_device_list(monkeypatch, visible):
+    """Test that get_gpu_count raises RuntimeError for empty device lists."""
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", visible)
     with pytest.raises(RuntimeError, match="No GPUs found"):
         get_gpu_count()
@@ -148,21 +148,25 @@ def test_get_gpu_count_rejects_an_empty_device_list(monkeypatch, visible):
 
 
 def test_resolve_engine_binary_returns_the_executable_path(stub_engine):
+    """Test resolving engine binary executable path from venv."""
     resolved = _resolve_engine_binary(EngineConfig.VLLM, stub_engine.venv_path)
     assert resolved == os.path.join(stub_engine.venv_path, "bin", "vllm")
 
 
 def test_resolve_engine_binary_requires_a_venv_path():
+    """Test that _resolve_engine_binary raises error when venv_path is empty."""
     with pytest.raises(RuntimeError, match="venv_path must be provided"):
         _resolve_engine_binary(EngineConfig.VLLM, "")
 
 
 def test_resolve_engine_binary_reports_a_missing_binary(tmp_path):
+    """Test that _resolve_engine_binary raises error when binary does not exist."""
     with pytest.raises(RuntimeError, match="not found or not executable"):
         _resolve_engine_binary(EngineConfig.APHRODITE, str(tmp_path))
 
 
 def test_resolve_engine_binary_rejects_a_non_executable_file(tmp_path):
+    """Test that _resolve_engine_binary rejects non-executable binary files."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     target = bin_dir / "vllm"
@@ -173,6 +177,7 @@ def test_resolve_engine_binary_rejects_a_non_executable_file(tmp_path):
 
 
 def test_resolve_engine_binary_looks_up_the_engine_by_name(tmp_path):
+    """Test resolving binary path matched by EngineConfig enum name."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     target = bin_dir / "aphrodite"
@@ -189,6 +194,7 @@ def test_resolve_engine_binary_looks_up_the_engine_by_name(tmp_path):
 
 
 def test_launch_rejects_a_non_local_engine():
+    """Test that launch_engine_server rejects proprietary non-local engines."""
     with pytest.raises(ValueError, match="not a local-server engine"):
         launch_engine_server(
             EngineConfig.OAI, "m", 8000, venv_path=".venv", parallelization_type="data"
@@ -196,6 +202,7 @@ def test_launch_rejects_a_non_local_engine():
 
 
 def test_context_rejects_a_non_local_engine():
+    """Test that llm_server_context rejects proprietary non-local engines."""
     with pytest.raises(ValueError, match="not a local-server engine"):
         with llm_server_context(
             EngineConfig.OAI, "m", venv_path=".venv", parallelization_type="data"
@@ -209,6 +216,7 @@ def test_context_rejects_a_non_local_engine():
 
 
 def test_launch_waits_until_the_server_is_healthy(stub_engine, free_port):
+    """Test that launch_engine_server polls until HTTP server responds."""
     proc = launch_engine_server(
         EngineConfig.VLLM,
         "some/model",
@@ -223,6 +231,7 @@ def test_launch_waits_until_the_server_is_healthy(stub_engine, free_port):
 
 
 def test_launch_passes_the_configured_engine_flags(stub_engine, free_port):
+    """Test that launch_engine_server forwards CLI options to the engine binary."""
     proc = launch_engine_server(
         EngineConfig.VLLM,
         "some/model",
@@ -258,6 +267,7 @@ def test_launch_passes_the_configured_engine_flags(stub_engine, free_port):
 
 
 def test_launch_gives_the_distributed_backend_its_own_port(stub_engine, free_port):
+    """Test that distributed master port is assigned distinctly from API port."""
     proc = launch_engine_server(
         EngineConfig.VLLM,
         "some/model",
@@ -276,6 +286,7 @@ def test_launch_gives_the_distributed_backend_its_own_port(stub_engine, free_por
 
 
 def test_launch_raises_when_the_engine_exits_early(stub_engine, free_port, monkeypatch):
+    """Test that early process failure during launch raises RuntimeError."""
     monkeypatch.setenv("STUB_ENGINE_EXIT", "3")
     with pytest.raises(RuntimeError, match="exited with code 3"):
         launch_engine_server(
@@ -288,6 +299,7 @@ def test_launch_raises_when_the_engine_exits_early(stub_engine, free_port, monke
 
 
 def test_launch_times_out_and_cleans_up(stub_engine, free_port, monkeypatch):
+    """Test that server startup timeout terminates the spawned subprocess."""
     monkeypatch.setenv("STUB_ENGINE_HANG", "1")
     monkeypatch.setattr(llm_utils, "HEALTH_CHECK_MAX_INTERVALS", 3)
 
@@ -307,6 +319,7 @@ def test_launch_times_out_and_cleans_up(stub_engine, free_port, monkeypatch):
 
 
 def test_context_yields_the_api_url_and_shuts_the_server_down(stub_engine, free_port):
+    """Test llm_server_context context manager lifecycle and teardown."""
     import requests
 
     with llm_server_context(
@@ -324,6 +337,7 @@ def test_context_yields_the_api_url_and_shuts_the_server_down(stub_engine, free_
 
 
 def test_context_shuts_the_server_down_when_the_body_raises(stub_engine, free_port):
+    """Test llm_server_context terminates process even if exception is raised inside body."""
     import requests
 
     with pytest.raises(ValueError, match="boom"):
@@ -341,6 +355,7 @@ def test_context_shuts_the_server_down_when_the_body_raises(stub_engine, free_po
 
 
 def test_context_picks_a_free_port_when_none_is_given(stub_engine):
+    """Test that llm_server_context automatically allocates an available port."""
     with llm_server_context(
         EngineConfig.VLLM,
         "some/model",
@@ -355,6 +370,7 @@ def test_context_picks_a_free_port_when_none_is_given(stub_engine):
 def test_context_does_not_leave_a_process_behind_when_launching_fails(
     tmp_path, monkeypatch
 ):
+    """Test that launch failures clean up temporary resources."""
     # The binary does not exist, so nothing should be spawned or leaked.
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
     with pytest.raises(RuntimeError, match="not found or not executable"):
@@ -374,6 +390,7 @@ def test_context_does_not_leave_a_process_behind_when_launching_fails(
 
 
 def test_terminate_proc_stops_a_running_process():
+    """Test that _terminate_proc terminates a running child process."""
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     _terminate_proc(proc, EngineConfig.VLLM)
     assert proc.poll() is not None
@@ -381,6 +398,7 @@ def test_terminate_proc_stops_a_running_process():
 
 @pytest.mark.slow
 def test_terminate_proc_escalates_to_kill_when_sigterm_is_ignored():
+    """Test that _terminate_proc sends SIGKILL if SIGTERM is ignored."""
     proc = subprocess.Popen(
         [
             sys.executable,

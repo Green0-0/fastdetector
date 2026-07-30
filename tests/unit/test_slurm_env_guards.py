@@ -1,20 +1,3 @@
-"""Every ``set -u`` job script must guard the env vars that are often unset.
-
-`slurm/tests/run_tests.sbatch` exited within seconds having run zero tests,
-with only ``line 20: CPATH: unbound variable`` in the log. Under ``set -u``,
-expanding an unset variable is fatal, and `CPATH` / `CPLUS_INCLUDE_PATH` are
-unset on a stock login environment. The sibling scripts already used
-``${VAR:-}``; this one was missed.
-
-The issue suggested a CI shellcheck pass would catch the class. It does not:
-shellcheck reports these files clean (exit 0 with SC1091 excluded) both before
-and after the fix, because it cannot know which environment variables happen to
-be set on the submitting host. So the guard is asserted directly here instead.
-
-The check is textual on purpose -- it runs in the default tier without Slurm,
-CUDA, or a cluster.
-"""
-
 import re
 
 import pytest

@@ -24,7 +24,7 @@ These five stages (ignoring prompts) correspond to the following python scripts 
 
 **#5:** analysis.py and analysis.toml
 
-There is also a globals.toml which specifies a naming convention for  huggingface datasets; **you should modify it with your username; you also need the source dataset under your account**.
+There is also a globals.toml which specifies traditional dataset paths and an optional username prefix for huggingface datasets; **you should modify it with your dataset paths (and optional prefix); you also need the source dataset under your account**.
 
 Stages #2 to #4 take a `--batch-id`: each one processes the shard with that index and writes its results back under the same shard name, so scaling out is one batch-id per machine (and stage #5 reads every shard back). Nothing else decides how much data a run covers — no config file carries a sample count, and each stage processes every row of the shard it is handed, so `--num-samples` at stage #1 is the single place that is set.
 

@@ -321,6 +321,8 @@ def main():
         md += md_entry(emoji, name, sm, bm)
         
     class NumpyEncoder(json.JSONEncoder):
+        """JSONEncoder subclass for serializing NumPy scalar and array types."""
+
         def default(self, obj):
             if isinstance(obj, np.floating):
                 return float(obj)

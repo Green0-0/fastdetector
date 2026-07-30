@@ -1,15 +1,3 @@
-"""Real Hugging Face Hub reads and (opt-in) writes.
-
-The read tests need ``FASTDETECTOR_TEST_HF_DATASET`` to point at a dataset the
-runner can see. The write tests additionally need
-``FASTDETECTOR_TEST_HF_WRITE_DATASET`` plus a token with write access, and they
-push real data — so they only run when you explicitly name a scratch repo::
-
-    FASTDETECTOR_TEST_HF_DATASET=some/public-dataset \\
-    FASTDETECTOR_TEST_HF_WRITE_DATASET=you/fastdetector-test-scratch \\
-        pytest -m network
-"""
-
 import uuid
 
 import pytest
@@ -26,6 +14,7 @@ pytestmark = [pytest.mark.network, pytest.mark.slow]
 
 
 def test_a_real_dataset_loads(read_dataset_id, skip_if_unreachable):
+    """Test loading a real dataset from Hugging Face Hub."""
     try:
         dataset = load_dataset_auto_shard(read_dataset_id, split="train")
     except Exception as exc:  # noqa: BLE001 - re-raised unless it is connectivity
@@ -34,6 +23,7 @@ def test_a_real_dataset_loads(read_dataset_id, skip_if_unreachable):
 
 
 def test_all_shards_of_a_real_dataset_load(read_dataset_id, skip_if_unreachable):
+    """Test loading all shards of a dataset from Hugging Face Hub."""
     try:
         dataset = load_dataset_all_shards(read_dataset_id, split="train")
     except Exception as exc:  # noqa: BLE001
@@ -44,6 +34,7 @@ def test_all_shards_of_a_real_dataset_load(read_dataset_id, skip_if_unreachable)
 def test_asking_for_a_shard_that_does_not_exist_fails_loudly(
     read_dataset_id, skip_if_unreachable
 ):
+    """Test that requesting a non-existent shard index raises ValueError."""
     # Reading some other shard instead would silently duplicate work across
     # machines, so index 9999 must never resolve to anything.
     try:

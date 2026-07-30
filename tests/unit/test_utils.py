@@ -1,10 +1,3 @@
-"""Dataset sharding, README publishing, and structured filtering.
-
-The shard helpers are the multi-machine safety net: a wrong config name here
-means one machine silently overwrites another machine's shard, so the
-resolution rules are pinned exhaustively.
-"""
-
 import pytest
 from datasets import Dataset
 
@@ -29,6 +22,8 @@ def fake_hub(monkeypatch):
     """
 
     class Hub:
+        """Stub dataset Hub recorder tracking configs and load calls."""
+
         configs: list[str] = []
         configs_error: Exception | None = None
         loads: list[tuple] = []
@@ -183,6 +178,8 @@ def fake_api(monkeypatch, tmp_path):
     """
 
     class Api:
+        """Recorder tracking uploaded files and remote README contents."""
+
         uploads: dict[str, bytes] = {}
         remote: dict[str, str] = {}
         fail_upload = False
@@ -197,6 +194,8 @@ def fake_api(monkeypatch, tmp_path):
     api.remote = {}
 
     class FakeHfApi:
+        """Mock HfApi client recording file uploads."""
+
         def upload_file(self, path_or_fileobj, path_in_repo, repo_id, repo_type):
             if api.fail_upload:
                 raise OSError("upload failed")

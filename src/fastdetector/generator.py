@@ -19,10 +19,6 @@ async def _send_request(
 ) -> tuple[str, int, int]:
     """Send a single chat completion request.
 
-    Retries are handled by the OpenAI client (max_retries=MAX_RETRIES set on
-    the client in _batch_generate_async). On non-retriable failure, returns
-    ("", 0, 0) so that the caller can track the failure and continue.
-
     Args:
         client: The AsyncOpenAI client.
         semaphore: Bounded semaphore limiting concurrency.
@@ -45,7 +41,7 @@ async def _send_request(
             response = await client.chat.completions.create(**kwargs)
 
             if not response.choices:
-                print(f"Request returned no choices (possibly content-filtered).")
+                print("Request returned no choices (possibly content-filtered).")
                 return "", 0, 0
 
             usage = getattr(response, "usage", None)
@@ -65,14 +61,6 @@ async def _batch_generate_async(
     model_name: str = "",
 ) -> tuple[list[str], int, int, int]:
     """Fire requests concurrently with a bounded semaphore.
-
-    The AsyncOpenAI client is created here and closed in a finally block so
-    it is always released even if gather raises.
-
-    Failed requests (those returning ("", 0, 0)) are counted and reported at
-    the end. The empty-string responses are kept in the output list at their
-    original positions so that the caller (build_dataset) can align them with
-    the input samples.
 
     Args:
         api_url: The URL of the OpenAI-compatible chat completions endpoint
@@ -100,6 +88,14 @@ async def _batch_generate_async(
 
     try:
         async def _tracked_request(messages: list[dict[str, str]]) -> tuple[str, int, int]:
+            """Send a request and update progress and failure counts.
+
+            Args:
+                messages: List of message dicts.
+
+            Returns:
+                Tuple of (response_text, prompt_tokens, completion_tokens).
+            """
             nonlocal completed, failed_count
             result = await _send_request(client, semaphore, messages, generation_params, model_name=model_name)
             completed += 1
@@ -135,9 +131,6 @@ def batch_generate(
     model_name: str = "",
 ) -> tuple[list[str], int, int, int]:
     """Send a batch of OpenAI-compatible chat conversations concurrently.
-
-    Uses the async OpenAI client to fire all requests concurrently via
-    asyncio.gather, bounded by MAX_CONCURRENT.
 
     Args:
         api_url: The URL of the OpenAI-compatible chat completions endpoint

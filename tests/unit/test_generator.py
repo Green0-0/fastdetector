@@ -1,10 +1,3 @@
-"""Message construction and the multi-turn dataset builder.
-
-``batch_generate`` is exercised against a real OpenAI-compatible server running
-on localhost (see the ``fake_openai_server`` fixture), so the actual client,
-serialisation, and concurrency paths run — only the model is fake.
-"""
-
 import pytest
 
 from fastdetector import generator as generator_module
@@ -28,11 +21,13 @@ def prompt(turns, use_multiturn=True, examples=None, metadata=None) -> Prompt:
 
 
 def test_first_turn_is_a_single_user_message():
+    """Test that turn_index 0 builds a single user message."""
     messages = _build_messages(prompt(["turn zero"]), turn_index=0, responses=[])
     assert messages == [{"role": "user", "content": "turn zero"}]
 
 
 def test_examples_are_prepended_as_user_assistant_pairs():
+    """Test that prompt examples are prepended as user/assistant message pairs."""
     messages = _build_messages(
         prompt(["ask"], examples=[("ex user", "ex assistant")]),
         turn_index=0,
@@ -46,6 +41,7 @@ def test_examples_are_prepended_as_user_assistant_pairs():
 
 
 def test_multiturn_replays_the_whole_conversation():
+    """Test that multi-turn mode replays complete conversation history."""
     messages = _build_messages(
         prompt(["first", "second"]), turn_index=1, responses=["answer0"]
     )
@@ -57,6 +53,7 @@ def test_multiturn_replays_the_whole_conversation():
 
 
 def test_single_turn_mode_sends_only_the_latest_message():
+    """Test that single-turn mode only sends current turn user message."""
     messages = _build_messages(
         prompt(["first", "second"], use_multiturn=False),
         turn_index=1,
@@ -66,6 +63,7 @@ def test_single_turn_mode_sends_only_the_latest_message():
 
 
 def test_single_turn_mode_drops_the_examples_after_the_first_turn():
+    """Test that single-turn mode drops prompt examples after turn 0."""
     # With use_multiturn=False each later turn is a brand new request whose
     # only context is the {{RESP_N}} substitutions.
     messages = _build_messages(
@@ -78,6 +76,7 @@ def test_single_turn_mode_drops_the_examples_after_the_first_turn():
 
 
 def test_single_turn_mode_still_sends_examples_on_the_first_turn():
+    """Test that single-turn mode includes prompt examples on turn 0."""
     messages = _build_messages(
         prompt(["first"], use_multiturn=False, examples=[("u", "a")]),
         turn_index=0,
@@ -87,6 +86,7 @@ def test_single_turn_mode_still_sends_examples_on_the_first_turn():
 
 
 def test_resp_placeholders_are_substituted():
+    """Test substitution of {{RESP_0}} placeholder in prompt text."""
     messages = _build_messages(
         prompt(["first", "expand on {{RESP_0}} please"], use_multiturn=False),
         turn_index=1,
@@ -96,6 +96,7 @@ def test_resp_placeholders_are_substituted():
 
 
 def test_multiple_resp_placeholders_are_substituted():
+    """Test substitution of multiple response placeholders in prompt text."""
     messages = _build_messages(
         prompt(["a", "b", "{{RESP_0}} then {{RESP_1}}"], use_multiturn=False),
         turn_index=2,
@@ -105,6 +106,7 @@ def test_multiple_resp_placeholders_are_substituted():
 
 
 def test_only_earlier_responses_are_substituted():
+    """Test that future response placeholders are left untouched."""
     # {{RESP_1}} inside turn 1 refers to that turn's own (not yet produced)
     # answer, so it must be left alone rather than raising IndexError.
     messages = _build_messages(
@@ -143,6 +145,7 @@ def recording_batch_generate(monkeypatch):
 
 
 def test_build_dataset_single_turn_columns(recording_batch_generate):
+    """Test build_dataset output columns for single-turn prompt execution."""
     prompts = PromptSet([prompt(["rewrite {{DOC}}"])])
     columns, prompt_tokens, completion_tokens, failed = build_dataset(
         ["sample one", "sample two"], "http://x/v1", prompts, {}
@@ -159,12 +162,14 @@ def test_build_dataset_single_turn_columns(recording_batch_generate):
 
 
 def test_build_dataset_every_column_has_one_row_per_sample(recording_batch_generate):
+    """Test that all generated dataset columns match sample row length."""
     prompts = PromptSet([prompt(["a {{DOC}}"]), prompt(["b {{DOC}}", "c"])])
     columns, *_ = build_dataset(["s0", "s1", "s2"], "http://x/v1", prompts, {})
     assert {len(v) for v in columns.values()} == {3}
 
 
 def test_build_dataset_fills_missing_turns_with_empty_strings(recording_batch_generate):
+    """Test that build_dataset pads missing turn responses with empty strings."""
     # Prompt 0 has one turn, prompt 1 has two; row 0 has no response_1.
     prompts = PromptSet([prompt(["one {{DOC}}"]), prompt(["two {{DOC}}", "more"])])
     columns, *_ = build_dataset(["s0", "s1"], "http://x/v1", prompts, {})
@@ -175,6 +180,7 @@ def test_build_dataset_fills_missing_turns_with_empty_strings(recording_batch_ge
 def test_build_dataset_final_response_is_each_rows_last_answer(
     recording_batch_generate,
 ):
+    """Test that final_response column matches each row's last turn response."""
     prompts = PromptSet([prompt(["one {{DOC}}"]), prompt(["two {{DOC}}", "more"])])
     columns, *_ = build_dataset(["s0", "s1"], "http://x/v1", prompts, {})
     assert columns["final_response"][0] == columns["response_0"][0]
@@ -182,6 +188,7 @@ def test_build_dataset_final_response_is_each_rows_last_answer(
 
 
 def test_build_dataset_batches_once_per_turn(recording_batch_generate):
+    """Test that build_dataset dispatches one API batch request per turn."""
     prompts = PromptSet([prompt(["a {{DOC}}", "b", "c"])])
     build_dataset(["s0", "s1"], "http://x/v1", prompts, {})
     assert len(recording_batch_generate) == 3
@@ -189,6 +196,7 @@ def test_build_dataset_batches_once_per_turn(recording_batch_generate):
 
 
 def test_build_dataset_only_sends_rows_that_have_the_turn(recording_batch_generate):
+    """Test that build_dataset filters API batch to active rows for each turn."""
     prompts = PromptSet([prompt(["one {{DOC}}"]), prompt(["two {{DOC}}", "more"])])
     build_dataset(["s0", "s1"], "http://x/v1", prompts, {})
     assert [len(call["inputs"]) for call in recording_batch_generate] == [2, 1]
@@ -197,6 +205,7 @@ def test_build_dataset_only_sends_rows_that_have_the_turn(recording_batch_genera
 def test_build_dataset_feeds_earlier_responses_into_later_turns(
     recording_batch_generate,
 ):
+    """Test feeding previous response outputs into subsequent prompt turn templates."""
     prompts = PromptSet([prompt(["first {{DOC}}", "use {{RESP_0}}"])])
     build_dataset(["s0"], "http://x/v1", prompts, {})
     second_turn_message = recording_batch_generate[1]["inputs"][0][-1]["content"]
@@ -204,6 +213,7 @@ def test_build_dataset_feeds_earlier_responses_into_later_turns(
 
 
 def test_build_dataset_accumulates_usage_across_turns(recording_batch_generate):
+    """Test accumulation of prompt and completion tokens across all turns."""
     prompts = PromptSet([prompt(["a {{DOC}}", "b"])])
     _, prompt_tokens, completion_tokens, _ = build_dataset(
         ["s0", "s1"], "http://x/v1", prompts, {}
@@ -213,6 +223,7 @@ def test_build_dataset_accumulates_usage_across_turns(recording_batch_generate):
 
 
 def test_build_dataset_accumulates_failures(monkeypatch):
+    """Test failure count accumulation across API request turns."""
     monkeypatch.setattr(
         generator_module,
         "batch_generate",
@@ -224,6 +235,7 @@ def test_build_dataset_accumulates_failures(monkeypatch):
 
 
 def test_build_dataset_forwards_credentials_and_params(recording_batch_generate):
+    """Test build_dataset passes API key and generation parameters to batch_generate."""
     prompts = PromptSet([prompt(["a {{DOC}}"])])
     build_dataset(
         ["s0"],
@@ -240,6 +252,7 @@ def test_build_dataset_forwards_credentials_and_params(recording_batch_generate)
 
 
 def test_build_dataset_with_no_samples_short_circuits(recording_batch_generate):
+    """Test build_dataset short-circuits on empty sample list without API calls."""
     prompts = PromptSet([prompt(["a {{DOC}}"])])
     columns, prompt_tokens, completion_tokens, failed = build_dataset(
         [], "http://x/v1", prompts, {}
@@ -250,6 +263,7 @@ def test_build_dataset_with_no_samples_short_circuits(recording_batch_generate):
 
 
 def test_build_dataset_records_the_prompt_template_per_row(recording_batch_generate):
+    """Test that build_dataset records prompt template metadata in column output."""
     prompts = PromptSet([prompt(["rewrite {{DOC}}"], metadata={"PROMPT_TYPE": "rw"})])
     columns, *_ = build_dataset(["s0"], "http://x/v1", prompts, {})
     assert columns["prompt"][0]["metadata"] == {"PROMPT_TYPE": "rw"}
@@ -262,6 +276,7 @@ def test_build_dataset_records_the_prompt_template_per_row(recording_batch_gener
 
 
 def test_batch_generate_returns_responses_in_request_order(fake_openai_server):
+    """Test that batch_generate preserves request ordering in response list."""
     inputs = [[{"role": "user", "content": f"msg{i}"}] for i in range(6)]
     texts, prompt_tokens, completion_tokens, failed = batch_generate(
         fake_openai_server.url, inputs, {}, model_name="fake-model"
@@ -273,6 +288,7 @@ def test_batch_generate_returns_responses_in_request_order(fake_openai_server):
 
 
 def test_batch_generate_sends_the_model_and_sampling_params(fake_openai_server):
+    """Test that batch_generate forwards model_name and sampling parameters."""
     batch_generate(
         fake_openai_server.url,
         [[{"role": "user", "content": "hi"}]],
@@ -288,6 +304,7 @@ def test_batch_generate_sends_the_model_and_sampling_params(fake_openai_server):
 def test_batch_generate_counts_content_filtered_responses_as_failures(
     fake_openai_server,
 ):
+    """Test that empty choices response (content filtering) counts as failure."""
     def no_choices(payload):
         return 200, {
             "id": "x",
@@ -306,6 +323,7 @@ def test_batch_generate_counts_content_filtered_responses_as_failures(
 
 
 def test_batch_generate_keeps_failed_rows_aligned(fake_openai_server):
+    """Test that failed API requests return empty string and align response list."""
     def fail_the_middle_one(payload):
         content = payload["messages"][-1]["content"]
         if content == "msg1":
@@ -333,6 +351,7 @@ def test_batch_generate_keeps_failed_rows_aligned(fake_openai_server):
 
 
 def test_batch_generate_treats_a_null_content_as_an_empty_string(fake_openai_server):
+    """Test that null message content is converted to an empty string."""
     def null_content(payload):
         return 200, {
             "id": "x",
@@ -360,11 +379,13 @@ def test_batch_generate_treats_a_null_content_as_an_empty_string(fake_openai_ser
 
 
 def test_batch_generate_with_no_inputs_does_not_call_the_server(fake_openai_server):
+    """Test that batch_generate short-circuits on empty inputs without calling server."""
     assert batch_generate(fake_openai_server.url, [], {}) == ([], 0, 0, 0)
     assert fake_openai_server.received == []
 
 
 def test_build_dataset_end_to_end_against_the_fake_server(fake_openai_server):
+    """Test full end-to-end dataset generation pipeline against mock HTTP server."""
     prompts = PromptSet(
         [prompt(["rewrite {{DOC}}", "polish {{RESP_0}}"], use_multiturn=False)]
     )

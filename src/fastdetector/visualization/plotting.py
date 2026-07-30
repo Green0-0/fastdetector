@@ -1,15 +1,3 @@
-"""Plotting helpers that render matplotlib figures as PNG bytes.
-
-These are thin rendering functions. All classification computation (sweeps,
-TP/FP/TN/FN) lives in :mod:`fastdetector.visualization.metrics`; the functions
-here call those helpers when needed and focus purely on drawing.
-
-Series are passed as plain ``(values, label)`` tuples so this module has no
-dependency on the wrapper classes in ``auto_visualizer`` (which imports this
-module; a class dependency in the other direction previously made the two
-modules circular and unimportable).
-"""
-
 from typing import Dict
 from typing import Optional
 from typing import Sequence
@@ -27,7 +15,7 @@ Series = Tuple[np.ndarray, str]
 
 
 def _save_fig_to_png() -> bytes:
-    """Save the current matplotlib figure to PNG bytes and close it."""
+    """Save active matplotlib figure to PNG bytes and close canvas."""
     buf = io.BytesIO()
     plt.savefig(buf, format="png", bbox_inches="tight")
     buf.seek(0)
@@ -36,17 +24,13 @@ def _save_fig_to_png() -> bytes:
 
 
 def _finite(values) -> np.ndarray:
-    """Return *values* as a float array with non-finite entries dropped.
-
-    Statistic columns carry NaNs wherever a metric errored out or was never
-    computed; matplotlib cannot bin those, and a single NaN poisons the
-    min/max used to derive shared bin edges.
+    """Filter non-finite entries from an array-like sequence.
 
     Args:
-        values: Any array-like of numbers, or None.
+        values: Array-like sequence or None.
 
     Returns:
-        A 1-D float array holding only the finite entries.
+        1D NumPy float array containing finite values.
     """
     if values is None:
         return np.array([], dtype=float)
@@ -55,14 +39,13 @@ def _finite(values) -> np.ndarray:
 
 
 def get_histogram(series: List[Series], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
-    """Render overlaid histograms, one per series, sharing a single set of bin edges.
+    """Render overlaid histogram plot for multiple series.
 
     Args:
-        series: List of ``(values, label)`` tuples. Entries whose values are
-            None, empty, or entirely non-finite are skipped.
-        title: Figure title.
+        series: List of (values, label) tuples.
+        title: Figure title string.
         bins: Number of histogram bins.
-        figsize: Figure width and height.
+        figsize: Figure dimensions (width, height).
 
     Returns:
         PNG image bytes.
@@ -108,20 +91,17 @@ def get_scatterplot(
     rolling_mean_window: int = 0,
     figsize: Tuple[int, int] = (8, 5),
 ) -> bytes:
-    """Render scatter series against shared or per-series x values.
+    """Render scatter plot with optional rolling mean trendline.
 
     Args:
-        x_values: Either a single sequence of x values shared by every series,
-            or a list holding one sequence per entry of *y_series*.
-        y_series: List of ``(values, label)`` tuples. Entries whose values are
-            None, empty, or of a length different from their x values are
-            skipped.
-        title: Figure title.
-        xlabel: X-axis label.
-        ylabel: Y-axis label.
-        point_alpha: Alpha for scatter points.
-        rolling_mean_window: Window for the rolling-mean trendline; 0 disables it.
-        figsize: Figure width and height.
+        x_values: Sequence of X values (shared or per-series list).
+        y_series: List of (values, label) tuples.
+        title: Figure title string.
+        xlabel: X-axis label string.
+        ylabel: Y-axis label string.
+        point_alpha: Alpha transparency for scatter points.
+        rolling_mean_window: Rolling mean window size (0 to disable).
+        figsize: Figure dimensions (width, height).
 
     Returns:
         PNG image bytes.
@@ -180,16 +160,13 @@ HEATMAP_MAX_ANNOTATED = 60
 
 
 def _format_correlation(value: float) -> str:
-    """Render a correlation for display inside a heatmap cell.
-
-    Space in a cell is the binding constraint, so the redundant leading zero
-    goes ("-.85", not "-0.85") and a perfect correlation is just "1".
+    """Format Pearson correlation coefficient string for cell display.
 
     Args:
-        value: Correlation coefficient, possibly NaN.
+        value: Correlation coefficient float.
 
     Returns:
-        Compact label, or ``"n/a"`` when the pair had nothing to correlate.
+        Formatted correlation string label.
     """
     if value != value:
         return "n/a"
@@ -199,14 +176,10 @@ def _format_correlation(value: float) -> str:
 
 
 def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
-    """Compute pairwise Pearson correlations among series and render a heatmap.
-
-    Only the lower triangle is drawn: the upper half is its mirror image, and
-    dropping it halves what the reader has to scan and leaves room for the
-    coefficient in every remaining cell.
+    """Render lower-triangle Pearson correlation heatmap.
 
     Args:
-        series: List of ``(values, label)`` tuples.
+        series: List of (values, label) tuples.
         title: Figure title string.
 
     Returns:
@@ -294,14 +267,14 @@ def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
     return buf.getvalue()
 
 def compute_row_emojis(rows: List[dict], emoji_config: Optional[dict]) -> Dict[str, str]:
-    """Compute best/worst indicator emojis for markdown summary table rows.
+    """Compute best/worst indicator icons for metric summary table rows.
 
     Args:
-        rows: List of row dictionaries containing cell metric values.
-        emoji_config: Configuration dictionary specifying metric, mode, and thresholds.
+        rows: List of row data dictionaries.
+        emoji_config: Configuration dictionary for indicator icons.
 
     Returns:
-        Dictionary mapping row name to indicator emoji string ("✔️ ", "❗ ", or "").
+        Dictionary mapping row names to indicator icon strings.
     """
     if not emoji_config:
         return {r["name"]: "" for r in rows}
@@ -350,13 +323,13 @@ def compute_row_emojis(rows: List[dict], emoji_config: Optional[dict]) -> Dict[s
     return {r["name"]: ("✔️ " if i in best else ("❗ " if i in worst else "")) for i, r in enumerate(rows)}
 
 def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional[dict] = None, row_header: str = "Name") -> Tuple[str, Dict[str, str]]:
-    """Format row and column cell values into a markdown summary table string.
+    """Format row and column cell values into a markdown summary table.
 
     Args:
         rows: List of row data dictionaries.
         columns: List of column specification dictionaries.
-        emoji_config: Optional configuration dictionary for indicator emojis.
-        row_header: Header label for the first column.
+        emoji_config: Optional configuration dictionary for indicator icons.
+        row_header: Header label for first column.
 
     Returns:
         Tuple of (markdown_table_string, emoji_mapping_dict).
@@ -406,21 +379,19 @@ def get_sweep_plot(
     title: str,
     figsize: tuple[int, int] = (8, 5),
 ) -> bytes:
-    """Render a threshold-sweep plot from pre-computed sweep data.
-
-    This is the rendering half of the old ``get_sweeping_classifier_plot``;
-    the computation half is :func:`compute_threshold_sweep`.
+    """Render threshold sweep accuracy curves.
 
     Args:
-        thresholds: Array of threshold values (x-axis).
-        per_dataset_accs: List of accuracy curves (one per input dataset).
+        thresholds: Array of threshold values.
+        per_dataset_accs: Accuracy curves per dataset.
         agg_accs: Aggregate accuracy curve.
-        labels: Legend labels for each per-dataset curve.
-        threshold_dict: Dict of named thresholds to draw as vertical lines.
-        title: Plot title.
+        labels: Legend labels for dataset curves.
+        threshold_dict: Dictionary of named threshold markers.
+        title: Plot title string.
+        figsize: Figure dimensions (width, height).
 
     Returns:
-        Plot as PNG bytes.
+        PNG image bytes.
     """
     plt.figure(figsize=figsize)
 
@@ -452,14 +423,17 @@ def format_confusion_matrix(
     fn: int,
     title: str,
 ) -> str:
-    """Format a confusion matrix as a markdown table.
+    """Format classification confusion matrix as a markdown table.
 
     Args:
-        tp, fp, tn, fn: Confusion matrix counts.
-        title: Table heading.
+        tp: True positive count.
+        fp: False positive count.
+        tn: True negative count.
+        fn: False negative count.
+        title: Table heading string.
 
     Returns:
-        Markdown-formatted confusion matrix string.
+        Markdown table string.
     """
     _, _, f1, fpr, tnr = _prf(tp, fp, tn, fn)
     actual_pos = tp + fn

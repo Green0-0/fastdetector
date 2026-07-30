@@ -5,14 +5,11 @@ import ot
 from collections import Counter
 
 def pairwise_cosdist(embeddings_list_a: list[np.ndarray] | np.ndarray, embeddings_list_b: list[np.ndarray] | np.ndarray) -> list[float]:
-    """Compute pairwise cosine distance between two aligned lists of normalized embeddings.
-
-    Distance = 1 - cosine similarity, matching the "lower = more similar"
-    convention of the other pairwise_* metrics.
+    """Compute pairwise cosine distance between aligned normalized embeddings.
 
     Args:
-        embeddings_list_a: First list/array of normalized embeddings.
-        embeddings_list_b: Second list/array of normalized embeddings.
+        embeddings_list_a: First list or array of normalized embeddings.
+        embeddings_list_b: Second list or array of normalized embeddings.
 
     Returns:
         List of cosine distances.
@@ -23,14 +20,14 @@ def pairwise_cosdist(embeddings_list_a: list[np.ndarray] | np.ndarray, embedding
     return cosdists.tolist()
 
 def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: int = 100) -> list[float]:
-    """Compute the average cosine similarity of each embedding against all other embeddings in the same list.
-    
+    """Compute mean cosine similarity of each embedding against all other embeddings in the list.
+
     Args:
-        embeddings_list: List/array of normalized embeddings.
-        batch_size: Number of rows to process at once to prevent OOM errors.
-        
+        embeddings_list: List or array of normalized embeddings.
+        batch_size: Processing batch size.
+
     Returns:
-        List of average cosine similarities.
+        List of mean self-cosine similarities.
     """
     embs = np.array(embeddings_list, dtype=np.float32)
     if len(embs) <= 1:
@@ -47,15 +44,15 @@ def self_cossim_all(embeddings_list: list[np.ndarray] | np.ndarray, batch_size: 
     return results
 
 def opposite_cossim_all(target_embeddings: list[np.ndarray] | np.ndarray, other_embeddings: list[np.ndarray] | np.ndarray, batch_size: int = 100) -> list[float]:
-    """Compute the average cosine similarity of each target embedding against all other_embeddings.
-    
+    """Compute mean cosine similarity of target embeddings against reference embeddings.
+
     Args:
-        target_embeddings: List/array of normalized target embeddings.
-        other_embeddings: List/array of normalized reference embeddings.
-        batch_size: Number of rows to process at once to prevent OOM errors.
-        
+        target_embeddings: Target normalized embeddings.
+        other_embeddings: Reference normalized embeddings.
+        batch_size: Processing batch size.
+
     Returns:
-        List of average cosine similarities.
+        List of mean opposite-cosine similarities.
     """
     target_embs = np.array(target_embeddings, dtype=np.float32)
     other_embs = np.array(other_embeddings, dtype=np.float32)
@@ -70,16 +67,13 @@ def opposite_cossim_all(target_embeddings: list[np.ndarray] | np.ndarray, other_
     return results
 
 def _compute_idf(tokens_lists: list[list[str]]) -> dict[str, float]:
-    """Compute inverse-document-frequency weights for a corpus of tokenized texts.
-
-    Uses the standard smoothed IDF formula: ``log((N + 1) / (df + 1))``
-    where N is the number of documents and df is the document frequency.
+    """Compute inverse document frequency weights for a tokenized corpus.
 
     Args:
-        tokens_lists: List of token lists (one per document).
+        tokens_lists: List of token lists for each document.
 
     Returns:
-        Dict mapping each token to its IDF weight.
+        Dictionary mapping tokens to IDF weights.
     """
     df = Counter()
     for tokens in tokens_lists:
@@ -89,18 +83,14 @@ def _compute_idf(tokens_lists: list[list[str]]) -> dict[str, float]:
     return {token: math.log((N + 1) / (count + 1)) for token, count in df.items()}
 
 def _get_idf_weights(tokens: list[str], idf_dict: dict[str, float]) -> np.ndarray:
-    """Look up the IDF weight for each token in *tokens* and L1-normalize.
-
-    Tokens not in *idf_dict* get weight 0. If all weights are near-zero
-    (e.g. none of the tokens appear in the IDF dict), fall back to uniform
-    weights so the caller doesn't divide by zero.
+    """Retrieve and normalize token IDF weights.
 
     Args:
-        tokens: List of tokens to look up.
-        idf_dict: Token -> IDF weight mapping (from :func:`_compute_idf`).
+        tokens: List of token strings.
+        idf_dict: Token to IDF weight mapping.
 
     Returns:
-        Normalized weight vector (sums to 1), same length as *tokens*.
+        Normalized IDF weight vector.
     """
     if not tokens:
         return np.array([])
@@ -111,16 +101,16 @@ def _get_idf_weights(tokens: list[str], idf_dict: dict[str, float]) -> np.ndarra
     return w / w.sum()
 
 def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: list[list[str]] | None = None, edit_tokens_list: list[list[str]] | None = None) -> tuple[list[float], list[float], list[float]]:
-    """Compute BERTScore (Precision, Recall, F1) for aligned lists of token embedding matrices.
-    
+    """Compute BERTScore precision, recall, and F1 distance metrics.
+
     Args:
-        src_embeddings_list: List of token embeddings for reference texts (each N x D).
-        edit_embeddings_list: List of token embeddings for candidate texts (each M x D).
-        src_tokens_list: Optional list of tokenized reference texts for IDF term weighting.
-        edit_tokens_list: Optional list of tokenized candidate texts for IDF term weighting.
-        
+        src_embeddings_list: Reference token embedding matrices.
+        edit_embeddings_list: Candidate token embedding matrices.
+        src_tokens_list: Optional reference token lists for IDF weighting.
+        edit_tokens_list: Optional candidate token lists for IDF weighting.
+
     Returns:
-        Tuple of (precisions, recalls, f1s), each a list of floats.
+        Tuple of (precision_distances, recall_distances, f1_distances).
     """
     precisions = []
     recalls = []
@@ -165,16 +155,16 @@ def bertscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddi
     return precisions, recalls, f1s
 
 def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embeddings_list: list[np.ndarray | torch.Tensor], src_tokens_list: list[list[str]] | None = None, edit_tokens_list: list[list[str]] | None = None) -> list[float]:
-    """Compute MoverScore (Earth Mover's Distance) for aligned lists of token embedding matrices.
-    
+    """Compute MoverScore (Earth Mover's Distance) for paired token embeddings.
+
     Args:
-        src_embeddings_list: List of token embeddings for reference texts (each N x D).
-        edit_embeddings_list: List of token embeddings for candidate texts (each M x D).
-        src_tokens_list: Optional list of tokenized reference texts for IDF term weighting.
-        edit_tokens_list: Optional list of tokenized candidate texts for IDF term weighting.
-        
+        src_embeddings_list: Reference token embedding matrices.
+        edit_embeddings_list: Candidate token embedding matrices.
+        src_tokens_list: Optional reference token lists for IDF weighting.
+        edit_tokens_list: Optional candidate token lists for IDF weighting.
+
     Returns:
-        List of Earth Mover's Distances (lower is better, 0 means identical).
+        List of Earth Mover's Distances.
     """
     results = []
     
@@ -211,15 +201,15 @@ def moverscore(src_embeddings_list: list[np.ndarray | torch.Tensor], edit_embedd
     return results
 
 def pairwise_cosdist_chunked(a: list[np.ndarray], b: list[np.ndarray], operation: str = 'max') -> list[list[float]]:
-    """Compute pairwise chunked cosine distance between two aligned lists of chunk embeddings.
-    
+    """Compute aggregated pairwise cosine distances across chunked embeddings.
+
     Args:
-        a: First list of 2D arrays (num_chunks_a, D).
-        b: Second list of 2D arrays (num_chunks_b, D).
-        operation: 'mean', 'max', or 'min'.
-        
+        a: First list of 2D chunk embedding arrays.
+        b: Second list of 2D chunk embedding arrays.
+        operation: Aggregation reduction ('max', 'min', or 'mean').
+
     Returns:
-        List of lists of floats.
+        Nested list of aggregated chunk cosine distances.
     """
     results = []
     for embs_a, embs_b in zip(a, b):

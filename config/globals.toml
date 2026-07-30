@@ -1,20 +1,13 @@
-# Optional: if set, the dataset will be loaded/written directly with this name
-# and the prefixes/suffixes specified below will be ignored. Omit (or set to
-# null) to use the prefix+suffix scheme.
-# override_dataset_input = ""
-# override_dataset_output = ""
+# Optional: dataset prefix (e.g. Hugging Face username or organization and corpus prefix)
+dataset_prefix = "G-reen/cc-2021-"
 
-# For convenience in running the pipeline, it is recommended to follow a
-# strict prefix-suffix dataset naming convention
-# the prefix represents the base dataset, and the suffix represents the pipeline phase
-# both reads and writes will adhere to this, unless an override dataset is specified
-dataset_prefix = "G-reen/cc-2021"
-raw_suffix = "raw"
-pre_filter_suffix = "processed"
-post_filter_suffix = "filtered"
-gen_suffix = "rewritten"
-stat_suffix = "stat"
-eval_suffix = "eval"
+# Dataset stage names (prepended by dataset_prefix)
+raw_dataset = "raw"
+pre_filter_dataset = "processed"
+post_filter_dataset = "filtered"
+gen_dataset = "rewritten"
+stat_dataset = "stat"
+eval_dataset = "eval"
 
 # Engine Virtual Environment Paths (Defaults to .vllm and .aphrodite)
 # vllm_venv_path = ".vllm"

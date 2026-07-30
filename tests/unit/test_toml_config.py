@@ -1,5 +1,3 @@
-"""Pydantic config models: defaults, validators, and dataset-name resolution."""
-
 import pytest
 from pydantic import ValidationError
 
@@ -18,13 +16,13 @@ from fastdetector.frontend.toml_config import (
 )
 
 GLOBALS_FIELDS = {
-    "dataset_prefix": "user/base",
-    "raw_suffix": "raw",
-    "pre_filter_suffix": "processed",
-    "post_filter_suffix": "filtered",
-    "gen_suffix": "rewritten",
-    "stat_suffix": "stat",
-    "eval_suffix": "eval",
+    "dataset_prefix": "user/base-",
+    "raw_dataset": "raw",
+    "pre_filter_dataset": "processed",
+    "post_filter_dataset": "filtered",
+    "gen_dataset": "rewritten",
+    "stat_dataset": "stat",
+    "eval_dataset": "eval",
 }
 
 PIPELINE_FIELDS = {"engine": "vllm", "model_name": "some/model"}
@@ -56,9 +54,9 @@ def make_llm_stat_config(**overrides) -> LLMStatConfig:
 # --------------------------------------------------------------------------
 
 
-def test_globals_requires_every_suffix():
+def test_globals_requires_every_dataset_field():
     with pytest.raises(ValidationError):
-        GlobalsConfig(dataset_prefix="user/base", raw_suffix="raw")
+        GlobalsConfig(dataset_prefix="user/base-", raw_dataset="raw")
 
 
 def test_globals_venv_defaults():
@@ -67,31 +65,15 @@ def test_globals_venv_defaults():
     assert config.aphrodite_venv_path == ".aphrodite"
 
 
-def test_resolve_uses_prefix_suffix_by_default():
+def test_resolve_dataset_with_prefix():
     config = make_globals()
-    assert config.resolve_input_dataset("raw") == "user/base-raw"
-    assert config.resolve_output_dataset("stat") == "user/base-stat"
+    assert config.resolve_dataset(config.raw_dataset) == "user/base-raw"
+    assert config.resolve_dataset(config.stat_dataset) == "user/base-stat"
 
 
-def test_overrides_bypass_the_suffix_scheme():
-    config = make_globals(
-        override_dataset_input="other/in", override_dataset_output="other/out"
-    )
-    assert config.resolve_input_dataset("raw") == "other/in"
-    assert config.resolve_output_dataset("stat") == "other/out"
-
-
-def test_input_and_output_overrides_are_independent():
-    config = make_globals(override_dataset_input="other/in")
-    assert config.resolve_input_dataset("raw") == "other/in"
-    assert config.resolve_output_dataset("stat") == "user/base-stat"
-
-
-def test_empty_string_override_is_honoured_not_treated_as_unset():
-    # None means "unset"; an empty string is a real (if useless) value, and
-    # silently falling back to the prefix scheme would write to the wrong repo.
-    config = make_globals(override_dataset_output="")
-    assert config.resolve_output_dataset("stat") == ""
+def test_resolve_dataset_without_prefix():
+    config = make_globals(dataset_prefix="")
+    assert config.resolve_dataset("user/base-raw") == "user/base-raw"
 
 
 # --------------------------------------------------------------------------

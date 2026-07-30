@@ -41,10 +41,10 @@ def run_pipeline(
     start_time = time.time()
     engine = pipe_config.engine
 
-    print(f"Running generation pipeline...")
+    print("Running generation pipeline...")
     print(f"Using engine: {engine.value}")
     print(f"Using model: {pipe_config.model_name}")
-    
+
     generation_params = {}
     extra_body = {}
     for param in engine.valid_sampling_params:

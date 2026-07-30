@@ -4,14 +4,14 @@ import Levenshtein
 from unidecode import unidecode
 
 def global_ngram_analysis(texts: list[str], n: int) -> dict[str, int]:
-    """Compute the global n-gram distribution across a list of texts.
-    
+    """Compute global n-gram frequencies across a list of texts.
+
     Args:
-        texts: List of strings to analyze.
-        n: The n-gram size.
-        
+        texts: List of text strings to analyze.
+        n: Size of n-grams in words.
+
     Returns:
-        Dictionary mapping n-grams to their raw frequencies.
+        Dictionary mapping n-gram strings to global counts.
     """
     counts = Counter()
     for text in texts:
@@ -21,14 +21,14 @@ def global_ngram_analysis(texts: list[str], n: int) -> dict[str, int]:
     return dict(counts)
 
 def ngram_analysis(texts: list[str], n: int) -> list[dict[str, int]]:
-    """Compute the n-gram distribution for each text individually.
-    
+    """Compute per-text n-gram frequency distributions.
+
     Args:
-        texts: List of strings to analyze.
-        n: The n-gram size.
-        
+        texts: List of text strings to analyze.
+        n: Size of n-grams in words.
+
     Returns:
-        List of dictionaries mapping n-grams to their raw counts for each text.
+        List of dictionaries mapping n-gram strings to counts for each text.
     """
     results = []
     for text in texts:
@@ -42,15 +42,15 @@ def ngram_analysis(texts: list[str], n: int) -> list[dict[str, int]]:
     return results
 
 def extract_ngrams(texts: list[str], min_length: int = 6, max_length: int = 12) -> list[list[str]]:
-    """Extract all contiguous word n-grams of lengths between min_length and max_length for each text.
-    
+    """Extract word n-grams within a specified word length range for each text.
+
     Args:
-        texts: List of input texts.
-        min_length: Minimum n-gram length in words.
-        max_length: Maximum n-gram length in words.
-        
+        texts: List of input text strings.
+        min_length: Minimum n-gram word length.
+        max_length: Maximum n-gram word length.
+
     Returns:
-        List of lists, where each inner list contains the n-gram phrases for the corresponding text.
+        List of n-gram string lists for each text.
     """
     results = []
     for text in texts:
@@ -71,15 +71,15 @@ def extract_ngrams(texts: list[str], min_length: int = 6, max_length: int = 12) 
     return results
 
 def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) -> list[float]:
-    """Compute pairwise Jaccard similarity between two aligned lists of texts using n-grams.
-    
+    """Compute pairwise Jaccard distance between aligned lists of texts.
+
     Args:
-        texts_list_a: First list of texts.
-        texts_list_b: Second list of texts.
-        n: The n-gram size.
-        
+        texts_list_a: First list of text strings.
+        texts_list_b: Second list of text strings.
+        n: Size of n-grams in words.
+
     Returns:
-        List of Jaccard similarity scores.
+        List of Jaccard distance scores.
     """
     results = []
     for text1, text2 in zip(texts_list_a, texts_list_b):
@@ -97,23 +97,23 @@ def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) 
     return results
 
 def pairwise_levenshteins(texts_list_a: list[str], texts_list_b: list[str]) -> list[float]:
-    """Compute pairwise Levenshtein distance between two aligned lists of texts.
-    
+    """Compute pairwise Levenshtein distance between aligned lists of texts.
+
     Args:
-        texts_list_a: First list of texts.
-        texts_list_b: Second list of texts.
-        
+        texts_list_a: First list of text strings.
+        texts_list_b: Second list of text strings.
+
     Returns:
-        List of Levenshtein distances (as floats).
+        List of Levenshtein edit distances.
     """
     return [float(Levenshtein.distance(t1, t2)) for t1, t2 in zip(texts_list_a, texts_list_b)]
 
 def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
-    """Compute the proportion and raw count of deviated lines between pairs of texts.
+    """Compute line count deviation proportions and raw line differences.
 
     Args:
-        texts_a: First list of texts.
-        texts_b: Second list of texts.
+        texts_a: First list of text strings.
+        texts_b: Second list of text strings.
 
     Returns:
         Tuple of (proportions_list, raw_counts_list).
@@ -135,11 +135,11 @@ def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float],
     return proportions, raw_counts
 
 def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
-    """Compute the proportion and raw count of deviated words between pairs of texts.
+    """Compute word count deviation proportions and raw word differences.
 
     Args:
-        texts_a: First list of texts.
-        texts_b: Second list of texts.
+        texts_a: First list of text strings.
+        texts_b: Second list of text strings.
 
     Returns:
         Tuple of (proportions_list, raw_counts_list).
@@ -161,11 +161,11 @@ def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float],
     return proportions, raw_counts
 
 def deviated_characters(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
-    """Compute the proportion and raw count of deviated characters between pairs of texts.
+    """Compute character count deviation proportions and raw character differences.
 
     Args:
-        texts_a: First list of texts.
-        texts_b: Second list of texts.
+        texts_a: First list of text strings.
+        texts_b: Second list of text strings.
 
     Returns:
         Tuple of (proportions_list, raw_counts_list).
@@ -187,14 +187,13 @@ def deviated_characters(texts_a: list[str], texts_b: list[str]) -> tuple[list[fl
     return proportions, raw_counts
 
 def quantile(values: list[float]) -> list[float]:
-    """Compute the quantile (percentile rank in decimal) for each value in a list of floats.
-    Uses average rank for ties.
-    
+    """Compute empirical percentile ranks for a list of values.
+
     Args:
-        values: List of floats.
-        
+        values: List of numerical values.
+
     Returns:
-        List of floats between 0.0 and 1.0.
+        List of percentile ranks scaled between 0.0 and 1.0.
     """
     if not values:
         return []
@@ -211,13 +210,13 @@ def quantile(values: list[float]) -> list[float]:
     return (avg_ranks / n).tolist()
 
 def min_max_norm(values: list[float]) -> list[float]:
-    """Compute the min-max normalization for a list of floats.
-    
+    """Perform min-max normalization on a list of values.
+
     Args:
-        values: List of floats.
-        
+        values: List of numerical values.
+
     Returns:
-        List of floats scaled between 0.0 and 1.0.
+        List of normalized values scaled between 0.0 and 1.0.
     """
     if not values:
         return []
@@ -232,14 +231,14 @@ def min_max_norm(values: list[float]) -> list[float]:
     return ((arr - min_val) / (max_val - min_val)).tolist()
 
 def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
-    """Check if texts_b are strictly substrings of texts_a.
+    """Check if candidate texts are strict substrings of source texts.
 
     Args:
-        texts_a: Source list of texts.
-        texts_b: Candidate subset texts to check.
+        texts_a: Source text strings.
+        texts_b: Candidate text strings.
 
     Returns:
-        List of booleans, True if candidate is a strict substring of source.
+        List of booleans indicating strict substring inclusion.
     """
     results = []
     for a, b in zip(texts_a, texts_b):
@@ -252,14 +251,14 @@ def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
     return results
 
 def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool], list[str]]:
-    """Check if texts_b are loose substrings of texts_a, ignoring spaces, case, and unicode differences.
+    """Check loose substring inclusion ignoring whitespace, case, and accents.
 
     Args:
-        texts_a: Source list of texts.
-        texts_b: Candidate subset texts to check.
+        texts_a: Source text strings.
+        texts_b: Candidate text strings.
 
     Returns:
-        Tuple of (is_subsets_list, collected_subsets_list).
+        Tuple of (is_subset_booleans, matched_substrings).
     """
     is_subsets = []
     collected_subsets = []
@@ -296,15 +295,15 @@ def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool],
     return is_subsets, collected_subsets
 
 def sliding_window_word_chunk(texts: list[str], window_size: int, step_size: int) -> list[list[str]]:
-    """Chunks each string into a list of strings using a sliding window.
-    
+    """Chunk texts using a sliding word window.
+
     Args:
-        texts: List of strings.
-        window_size: Number of words in each chunk.
-        step_size: Number of words to slide the window.
-        
+        texts: Input text strings.
+        window_size: Number of words per window.
+        step_size: Stride size in words between windows.
+
     Returns:
-        List of lists of strings, where each inner list contains chunks for the corresponding text.
+        List of chunk string lists for each text.
     """
     results = []
     for text in texts:
@@ -325,16 +324,16 @@ def sliding_window_word_chunk(texts: list[str], window_size: int, step_size: int
     return results
 
 def pairwise_chunked_jaccards(a: list[list[str]], b: list[list[str]], n: int, operation: str = 'max') -> list[list[float]]:
-    """Compute pairwise chunked Jaccard distance between two aligned lists of chunk lists.
-    
+    """Compute aggregated pairwise Jaccard distances across chunked text lists.
+
     Args:
-        a: First list of chunk lists.
-        b: Second list of chunk lists.
-        n: The n-gram size.
-        operation: 'mean', 'max', or 'min'.
-        
+        a: First list of chunked text lists.
+        b: Second list of chunked text lists.
+        n: Size of n-grams in words.
+        operation: Aggregation reduction ('max', 'min', or 'mean').
+
     Returns:
-        List of lists of floats.
+        Nested list of aggregated chunk Jaccard distances.
     """
     results = []
     for chunks_a, chunks_b in zip(a, b):
@@ -376,15 +375,15 @@ def pairwise_chunked_jaccards(a: list[list[str]], b: list[list[str]], n: int, op
     return results
 
 def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operation: str = 'max') -> list[list[float]]:
-    """Compute pairwise chunked Levenshtein distance between two aligned lists of chunk lists.
+    """Compute aggregated pairwise Levenshtein distances across chunked text lists.
 
     Args:
-        a: First list of chunk lists.
-        b: Second list of chunk lists.
-        operation: 'mean', 'max', or 'min'.
+        a: First list of chunked text lists.
+        b: Second list of chunked text lists.
+        operation: Aggregation reduction ('max', 'min', or 'mean').
 
     Returns:
-        List of lists of Levenshtein distance floats.
+        Nested list of aggregated chunk Levenshtein distances.
     """
     results = []
     for chunks_a, chunks_b in zip(a, b):
@@ -411,13 +410,13 @@ def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operat
     return results
 
 def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
-    """Compute quantile for a list of lists of values.
+    """Compute percentile ranks across nested lists of chunk values.
 
     Args:
-        values_list: List of lists of floats.
+        values_list: Nested list of numerical chunk values.
 
     Returns:
-        List of lists of quantile floats between 0.0 and 1.0.
+        Nested list of percentile ranks scaled between 0.0 and 1.0.
     """
     flat_values = [v for values in values_list for v in values]
     if not flat_values:
@@ -444,13 +443,13 @@ def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
     return results
 
 def chunkwise_min_max_norm(values_list: list[list[float]]) -> list[list[float]]:
-    """Compute min-max normalization for a list of lists of values.
+    """Perform min-max normalization across nested lists of chunk values.
 
     Args:
-        values_list: List of lists of floats.
+        values_list: Nested list of numerical chunk values.
 
     Returns:
-        List of lists of min-max normalized floats scaled between 0.0 and 1.0.
+        Nested list of normalized values scaled between 0.0 and 1.0.
     """
     flat_values = [v for values in values_list for v in values]
     if not flat_values:

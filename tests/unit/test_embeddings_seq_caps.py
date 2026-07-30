@@ -1,15 +1,3 @@
-"""The sequence-length caps must actually reach the checkpoints.
-
-Peak VRAM in the embedding and reranker passes scales with
-``batch_size * longest_text_in_batch``, because ``SentenceTransformer.encode``
-sorts inputs by length and pads each batch to its longest member. A cap that is
-accepted by the config but silently dropped on the way to the model would leave
-the stage inheriting the checkpoint's own 40960-token limit while *looking*
-bounded, so these tests assert the plumbing rather than the memory.
-
-Stand-in models keep this in the default (fast, offline, CPU-only) tier.
-"""
-
 import pytest
 
 import fastdetector.statistics.embeddings_api as api
@@ -70,6 +58,7 @@ def fake_models(monkeypatch):
 
 
 def test_embedding_cap_is_applied_to_the_model(fake_models):
+    """Test that max_seq_length cap is assigned to the sentence transformer model."""
     api.batch_gen_embeddings(["a", "b"], model_name="fake", max_seq_length=8192)
     assert _FakeSentenceTransformer.last_instance.max_seq_length == 8192
 
@@ -81,6 +70,7 @@ def test_embedding_cap_defaults_to_the_checkpoint_limit(fake_models):
 
 
 def test_reranker_cap_is_passed_at_construction(fake_models):
+    """Test that reranker max_length cap is passed to model init kwargs."""
     api.batch_cross_encoder(["a"], ["b"], model_name="fake", max_length=8192)
     assert _FakeCrossEncoder.last_instance.init_kwargs["max_length"] == 8192
 

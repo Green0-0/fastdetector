@@ -1,10 +1,3 @@
-"""Classification metric computation, separated from plotting.
-
-These functions compute raw numbers (thresholds, accuracy, F1, AUROC, TP/FP/TN/FN).
-Plotting helpers in ``plotting.py`` call them internally; the AutoVisualizer
-calls them directly when only scalar values are needed (no plot).
-"""
-
 from typing import Sequence
 
 from sklearn.metrics import roc_auc_score
@@ -26,28 +19,25 @@ def compute_auroc(
     """Compute Area Under the Receiver Operating Characteristic Curve (ROC AUC).
 
     Args:
-        y_true: True binary labels.
-        y_scores: Target scores — probability estimates of the positive class
-            or confidence values.
+        y_true: Ground truth binary labels.
+        y_scores: Target prediction scores.
 
     Returns:
-        The AUROC score.
+        ROC AUC score float value.
     """
     return float(roc_auc_score(y_true, y_scores))
 
-def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
-    """Classify values in *arr* as positive (True) or negative (False).
 
-    Without flip: values > threshold are positive.
-    With flip: values <= threshold are positive.
+def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
+    """Generate binary predictions given threshold and inequality direction.
 
     Args:
-        arr: Array of numerical score values.
-        threshold: Classification threshold value.
-        flip: If True, values <= threshold are treated as positive.
+        arr: Array of score values.
+        threshold: Classification threshold.
+        flip: If True, values <= threshold are positive.
 
     Returns:
-        Boolean numpy array of predictions.
+        Boolean prediction array.
     """
     if flip:
         return arr <= threshold
@@ -55,18 +45,16 @@ def _predict(arr: np.ndarray, threshold: float, flip: bool) -> np.ndarray:
 
 
 def _prf(tp: int, fp: int, tn: int, fn: int) -> tuple[float, float, float, float, float]:
-    """Compute precision, recall, f1, fpr, tnr from confusion counts.
-
-    Zero-division safe: returns 0.0 for any rate whose denominator is 0.
+    """Compute precision, recall, F1, FPR, and TNR from confusion counts.
 
     Args:
-        tp: True positives count.
-        fp: False positives count.
-        tn: True negatives count.
-        fn: False negatives count.
+        tp: True positive count.
+        fp: False positive count.
+        tn: True negative count.
+        fn: False negative count.
 
     Returns:
-        Tuple of ``(precision, recall, f1, fpr, tnr)``.
+        Tuple of (precision, recall, f1, fpr, tnr).
     """
     actual_pos = tp + fn
     pred_pos = tp + fp
@@ -85,24 +73,16 @@ def compute_threshold_sweep(
     flip_inequality: bool,
     n_thresholds: int = 100,
 ) -> tuple[dict[str, float], float, tuple]:
-    """Sweep thresholds and compute aggregate metrics at each step.
+    """Sweep candidate thresholds and compute aggregate classification metrics.
 
     Args:
-        arrays: List of score arrays (one per class).
-        labels: List of class labels (True = positive class).
+        arrays: List of score arrays per class.
+        labels: List of boolean class labels (True = positive class).
         flip_inequality: If True, values <= threshold are positive.
-        n_thresholds: Number of thresholds to sweep.
+        n_thresholds: Number of sweep threshold steps.
 
     Returns:
-        A tuple of (threshold_dict, optimal_accuracy, sweep_data).
-
-        ``threshold_dict`` maps threshold-type names to threshold values:
-        ``"accuracy"``, ``"f1"``, and one entry per key in
-        :data:`FPR_TARGETS`.
-
-        ``sweep_data`` is ``(thresholds, per_dataset_accs, agg_accs)``
-        where each ``*_accs`` is a list aligned with ``thresholds``.
-        ``per_dataset_accs`` is a list of lists (one per input array).
+        Tuple of (threshold_dict, optimal_accuracy, sweep_data).
     """
     all_data = np.concatenate([np.asarray(a, dtype=float) for a in arrays]) if arrays else np.array([])
 
@@ -169,22 +149,7 @@ def compute_threshold_sweep(
     threshold_dict["f1"] = float(thresholds[f1_idx])
 
     def _fpr_threshold(target_fpr: float) -> float:
-        """Return the threshold achieving FPR <= *target_fpr*.
-
-        When ``flip_inequality`` is False (higher score -> positive), we want
-        the lowest threshold that satisfies the FPR target (most permissive).
-        When ``flip_inequality`` is True (lower score -> positive), we want
-        the highest threshold.
-
-        If no threshold satisfies the target, fall back to the threshold
-        with the minimum FPR.
-
-        Args:
-            target_fpr: Desired false positive rate bound.
-
-        Returns:
-            Threshold float satisfying target FPR.
-        """
+        """Find threshold satisfying target FPR bound."""
         valid = [i for i, fpr in enumerate(agg_fprs) if fpr <= target_fpr]
         if not valid:
             valid = [int(np.argmin(agg_fprs))]
@@ -204,18 +169,16 @@ def compute_classifier_metrics(
     threshold: float,
     flip_inequality: bool,
 ) -> dict:
-    """Compute classification metrics at a single threshold.
+    """Compute complete confusion matrix and scalar metrics at a fixed threshold.
 
     Args:
-        arrays: List of score arrays (one per class).
-        labels: List of class labels (True = positive class).
-        threshold: Classification threshold.
+        arrays: List of score arrays per class.
+        labels: List of boolean class labels (True = positive class).
+        threshold: Classification decision threshold.
         flip_inequality: If True, values <= threshold are positive.
 
     Returns:
-        Dict with keys: ``n`` (scored rows), ``acc``, ``f1``, ``auroc``,
-        ``tpr``, ``fnr``, ``fpr``, ``tnr``, ``precision``, ``recall``,
-        ``TP``, ``FP``, ``TN``, ``FN``.
+        Dictionary of classification metric counts and scalar values.
     """
     actual: list[bool] = []
     predicted: list[bool] = []

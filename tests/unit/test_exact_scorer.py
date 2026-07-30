@@ -1,10 +1,3 @@
-"""ExactScorer: settings validation, batch planning, and numerical correctness.
-
-The correctness tests run a real (tiny, randomly-initialised) Llama on CPU and
-compare every reduction against a naive per-position reference, so the fused
-chunked implementation cannot drift without being caught. No downloads, no GPU.
-"""
-
 import numpy as np
 import pytest
 import torch

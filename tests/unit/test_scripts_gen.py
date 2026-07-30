@@ -1,10 +1,3 @@
-"""Post-processing of generated responses (``scripts/gen.py``).
-
-Each rule strips a different flavour of LLM boilerplate, and rule 5 reverts the
-whole thing when the strippers ate too much. The revert guard is why every
-positive test below uses a long body: a short one would trip it.
-"""
-
 import pytest
 
 from gen import post_process_response

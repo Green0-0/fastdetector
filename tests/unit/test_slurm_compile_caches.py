@@ -1,19 +1,3 @@
-"""GPU job scripts must keep their compile caches off NFS.
-
-Nothing set ``TRITON_CACHE_DIR``, so Triton used ``$HOME/.triton``. On this
-cluster ``$HOME`` is NFS, and several array tasks starting engines at once
-compile the same kernels into one shared directory, race, and get ``ESTALE``
-back. It surfaces as ``Triton compilation failed`` / ``OSError: [Errno 116]
-Stale file handle``, which reads like a CUDA problem rather than a
-shared-filesystem one. ``$HOME`` is also quota-limited, so filling it with
-compile artifacts is undesirable regardless.
-
-The set of scripts that need this is derived from ``--gres=gpu`` rather than
-hardcoded, so a new GPU stage is covered the moment it is added.
-
-Textual checks, so they run in the default tier without Slurm.
-"""
-
 import re
 
 import pytest

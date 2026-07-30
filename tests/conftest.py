@@ -1,17 +1,3 @@
-"""Shared fixtures and tier gating for the FastDetector test suite.
-
-Two independent mechanisms decide whether a test runs:
-
-* **Markers** declare *intent* — "this needs a GPU", "this downloads data".
-  ``pyproject.toml`` deselects the expensive ones by default.
-* **Capability checks** (``pytest_runtest_setup`` below) declare *environment* —
-  a ``gpu``-marked test that is explicitly selected on a CPU-only box skips with
-  a reason instead of erroring.
-
-Everything in the default tier runs offline: the model fixtures below build
-randomly-initialised checkpoints in-process instead of downloading them.
-"""
-
 import json
 import os
 import socket
@@ -251,6 +237,15 @@ def tiny_sequence_classifier():
     from transformers import BertConfig, BertForSequenceClassification
 
     def _build(num_labels: int = 5, seed: int = 0):
+        """Build a tiny BertForSequenceClassification model instance.
+
+        Args:
+            num_labels: Number of output classification labels.
+            seed: PRNG manual seed.
+
+        Returns:
+            BertForSequenceClassification model in eval mode.
+        """
         torch.manual_seed(seed)
         config = BertConfig(
             vocab_size=TINY_VOCAB_SIZE,

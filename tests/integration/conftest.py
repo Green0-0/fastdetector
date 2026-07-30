@@ -1,5 +1,3 @@
-"""Fixtures shared by the network-dependent integration tier."""
-
 import os
 
 import pytest
@@ -22,6 +20,12 @@ def skip_if_unreachable():
     """
 
     def _skip(exc: Exception, what: str) -> None:
+        """Skip test if exception is a connectivity/reachability error.
+
+        Args:
+            exc: Caught Exception.
+            what: Description of target resource.
+        """
         from huggingface_hub.errors import (
             GatedRepoError,
             HfHubHTTPError,

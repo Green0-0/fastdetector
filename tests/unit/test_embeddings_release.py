@@ -1,15 +1,3 @@
-"""Regression tests for ``_release_model``.
-
-The failure these guard against is silent: nothing raises when a checkpoint is
-left on the GPU, and the run only dies later when the *next* stage in
-``distance_stats.py`` loads its own multi-GiB checkpoint on top of it.
-
-These use stand-ins rather than real checkpoints so they stay in the default
-(fast, offline, CPU-only) tier. They assert the contract that makes the memory
-release work -- the parameters are moved off the device before the reference is
-dropped -- rather than measuring VRAM, which the ``gpu`` tier covers.
-"""
-
 import pytest
 
 from fastdetector.statistics.embeddings_api import _release_model

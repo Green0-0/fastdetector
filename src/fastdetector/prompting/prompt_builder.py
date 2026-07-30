@@ -1,8 +1,10 @@
 import json
-import random
 import os
-from typing import List
+import random
+from typing import Any, List
+
 from fastdetector.prompting.prompts import Prompt
+
 
 def shuffle(items: list[list[str]], seed: int = 42) -> list[list[str]]:
     """
@@ -88,14 +90,18 @@ def resize(items: list[list[str]], target_length: int, also_shuffle: bool = True
         rng.shuffle(result)
     return result
 
-def partial_stack(items_to_stack: list[list[list[str]]], min_stack_size: int = 1, max_stack_size: int = 1, seed: int = 42) -> list[list[str]]:
-    """
-    Takes a list of lists, where each list must have the exact same number of elements.
+def partial_stack(
+    items_to_stack: list[list[list[str]]],
+    min_stack_size: int = 1,
+    max_stack_size: int = 1,
+    seed: int = 42,
+) -> list[list[str]]:
+    """Takes a list of lists, where each list must have the exact same number of elements.
 
-    Returns a list where each entry in the list is a variate length list 
-    containing the i-th element from the first list up to 
+    Returns a list where each entry in the list is a variate length list
+    containing the i-th element from the first list up to
     [min_stack_size, max_stack_size] lists from the lists to stack.
-    
+
     As a result, note that some items from the list stack will be excluded.
 
     Returns a new list, without modifying the original list.
@@ -105,11 +111,11 @@ def partial_stack(items_to_stack: list[list[list[str]]], min_stack_size: int = 1
         min_stack_size (int, optional): Minimum number of lists to stack. Defaults to 1.
         max_stack_size (int, optional): Maximum number of lists to stack. Defaults to 1.
         seed (int, optional): Seed for the random number generator. Defaults to 42.
-    
+
     Returns:
         list[list[str]]: List of sequentially combined chat turns.
     """
-    assert items_to_stack != None and len(items_to_stack) > 0, "items_to_stack cannot be empty."
+    assert items_to_stack is not None and len(items_to_stack) > 0, "items_to_stack cannot be empty."
     assert False not in [len(lst) == len(items_to_stack[0]) for lst in items_to_stack], "All lists must have the same length."
     assert 1 <= min_stack_size <= max_stack_size, f"Invalid bounds: min ({min_stack_size}) must be <= max ({max_stack_size}) and >= 1."
     assert max_stack_size <= len(items_to_stack), f"max_stack_size ({max_stack_size}) cannot exceed the number of sets provided ({len(items_to_stack)})."
@@ -246,7 +252,7 @@ def generate_dataset(prompts: list[list[str]], use_multiturn: bool = True) -> Li
     """
     return [Prompt(chat_turns=chat, use_multiturn=use_multiturn) for chat in prompts]
 
-def add_metadata(prompts: List[Prompt], key: str, value: any) -> List[Prompt]:
+def add_metadata(prompts: List[Prompt], key: str, value: Any) -> List[Prompt]:
     """Add a key-value pair to the metadata dict of each Prompt in a list.
 
     Args:

@@ -1,34 +1,3 @@
-"""VRAM preflight for the statistics stages.
-
-These answer the question "will this config OOM three hours into the run?"
-*before* the run: each test loads the real checkpoints named in ``config/`` and
-pushes a deliberately worst-case batch through them, then asserts the measured
-peak fits inside a fraction of the card.
-
-    pytest -m "gpu and slow"
-
-What this does and does not prove
----------------------------------
-The synthetic batches below are built to be the worst case the *configuration*
-allows: every text is padded to the configured sequence cap and there are as
-many of them as the batch size permits. That is the shape that OOMs, because
-``SentenceTransformer.encode`` sorts inputs by length and pads each batch to its
-longest member, so the longest rows in a shard end up batched together.
-
-It is still synthetic. A green run here means "this config fits when saturated",
-not "this shard fits" -- token counts, and therefore activation sizes, depend on
-what the text actually is. Set ``FASTDETECTOR_TEST_PREFLIGHT_DATASET`` to push
-the longest rows of a real shard through instead, which is the only check that
-observes the true worst case.
-
-Knobs:
-    ``FASTDETECTOR_TEST_VRAM_BUDGET`` - allowed fraction of total VRAM (default 0.9)
-    ``FASTDETECTOR_TEST_CUDA_DEVICE`` - device to report against (default cuda:0)
-    ``FASTDETECTOR_TEST_PREFLIGHT_DATASET`` - real dataset to sample (default: unset, skips)
-    ``FASTDETECTOR_TEST_PREFLIGHT_SHARD`` - which shard/batch-id to sample (default 0)
-    ``FASTDETECTOR_TEST_PREFLIGHT_ROWS`` - how many of the longest rows to use (default 8)
-"""
-
 import os
 
 import numpy as np
@@ -224,6 +193,7 @@ def longest_real_rows(config, count: int):
 
 
 def test_a_gpu_is_actually_usable(cuda_device):
+    """Test that CUDA device is accessible and functional."""
     tensor = torch.zeros(1024, device=cuda_device)
     assert tensor.sum().item() == 0.0
     free_bytes, total_bytes = torch.cuda.mem_get_info()
@@ -330,6 +300,7 @@ def test_llm_stats_memory_is_released_after_scoring(repo_root):
 
 @pytest.mark.network
 def test_editlens_config_fits_in_vram(repo_root):
+    """Test that EditLens model evaluation fits within the VRAM budget."""
     from fastdetector.modeling.editlens import (
         compute_editlens_scores,
         get_model_and_tokenizer,
@@ -402,6 +373,7 @@ def test_distance_stats_embedding_model_fits_in_vram(repo_root):
 @pytest.mark.bigmem
 @pytest.mark.network
 def test_distance_stats_token_embedding_model_fits_in_vram(repo_root):
+    """Test that token-level embedding model evaluation fits within the VRAM budget."""
     from fastdetector.statistics.embeddings_api import generate_token_embeddings_pairs
 
     config = DistanceStatConfig(

@@ -1,5 +1,3 @@
-"""Metadata extraction and summary assembly in ``scripts/analysis.py``."""
-
 import json
 import re
 

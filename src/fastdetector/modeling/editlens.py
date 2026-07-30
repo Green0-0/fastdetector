@@ -19,34 +19,29 @@ from transformers import (
 
 
 class NormedLinear(torch.nn.Module):
-    """Linear layer preceded by LayerNorm to keep logits well-scaled.
-
-    Used as a drop-in replacement for the default ``score`` head
-    (``torch.nn.Linear``) on sequence-classification models when loading
-    a QLoRA adapter whose head was trained with this normalization.
-    """
+    """Linear layer with preceding LayerNorm for QLoRA classification heads."""
 
     def __init__(self, hidden_size: int, num_labels: int, device=None, dtype=None) -> None:
-        """Initialize NormedLinear layer.
+        """Initialize NormedLinear.
 
         Args:
-            hidden_size: Size of input hidden features.
-            num_labels: Number of target output classes/labels.
-            device: Torch device for parameters.
-            dtype: Torch data type for parameters.
+            hidden_size: Hidden dimension size.
+            num_labels: Number of output labels.
+            device: PyTorch device.
+            dtype: PyTorch data type.
         """
         super().__init__()
         self.norm = torch.nn.LayerNorm(hidden_size, device=device, dtype=dtype)
         self.linear = torch.nn.Linear(hidden_size, num_labels, bias=False, device=device, dtype=dtype)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass applying LayerNorm followed by Linear projection.
+        """Apply LayerNorm followed by Linear projection.
 
         Args:
             x: Input tensor of shape (batch_size, hidden_size).
 
         Returns:
-            Logits tensor of shape (batch_size, num_labels).
+            Output logits of shape (batch_size, num_labels).
         """
         return self.linear(self.norm(x))
 
@@ -54,17 +49,11 @@ class NormedLinear(torch.nn.Module):
 def clean_text(text: str) -> str:
     """Normalize text for EditLens inference.
 
-    Steps:
-    1. demojize — convert emoji to text aliases.
-    2. Strip ``<think>...</think>`` blocks (Qwen3 reasoning traces).
-    3. Collapse whitespace.
-    4. Lowercase.
-
     Args:
-        text: Input string or value to clean.
+        text: Input text string.
 
     Returns:
-        Cleaned, normalized string.
+        Normalized text string.
     """
     if text is None:
         return ""
@@ -78,10 +67,10 @@ def clean_text(text: str) -> str:
 
 
 def is_qlora_checkpoint(checkpoint: str) -> bool:
-    """Return True if *checkpoint* is a PEFT/QLoRA adapter (has adapter_config.json).
+    """Check if a checkpoint is a QLoRA adapter.
 
     Args:
-        checkpoint: Local path or HuggingFace repo ID.
+        checkpoint: Local directory path or HuggingFace repository ID.
 
     Returns:
         True if the checkpoint is a QLoRA adapter, False otherwise.
@@ -98,18 +87,14 @@ def is_qlora_checkpoint(checkpoint: str) -> bool:
 def infer_n_buckets(checkpoint: str) -> int:
     """Infer the number of classification buckets from a checkpoint.
 
-    For a full (non-QLoRA) checkpoint, reads ``num_labels`` from the model
-    config. For a QLoRA adapter, reads the shape of the ``score.linear.weight``
-    tensor from the adapter's safetensors or ``.bin`` file.
-
     Args:
-        checkpoint: Local path or HuggingFace repo ID.
+        checkpoint: Local directory path or HuggingFace repository ID.
 
     Returns:
-        Number of classification buckets (num_labels).
+        Number of classification buckets.
 
     Raises:
-        ValueError: if n_buckets cannot be determined.
+        ValueError: If bucket count cannot be determined.
     """
     if not is_qlora_checkpoint(checkpoint):
         return AutoConfig.from_pretrained(checkpoint).num_labels
@@ -144,22 +129,15 @@ def infer_n_buckets(checkpoint: str) -> int:
 
 
 def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_buckets: int):
-    """Load the EditLens model and tokenizer.
-
-    For QLoRA adapters, the base model is loaded in 4-bit quantization and
-    the default ``score`` head is replaced with ``NormedLinear`` (if the base
-    model uses a plain ``Linear`` head) so that the adapter's trained head
-    weights load correctly.
+    """Load EditLens model and matching tokenizer.
 
     Args:
-        checkpoint_path: Path or HF repo ID of the checkpoint/adapter.
-        base_model_name: Path or HF repo ID of the base model (required for
-            QLoRA adapters; ignored for full checkpoints).
-        n_buckets: Number of classification buckets (used only for QLoRA
-            adapters to size the replacement head).
+        checkpoint_path: Checkpoint path or HuggingFace repository ID.
+        base_model_name: Base model path or HuggingFace repository ID.
+        n_buckets: Number of classification buckets.
 
     Returns:
-        Tuple of (model, tokenizer, is_qlora). The model is in eval mode.
+        Tuple of (model, tokenizer, is_qlora).
     """
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     if tokenizer.pad_token is None:
@@ -206,40 +184,24 @@ def compute_editlens_scores(
     max_length: int,
     batch_size: int,
 ):
-    """Run EditLens inference on a list of texts.
-
-    Uses a plain ``torch.no_grad()`` DataLoader loop for direct control over
-    inference.
+    """Run EditLens batch inference on input texts.
 
     Args:
         texts: List of input strings.
-        model: The loaded EditLens model (from get_model_and_tokenizer).
-        tokenizer: The matching tokenizer.
-        is_qlora: Whether the model is a QLoRA adapter. Used to reduce the
-            batch size for QLoRA (4-bit quantization uses more memory per
-            sample).
+        model: Loaded EditLens model.
+        tokenizer: Loaded tokenizer.
+        is_qlora: Whether model is a QLoRA adapter.
         n_buckets: Number of classification buckets.
-        max_length: Max tokenization length.
-        batch_size: Inference batch size (ignored if is_qlora, which uses 4).
+        max_length: Maximum tokenization length.
+        batch_size: Inference batch size.
 
     Returns:
-        Tuple of (bucket_preds, score_preds), each a list of floats/ints of
-        length len(texts).
-        - bucket_preds[i]: argmax bucket index for texts[i].
-        - score_preds[i]: weighted average of bucket indices normalized to
-          [0, 1] = (probs @ arange(n_buckets)) / (n_buckets - 1).
+        Tuple of (bucket_preds, score_preds).
     """
     ds = Dataset.from_dict({"text": texts})
 
     def tokenize(example: dict) -> dict:
-        """Tokenize a batch of text examples after cleaning.
-
-        Args:
-            example: Dictionary with key "text" containing a list of strings.
-
-        Returns:
-            Dictionary of tokenized model inputs.
-        """
+        """Tokenize a batch of text examples."""
         cleaned_texts = [clean_text(t) for t in example["text"]]
         return tokenizer(cleaned_texts, truncation=True, max_length=max_length)
 

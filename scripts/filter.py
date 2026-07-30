@@ -15,6 +15,7 @@ from fastdetector.statistics.statistics_basic import (
     quantile
 )
 
+
 def main() -> None:
     """Run dataset generation, similarity metric computation, and condition filtering pipeline.
 
@@ -32,11 +33,11 @@ def main() -> None:
         args.globals_config, args.filter_config, FilterConfig
     )
 
-    source_dataset = globals_config.resolve_input_dataset(globals_config.raw_suffix)
-    intermediate_dataset = globals_config.resolve_output_dataset(globals_config.pre_filter_suffix)
+    source_dataset = globals_config.resolve_dataset(globals_config.raw_dataset)
+    intermediate_dataset = globals_config.resolve_dataset(globals_config.pre_filter_dataset)
     config_name = shard_config_name(args.batch_id)
 
-    print(f"Running filtering generation pipeline...")
+    print("Running filtering generation pipeline...")
     ds, gen_readme = run_pipeline(
         globals_config=globals_config,
         pipe_config=filter_config.pipeline,
@@ -68,21 +69,13 @@ def main() -> None:
     
     is_str_sub = is_strict_subset(originals, news)
     ds = ds.add_column("is_strict_subset", is_str_sub)
-    
-    # Quantiles are taken within this shard, so the quantile-based conditions
-    # below are relative to the rows this run processed, not the whole corpus.
+
     print("Computing quantiles...")
     for col in ["deviated_lines_proportion", "deviated_words_proportion", "deviated_characters_proportion"]:
         q = quantile(ds[col])
         ds = ds.add_column(f"{col}_quantile", q)
 
-    readme_content = gen_readme + f"""
-## Metrics Added (config: {config_name})
-- Deviated lines, words, characters (proportion + raw count)
-- Loose and strict subset checks
-- Quantiles for deviated_*_proportion columns
-- Total rows: {len(ds)}
-"""
+    readme_content = gen_readme
     print(f"Uploading updated dataset to {intermediate_dataset} (config '{config_name}')...")
     push_shard(ds, intermediate_dataset, config_name=config_name)
     upload_readme(
@@ -119,7 +112,7 @@ def main() -> None:
         print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
         ds_filtered = ds_filtered.filter(is_highly_english, num_proc=4)
 
-    filtered_dataset = globals_config.resolve_output_dataset(globals_config.post_filter_suffix)
+    filtered_dataset = globals_config.resolve_dataset(globals_config.post_filter_dataset)
 
     filtered_readme = f"""
 ## Filtering Applied
@@ -139,6 +132,7 @@ def main() -> None:
         readme_content=filtered_readme,
         append_readme_source=intermediate_dataset
     )
+
 
 if __name__ == "__main__":
     main()

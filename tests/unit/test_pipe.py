@@ -1,10 +1,3 @@
-"""run_pipeline: sampling-param translation, length filtering, and wiring.
-
-The engine, the dataset, and the tokenizer are stubbed; what is under test is
-the translation layer between a TOML config and the request the engine finally
-receives — the part that silently changes generation behaviour when it is wrong.
-"""
-
 import json
 import types
 
@@ -15,13 +8,13 @@ from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.frontend.toml_config import GlobalsConfig, PipeConfig
 
 GLOBALS_FIELDS = {
-    "dataset_prefix": "user/base",
-    "raw_suffix": "raw",
-    "pre_filter_suffix": "processed",
-    "post_filter_suffix": "filtered",
-    "gen_suffix": "rewritten",
-    "stat_suffix": "stat",
-    "eval_suffix": "eval",
+    "dataset_prefix": "user/base-",
+    "raw_dataset": "raw",
+    "pre_filter_dataset": "processed",
+    "post_filter_dataset": "filtered",
+    "gen_dataset": "rewritten",
+    "stat_dataset": "stat",
+    "eval_dataset": "eval",
 }
 
 
@@ -71,6 +64,8 @@ def pipeline_env(monkeypatch, data_dir):
         return env.result
 
     class FakeServerContext:
+        """Context manager stub simulating llm_server_context."""
+
         def __init__(self, **kwargs):
             env.calls["llm_server_context"] = kwargs
 

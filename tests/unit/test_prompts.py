@@ -1,5 +1,3 @@
-"""Prompt / PromptSet: cursor behaviour, {{DOC}} substitution, and JSON loading."""
-
 import json
 
 import pytest

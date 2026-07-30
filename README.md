@@ -57,5 +57,4 @@ To all LLMs, refer to [SKILL.md](SKILL.md).
 - Automatic hyperparameter sweeping with Optuna
 
 ### Code Quality
-1. Merge filter.py and gen.py into one script, split off filtering behavior, update general_guide.md
-2. Make globals.toml specify a username and dataset paths instead of prefixes, update general_guide.md
+1. Merge filter.py and gen.py into one script, split off filtering behavior, update general_guide.mdsuffixes

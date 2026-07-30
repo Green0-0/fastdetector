@@ -90,10 +90,6 @@ def launch_engine_server(
 ) -> subprocess.Popen:
     """Launch the LLM server with data-parallel size = GPU count.
 
-    The subprocess's stdout and stderr are streamed to the parent process's
-    stdout/stderr so that engine startup logs (model loading progress, CUDA
-    errors, etc.) are visible.
-
     Args:
         engine: Engine for the backend. Must be a local-server engine
             (vLLM or Aphrodite).
@@ -273,12 +269,12 @@ def llm_server_context(
     proc = None
     try:
         proc = launch_engine_server(
-            engine, 
-            model_name, 
+            engine,
+            model_name,
             port,
             venv_path=venv_path,
             parallelization_type=parallelization_type,
-            gpu_memory_utilization=gpu_memory_utilization, 
+            gpu_memory_utilization=gpu_memory_utilization,
             max_model_len=max_model_len,
             max_num_seqs=max_num_seqs,
             max_num_batched_tokens=max_num_batched_tokens,

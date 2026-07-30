@@ -1,10 +1,17 @@
 import random
 
 from fastdetector.prompting.prompt_builder import (
-    shuffle, resize, partial_stack, force_reformat,
-    apply_recursive_format, generate_dataset, save_dataset,
-    add_metadata, load_raw_samples_balanced_autosplit
+    add_metadata,
+    apply_recursive_format,
+    force_reformat,
+    generate_dataset,
+    load_raw_samples_balanced_autosplit,
+    partial_stack,
+    resize,
+    save_dataset,
+    shuffle,
 )
+
 
 def build_prompts_generic(paths: list[str], dataset_name: str, prompt_type: str, target_size: int, max_stack: int) -> tuple[list, list]:
     """Load, split, resize, stack, format with recursive headers, and save generic prompt sets.
@@ -50,8 +57,9 @@ def build_prompts_generic(paths: list[str], dataset_name: str, prompt_type: str,
 
     train_prompts = process(train_samples, f"{dataset_name}_train", train_size)
     test_prompts = process(test_samples, f"{dataset_name}_test", test_size)
-    
+
     return train_prompts, test_prompts
+
 
 def build_indirect_reference(subcategories: dict[str, str], dataset_name: str, prompt_type: str, target_size: int) -> tuple[list, list]:
     """Build and save indirect reference prompt datasets from subcategory mapping.
@@ -104,6 +112,7 @@ def build_indirect_reference(subcategories: dict[str, str], dataset_name: str, p
     save_dataset(all_test_prompts, f"{dataset_name}_test")
     print(f"  Saved {len(all_train_prompts)} train and {len(all_test_prompts)} test prompts to {dataset_name}")
     return all_train_prompts, all_test_prompts
+
 
 def main() -> None:
     """Build all prompt datasets (direct, revise, rewrite, indirect) and write outputs to disk.
@@ -166,6 +175,7 @@ def main() -> None:
     print(f"\nSaved {len(all_train_prompts)} combined prompts to combined_dataset_train")
     print(f"Saved {len(all_test_prompts)} combined prompts to combined_dataset_test")
     print("All datasets built successfully.")
+
 
 if __name__ == "__main__":
     main()

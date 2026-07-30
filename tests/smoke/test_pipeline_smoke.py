@@ -1,20 +1,3 @@
-"""End-to-end pipeline smoke test against a real engine.
-
-This launches the actual vLLM/Aphrodite server named in ``config/`` and runs a
-handful of samples through ``run_pipeline``. It is the preflight for a
-generation job: if the model does not fit, the flags are wrong, or the prompt
-file does not render, it fails here in minutes rather than after a queue wait.
-
-Run it from the main venv like every other tier::
-
-    pytest -m vllm
-
-Nothing here imports ``vllm``: the engine binary is resolved from
-``vllm_venv_path`` in globals.toml (or ``VLLM_VENV_PATH``) and launched as a
-subprocess, so the tier needs a populated engine venv on disk rather than an
-importable package. It skips cleanly when there is no binary.
-"""
-
 import os
 
 import pytest

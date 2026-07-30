@@ -1,5 +1,3 @@
-"""TOML loading and the globals+stage config pairing used by every entry point."""
-
 import tomllib
 
 import pytest
@@ -13,7 +11,7 @@ from fastdetector.frontend.toml_loader import load_config_pair, load_toml
 def test_load_toml_returns_plain_dict(data_dir):
     parsed = load_toml(str(data_dir / "globals.toml"))
     assert isinstance(parsed, dict)
-    assert parsed["dataset_prefix"] == "testuser/testds"
+    assert parsed["dataset_prefix"] == "testuser/testds-"
 
 
 def test_load_toml_missing_file():
@@ -36,7 +34,7 @@ def test_load_config_pair_builds_both_models(data_dir):
     assert isinstance(gen_config, GenConfig)
     assert gen_config.pipeline.engine is EngineConfig.VLLM
     assert gen_config.source_column == "collected_subset"
-    assert globals_config.resolve_output_dataset(globals_config.gen_suffix) == (
+    assert globals_config.resolve_dataset(globals_config.gen_dataset) == (
         "testuser/testds-rewritten"
     )
 
@@ -45,7 +43,7 @@ def test_load_config_pair_reads_overrides_and_venv_paths(data_dir):
     globals_config, _ = load_config_pair(
         str(data_dir / "globals_override.toml"), str(data_dir / "gen.toml"), GenConfig
     )
-    assert globals_config.resolve_input_dataset("raw") == "someone/input-only"
+    assert globals_config.resolve_dataset(globals_config.raw_dataset) == "someone/input-only"
     assert globals_config.vllm_venv_path == ".vllm-custom"
     assert globals_config.aphrodite_venv_path == ".aphrodite-custom"
 

@@ -1,22 +1,21 @@
-from fastdetector.statistics.statistics_basic import extract_ngrams
-from typing import Dict, Optional
 import gc
+from typing import Dict, Optional
 
 import numpy as np
 import torch
-from sentence_transformers import SentenceTransformer, CrossEncoder
+from sentence_transformers import CrossEncoder, SentenceTransformer
 from transformers import AutoModel, AutoTokenizer
 
-def _build_kwargs(model_name: str) -> Dict:
-    """Returns the SentenceTransformer/CrossEncoder kwargs for a given model.
+from fastdetector.statistics.statistics_basic import extract_ngrams
 
-    Automatically applies flash attention, bf16, and left padding for Qwen3 models.
+def _build_kwargs(model_name: str) -> Dict:
+    """Build keyword arguments for model initialization.
 
     Args:
         model_name: HuggingFace model identifier.
 
     Returns:
-        Dictionary of Keyword arguments for model instantiation.
+        Dictionary of keyword arguments.
     """
     if "qwen3" in model_name.lower():
         return {
@@ -27,18 +26,10 @@ def _build_kwargs(model_name: str) -> Dict:
 
 
 def _release_model(model) -> None:
-    """Move a model off the GPU, drop it, and reclaim CUDA memory.
-
-    Moving the parameters to host memory first frees the CUDA allocations
-    regardless of Python reference cycles. The outer object is tried first
-    because ``torch.nn.Module.to`` is recursive. ``CrossEncoder`` is handled
-    via fallback if it wraps its module in ``.model``.
+    """Release model parameters from CUDA memory and reclaim memory.
 
     Args:
-        model: PyTorch / SentenceTransformer / CrossEncoder object to release.
-
-    Returns:
-        None.
+        model: PyTorch model instance to unload.
     """
     for candidate in (model, getattr(model, "model", None)):
         if candidate is None or not hasattr(candidate, "to"):
@@ -61,21 +52,16 @@ def batch_gen_embeddings(
     batch_size: int = 4,
     max_seq_length: Optional[int] = None,
 ) -> np.ndarray:
-    """Generate normalized embeddings for a list of texts.
+    """Generate normalized embeddings for input texts.
 
     Args:
-        texts: List of strings.
+        texts: List of text strings.
         model_name: HuggingFace model identifier.
-        batch_size: Batch size for inference.
-        max_seq_length: Truncate inputs to this many tokens. ``None`` inherits
-            the checkpoint's own limit, which is 40960 tokens for
-            ``Qwen3-Embedding-4B``. Because ``SentenceTransformer.encode``
-            sorts by length and pads each batch to its longest member, leaving
-            this unset lets one runaway generation set the memory cost of its
-            whole batch.
+        batch_size: Inference batch size.
+        max_seq_length: Maximum sequence token length.
 
     Returns:
-        Numpy array of normalized embeddings (shape: [len(texts), D]).
+        Numpy array of normalized embeddings.
     """
     model = SentenceTransformer(model_name, trust_remote_code=True, **_build_kwargs(model_name))
     if max_seq_length is not None:
@@ -96,20 +82,15 @@ def batch_cross_encoder(
     """Compute cross-encoder scores for aligned pairs of texts.
 
     Args:
-        texts_a: First list of texts.
-        texts_b: Second list of texts (same length as texts_a).
+        texts_a: First list of text strings.
+        texts_b: Second list of text strings.
         model_name: HuggingFace model identifier.
-        batch_size: Batch size for inference.
-        as_distance: If True, negate the scores so they behave like distances
-            (lower = more similar), matching the convention of the other
-            ``pairwise_*`` metrics.
-        max_length: Truncate pairs to this many tokens. ``None`` inherits the
-            checkpoint's own limit, which is 40960 tokens for
-            ``Qwen3-Reranker-4B``; see :func:`batch_gen_embeddings` for why
-            that is expensive under length-sorted batching.
+        batch_size: Inference batch size.
+        as_distance: If True, negate scores to represent distances.
+        max_length: Maximum token length.
 
     Returns:
-        List of cross-encoder scores (negated if as_distance=True).
+        List of cross-encoder scores or distances.
     """
     ce_kwargs = dict(_build_kwargs(model_name))
     if max_length is not None:
@@ -131,18 +112,14 @@ def generate_token_embeddings_pairs(
     batch_size: int = 4,
     chunk_size: int = 100,
 ):
-    """Extract normalized token-level embeddings and subword tokens.
-
-    Yields chunks of (embs_a, toks_a, embs_b, toks_b) to avoid OOM on large
-    datasets. Each embs array is (num_tokens, D) with L2-normalized rows;
-    special tokens ([CLS], [SEP]) are excluded.
+    """Extract normalized token-level embeddings and token lists for paired texts.
 
     Args:
-        texts_a: First list of texts.
-        texts_b: Second list of texts.
+        texts_a: First list of text strings.
+        texts_b: Second list of text strings.
         model_name: HuggingFace model identifier.
         batch_size: Inference batch size.
-        chunk_size: How many texts to yield per iteration.
+        chunk_size: Number of texts per yielded chunk.
 
     Yields:
         Tuple of (embs_a, toks_a, embs_b, toks_b) for each chunk.
@@ -155,14 +132,7 @@ def generate_token_embeddings_pairs(
         model = model.cuda()
 
     def _extract_chunk(texts: list[str]) -> tuple[list[np.ndarray], list[list[str]]]:
-        """Extract token-level embeddings and token lists for a chunk of texts.
-
-        Args:
-            texts: List of strings to encode.
-
-        Returns:
-            Tuple of (all_embeddings, all_tokens).
-        """
+        """Extract token-level embeddings and token lists for a text chunk."""
         all_embs = []
         all_tokens = []
         for i in range(0, len(texts), batch_size):
@@ -201,6 +171,7 @@ def generate_token_embeddings_pairs(
 
     _release_model(model)
 
+
 def batch_soft_ngram_scores(
     source_texts: list[str],
     edited_texts: list[str],
@@ -210,30 +181,19 @@ def batch_soft_ngram_scores(
     max_length: int = 12,
     phrase_batch_size: int = 2048,
 ) -> list[float]:
-    """Compute soft n-gram distance between pairs of source and edited texts.
-
-    For each (source, edited) pair:
-    1. Extract all word n-grams (lengths min_length..max_length) from both texts.
-    2. Embed all unique n-grams across the current chunk using a sentence
-       embedding model.
-    3. For each n-gram in the edited text, check if any n-gram in the source
-       text has cosine similarity >= threshold. If so, count it as matched.
-    4. Distance = 1 - precision = 1 - (matched / total edited n-grams).
-
-    Processing is done in chunks of `doc_batch_size=100` documents to prevent
-    CUDA OOM on massive datasets.
+    """Compute soft n-gram distance between paired source and edited texts.
 
     Args:
-        source_texts: List of original texts.
-        edited_texts: List of edited/generated texts (same length as source_texts).
-        model_name: HuggingFace sentence-transformers model ID.
-        threshold: Cosine similarity threshold for counting a phrase as matched.
-        min_length: Minimum n-gram length in words.
-        max_length: Maximum n-gram length in words.
-        phrase_batch_size: Encoding batch size for soft n-gram phrases.
+        source_texts: Original text strings.
+        edited_texts: Edited text strings.
+        model_name: HuggingFace sentence transformer model ID.
+        threshold: Cosine similarity threshold for phrase matching.
+        min_length: Minimum n-gram word length.
+        max_length: Maximum n-gram word length.
+        phrase_batch_size: Encoding batch size for phrase embeddings.
 
     Returns:
-        List of distance scores (1 - precision). Higher means more dissimilar.
+        List of soft n-gram distance scores.
     """
     model = SentenceTransformer(model_name, trust_remote_code=True, **_build_kwargs(model_name))
     results = []

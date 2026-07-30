@@ -82,6 +82,7 @@ def post_process_response(row: dict) -> dict:
     row["reverted"] = reverted
     return row
 
+
 def main() -> None:
     """Execute the text generation pipeline from command line configuration.
 
@@ -99,11 +100,11 @@ def main() -> None:
         args.globals_config, args.gen_config, GenConfig
     )
 
-    source_dataset = globals_config.resolve_input_dataset(globals_config.post_filter_suffix)
-    target_dataset = globals_config.resolve_output_dataset(globals_config.gen_suffix)
-    stat_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
+    source_dataset = globals_config.resolve_dataset(globals_config.post_filter_dataset)
+    target_dataset = globals_config.resolve_dataset(globals_config.gen_dataset)
+    stat_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
 
-    print(f"Running generation pipeline...")
+    print("Running generation pipeline...")
     print(f"Source Dataset: {source_dataset}")
     print(f"Target Dataset: {target_dataset}")
     print(f"Engine: {task_config.pipeline.engine}")
@@ -122,21 +123,24 @@ def main() -> None:
 
     total = len(result_ds)
     if total > 0:
-        prop_1 = sum(result_ds["mod_1"]) / total
-        prop_2 = sum(result_ds["mod_2"]) / total
-        prop_3 = sum(result_ds["mod_3"]) / total
-        prop_4 = sum(result_ds["mod_4"]) / total
+        count_1 = sum(result_ds["mod_1"])
+        count_2 = sum(result_ds["mod_2"])
+        count_3 = sum(result_ds["mod_3"])
+        count_4 = sum(result_ds["mod_4"])
         reverted_count = sum(result_ds["reverted"])
     else:
-        prop_1 = prop_2 = prop_3 = prop_4 = 0.0
+        count_1 = count_2 = count_3 = count_4 = 0
         reverted_count = 0
 
-    readme_content += f"\n\n## Post Processing Stats\n"
-    readme_content += f"- Step 1 (Extract between '---'): {prop_1:.2%} modified\n"
-    readme_content += f"- Step 2 (Remove trailing '---'): {prop_2:.2%} modified\n"
-    readme_content += f"- Step 3 (Remove up to '---'): {prop_3:.2%} modified\n"
-    readme_content += f"- Step 4 (Remove first line): {prop_4:.2%} modified\n"
-    readme_content += f"- Reverted due to excessive divergence: {reverted_count}\n"
+    readme_content += f"""
+
+## Post Processing Stats
+- Step 1 (Extract between '---'): {count_1}/{total} modified
+- Step 2 (Remove trailing '---'): {count_2}/{total} modified
+- Step 3 (Remove up to '---'): {count_3}/{total} modified
+- Step 4 (Remove first line): {count_4}/{total} modified
+- Reverted due to excessive divergence: {reverted_count}
+"""
 
     cols_to_remove = [c for c in ["mod_1", "mod_2", "mod_3", "mod_4", "reverted"] if c in result_ds.column_names]
     if cols_to_remove:

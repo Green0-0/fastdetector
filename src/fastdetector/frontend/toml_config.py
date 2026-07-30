@@ -5,60 +5,39 @@ from fastdetector.frontend.engine_config import EngineConfig
 
 
 class GlobalsConfig(BaseModel):
-    """Global configuration settings for dataset processing, paths, and naming conventions."""
+    """Global configuration settings for dataset processing and paths."""
 
-    # Dataset Overrides (if set, these bypass the prefix/suffix logic).
-    # None means "not set"; use the prefix+suffix scheme instead.
-    override_dataset_input: Optional[str] = None
-    override_dataset_output: Optional[str] = None
+    # Optional dataset prefix
+    dataset_prefix: str = ""
 
-    # Standard Naming Convention (Prefix + Suffix).
-    dataset_prefix: str
-    raw_suffix: str
-    pre_filter_suffix: str
-    post_filter_suffix: str
-    gen_suffix: str
-    stat_suffix: str
-    eval_suffix: str
+    # Dataset Name Paths
+    raw_dataset: str
+    pre_filter_dataset: str
+    post_filter_dataset: str
+    gen_dataset: str
+    stat_dataset: str
+    eval_dataset: str
 
     # Engine Virtual Environment Paths
     vllm_venv_path: str = ".vllm"
     aphrodite_venv_path: str = ".aphrodite"
 
-    def resolve_input_dataset(self, suffix: str) -> str:
-        """Return the source dataset name for the given suffix, honouring override_dataset_input.
-
-        Args:
-            suffix: Dataset suffix string.
-
-        Returns:
-            Resolved input dataset name.
-        """
-        if self.override_dataset_input is not None:
-            return self.override_dataset_input
-        return f"{self.dataset_prefix}-{suffix}"
-
-    def resolve_output_dataset(self, suffix: str) -> str:
-        """Return the target dataset name for the given suffix, honouring override_dataset_output.
-
-        Args:
-            suffix: Dataset suffix string.
-
-        Returns:
-            Resolved output dataset name.
-        """
-        if self.override_dataset_output is not None:
-            return self.override_dataset_output
-        return f"{self.dataset_prefix}-{suffix}"
+    def resolve_dataset(self, dataset_path: str) -> str:
+        """Return the resolved dataset repo ID by prepending dataset_prefix."""
+        return f"{self.dataset_prefix}{dataset_path}"
 
 
 class ConditionConfig(BaseModel):
+    """Configuration for dataset filtering conditions based on column comparisons."""
+
     column: str
     operator: str
     value: Any
 
-    
+
 class PipeConfig(BaseModel):
+    """Configuration for inference pipelines, sampling parameters, and engine options."""
+
     # Engine
     engine: EngineConfig
     model_name: str
@@ -80,8 +59,7 @@ class PipeConfig(BaseModel):
     max_model_len: Optional[int] = None
     max_input_len: Optional[int] = None
 
-    # Server batching (local engines only). Defaults match the previously
-    # hardcoded values.
+    # Engine batching (local engines only)
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 2048
 
@@ -97,6 +75,7 @@ class GenConfig(BaseModel):
     when the source dataset is sharded (scripts/shard_dataset.py), so there is
     no sample count here.
     """
+
     source_column: str
     prompt_file: str
     pipeline: PipeConfig
@@ -104,18 +83,21 @@ class GenConfig(BaseModel):
 
 class FilterConfig(BaseModel):
     """Configuration for the filtering script (filter.py)."""
+
     source_column: str
     prompt_file: str
     pipeline: PipeConfig
 
     conditions: List[ConditionConfig] = []
     filter_type: str = "AND"
-    
+
     # Langdetect threshold (0 to 1). If set, filter out rows where English prob < threshold.
     langdetect_threshold: Optional[float] = None
 
 
 class ClassifierConfig(BaseModel):
+    """Configuration for individual score/bin classifier evaluation settings."""
+
     name: str
     suffix: str
     direction: str = "higher_is_ai"
@@ -126,6 +108,14 @@ class ClassifierConfig(BaseModel):
 
     @model_validator(mode="after")
     def _check_threshold_kind(self):
+        """Validate threshold_kind attribute to ensure it is 'score' or 'bin'.
+
+        Returns:
+            Self instance if valid.
+
+        Raises:
+            ValueError: If threshold_kind is not 'score' or 'bin'.
+        """
         if self.threshold_kind not in ("score", "bin"):
             raise ValueError(
                 f'threshold_kind must be "score" or "bin", got {self.threshold_kind!r}.'
@@ -146,9 +136,6 @@ class AnalysisConfig(BaseModel):
     model_metadata_column: str
 
     # Thresholds & Splits.
-    # Each classifier selects its settings via threshold_kind ("score"/"bin").
-    # Set the matching manual_threshold_* to a value to skip the validation
-    # sweep for that classifier and use the fixed threshold instead.
     validation_size: float
     threshold_type_bin: str
     threshold_type_score: str
@@ -165,10 +152,6 @@ class AnalysisConfig(BaseModel):
     # Classifiers to Evaluate
     classifiers: List[ClassifierConfig] = []
 
-    # Per-classifier bin breakdown: every row is placed in one of num_bins
-    # equal-count (quantile) bins of bin_column, and each classifier is scored
-    # per bin. This is what shows whether detection only works on the heavily
-    # rewritten rows. bin_column defaults to the first distance metric.
     bin_column: Optional[str] = None
     num_bins: int = 4
 
@@ -183,12 +166,7 @@ class DistanceStatConfig(BaseModel):
     softngram_phrase_batch_size: int = 2048
     token_embedding_chunk_size: int = 100
 
-    # Sequence-length caps for the Qwen3 embedding/reranker passes. None
-    # inherits the checkpoint's own limit (40960 tokens), which lets a single
-    # runaway generation set the memory cost of its whole batch, since
-    # SentenceTransformer.encode sorts by length and pads to the longest
-    # member. Note these change metric values for texts longer than the cap:
-    # the tail beyond it is not seen by the model.
+    # Sequence-length caps for the Qwen3 embedding/reranker passes.
     embedding_max_seq_length: Optional[int] = None
     reranker_max_length: Optional[int] = None
 
@@ -227,16 +205,13 @@ class LLMStatConfig(BaseModel):
     # Maximum tokens per text; longer texts are truncated.
     max_model_len: int = 16000
 
-    # Cap on padded tokens (batch_size * max_len) per forward pass. Texts are
-    # length-sorted into buckets so padding waste stays low.
+    # Cap on padded tokens (batch_size * max_len) per forward pass.
     max_batch_tokens: int = 16384
 
-    # Positions per LM-head/log-softmax reduction chunk. Peak activation
-    # memory scales with head_chunk_size * vocab_size (per co-resident model).
+    # Positions per LM-head/log-softmax reduction chunk.
     head_chunk_size: int = 512
 
-    # Model dtype: "bfloat16", "float16", or "float32". Reductions always run
-    # in float32.
+    # Model dtype: "bfloat16", "float16", or "float32".
     dtype: str = "bfloat16"
 
     # Attention backend. None tries flash_attention_2, then falls back to sdpa.
@@ -265,8 +240,8 @@ class LLMStatConfig(BaseModel):
     llm_checkpoints: List[str]
     col_suffixes: List[str]
 
-    @model_validator(mode='after')
-    def validate_llm_settings(self) -> 'LLMStatConfig':
+    @model_validator(mode="after")
+    def validate_llm_settings(self) -> "LLMStatConfig":
         """Validate alignment of LLM checkpoints, column suffixes, and binoculars configuration.
 
         Returns:
@@ -276,20 +251,28 @@ class LLMStatConfig(BaseModel):
             ValueError: If llm_checkpoints and col_suffixes lengths differ or binoculars requirements are unmet.
         """
         if len(self.llm_checkpoints) != len(self.col_suffixes):
-            raise ValueError(f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) must match col_suffixes ({len(self.col_suffixes)})")
+            raise ValueError(
+                f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) "
+                f"must match col_suffixes ({len(self.col_suffixes)})"
+            )
         if len(set(self.col_suffixes)) != len(self.col_suffixes):
             raise ValueError(f"col_suffixes must be unique, got {self.col_suffixes}")
         if self.binoculars_score and len(self.llm_checkpoints) != 2:
-            raise ValueError(f"Binoculars score requires exactly 2 llm_checkpoints, but {len(self.llm_checkpoints)} were provided.")
+            raise ValueError(
+                f"Binoculars score requires exactly 2 llm_checkpoints, "
+                f"but {len(self.llm_checkpoints)} were provided."
+            )
         return self
 
 
 class EditLensStatConfig(BaseModel):
     """Configuration for EditLens-specific bucket and score inference (editlens_stats.py)."""
+
     columns_to_score: List[str]
     suffix: str
-    
+
     base_model: str
     checkpoint: str
     max_length: int
     batch_size: int
+

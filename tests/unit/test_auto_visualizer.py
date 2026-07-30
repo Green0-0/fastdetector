@@ -1,5 +1,3 @@
-"""The wrapper objects the analysis README is assembled from."""
-
 import math
 
 import numpy as np
@@ -45,20 +43,24 @@ def group_mask(value: str):
 
 
 def test_extract_returns_a_float_array(dataset):
+    """Test that _extract converts dataset column to a float NumPy array."""
     values = _extract(dataset, "score", None)
     assert values.dtype == float
     assert values.tolist() == [0.0, 1.0, 2.0, 3.0]
 
 
 def test_extract_applies_the_mask(dataset):
+    """Test that _extract correctly filters rows using a mask function."""
     assert _extract(dataset, "score", group_mask("a")).tolist() == [0.0, 2.0]
 
 
 def test_extract_with_a_mask_that_selects_nothing(dataset):
+    """Test that _extract returns empty array when mask selects no rows."""
     assert _extract(dataset, "score", group_mask("zzz")).tolist() == []
 
 
 def test_extract_of_a_missing_column_raises(dataset):
+    """Test that extracting a non-existent column raises KeyError or ValueError."""
     # A typo'd classifier suffix must fail loudly rather than yielding an
     # empty array that quietly turns into a 0.0 metric.
     with pytest.raises((KeyError, ValueError)):
@@ -71,6 +73,7 @@ def test_extract_of_a_missing_column_raises(dataset):
 
 
 def test_stat_wrapper_summarises_a_column(dataset):
+    """Test that StatWrapper computes summary statistics for a dataset column."""
     stat = StatWrapper(dataset, "score", "Score")
     assert stat.name == "Score"
     assert stat.column == "score"
@@ -84,6 +87,7 @@ def test_stat_wrapper_summarises_a_column(dataset):
 
 
 def test_stat_wrapper_exposes_its_values_for_the_table_builder(dataset):
+    """Test that StatWrapper exposes its metric dictionary for table generation."""
     stat = StatWrapper(dataset, "score", "Score")
     assert set(stat.values) == {
         "count",
@@ -98,11 +102,13 @@ def test_stat_wrapper_exposes_its_values_for_the_table_builder(dataset):
 
 
 def test_stat_wrapper_respects_a_mask(dataset):
+    """Test that StatWrapper calculates statistics over a masked subset."""
     stat = StatWrapper(dataset, "score", "Score", mask_fn=group_mask("b"))
     assert stat.mean == pytest.approx(2.0)
 
 
 def test_stat_wrapper_of_an_empty_subset_is_all_nan(dataset):
+    """Test that StatWrapper computes NaN statistics for an empty subset."""
     stat = StatWrapper(dataset, "score", "Score", mask_fn=group_mask("zzz"))
     assert stat.count == 0
     assert stat.invalid == 0
@@ -114,6 +120,7 @@ def test_stat_wrapper_of_an_empty_subset_is_all_nan(dataset):
 
 
 def test_stat_wrapper_counts_and_excludes_invalid_rows():
+    """Test that StatWrapper tracks and skips non-finite values."""
     # A metric that errored out on some rows must not turn the whole column's
     # mean into NaN - it has to be counted and skipped.
     dataset = Dataset.from_dict({"score": [1.0, None, 3.0, float("nan")]})
@@ -130,6 +137,7 @@ def test_stat_wrapper_counts_and_excludes_invalid_rows():
 
 
 def test_threshold_wrapper_selects_the_requested_threshold_type():
+    """Test that ThresholdWrapper selects the specified threshold type."""
     wrapper = ThresholdWrapper([HUMAN, AI], [False, True], threshold_type="accuracy")
     assert wrapper.threshold_value == wrapper.threshold_dict["accuracy"]
     assert wrapper.optimal_acc == 1.0
@@ -137,6 +145,7 @@ def test_threshold_wrapper_selects_the_requested_threshold_type():
 
 
 def test_threshold_wrapper_supports_the_fpr_targets():
+    """Test that ThresholdWrapper supports target FPR thresholds."""
     wrapper = ThresholdWrapper(
         [HUMAN, AI], [False, True], threshold_type="fpr_0_5pct"
     )
@@ -144,16 +153,19 @@ def test_threshold_wrapper_supports_the_fpr_targets():
 
 
 def test_threshold_wrapper_returns_none_for_an_unknown_type():
+    """Test that ThresholdWrapper returns None for an unrecognised threshold type."""
     wrapper = ThresholdWrapper([HUMAN, AI], [False, True], threshold_type="nonsense")
     assert wrapper.threshold_value is None
 
 
 def test_threshold_wrapper_defaults_its_column_names():
+    """Test that ThresholdWrapper assigns default column names if unsupplied."""
     wrapper = ThresholdWrapper([HUMAN, AI], [False, True], threshold_type="accuracy")
     assert wrapper.column_names == ["Class 0", "Class 1"]
 
 
 def test_threshold_wrapper_keeps_custom_column_names():
+    """Test that ThresholdWrapper retains custom dataset column names."""
     wrapper = ThresholdWrapper(
         [HUMAN, AI],
         [False, True],
@@ -164,6 +176,7 @@ def test_threshold_wrapper_keeps_custom_column_names():
 
 
 def test_threshold_wrapper_carries_the_flip_flag_to_the_classifier():
+    """Test that flip_class boolean is preserved in ThresholdWrapper."""
     wrapper = ThresholdWrapper(
         [AI, HUMAN], [False, True], threshold_type="accuracy", flip_class=True
     )
@@ -172,6 +185,7 @@ def test_threshold_wrapper_carries_the_flip_flag_to_the_classifier():
 
 
 def test_threshold_wrapper_renders_a_sweep_plot():
+    """Test rendering threshold sweep plot to PNG bytes."""
     wrapper = ThresholdWrapper(
         [HUMAN, AI], [False, True], threshold_type="accuracy", name="Test"
     )
@@ -179,6 +193,7 @@ def test_threshold_wrapper_renders_a_sweep_plot():
 
 
 def test_threshold_wrapper_on_empty_input():
+    """Test ThresholdWrapper behavior when provided empty input arrays."""
     wrapper = ThresholdWrapper([], [], threshold_type="accuracy")
     assert wrapper.threshold_value is None
     assert wrapper.optimal_acc == 0.0
@@ -190,6 +205,7 @@ def test_threshold_wrapper_on_empty_input():
 
 
 def test_static_threshold_wrapper_holds_its_value():
+    """Test that StaticThresholdWrapper stores fixed threshold value and flags."""
     wrapper = StaticThresholdWrapper(0.42, flip_class=True, name="Manual")
     assert wrapper.threshold_value == 0.42
     assert wrapper.flip_class is True
@@ -202,6 +218,7 @@ def test_static_threshold_wrapper_holds_its_value():
 
 
 def test_classifier_wrapper_evaluates_at_the_swept_threshold():
+    """Test ClassifierWrapper metric evaluation using a swept threshold."""
     threshold = ThresholdWrapper([HUMAN, AI], [False, True], threshold_type="accuracy")
     classifier = ClassifierWrapper([HUMAN, AI], [False, True], threshold, name="Clf")
     assert classifier.metrics["acc"] == 1.0
@@ -210,6 +227,7 @@ def test_classifier_wrapper_evaluates_at_the_swept_threshold():
 
 
 def test_classifier_wrapper_evaluates_at_a_manual_threshold():
+    """Test ClassifierWrapper evaluation using a static threshold."""
     threshold = StaticThresholdWrapper(0.5)
     classifier = ClassifierWrapper([HUMAN, AI], [False, True], threshold)
     assert classifier.metrics["TP"] == 4
@@ -217,6 +235,7 @@ def test_classifier_wrapper_evaluates_at_a_manual_threshold():
 
 
 def test_classifier_wrapper_honours_a_flipped_threshold():
+    """Test ClassifierWrapper behavior when using flipped threshold inequality."""
     threshold = StaticThresholdWrapper(0.5, flip_class=True)
     classifier = ClassifierWrapper([AI, HUMAN], [False, True], threshold)
     assert classifier.metrics["acc"] == 1.0
@@ -224,6 +243,7 @@ def test_classifier_wrapper_honours_a_flipped_threshold():
 
 
 def test_classifier_wrapper_attaches_a_confusion_matrix():
+    """Test that ClassifierWrapper formats markdown confusion matrix."""
     threshold = StaticThresholdWrapper(0.5)
     classifier = ClassifierWrapper([HUMAN, AI], [False, True], threshold, name="Clf")
     matrix = classifier.metrics["confusion_matrix"]
@@ -232,6 +252,7 @@ def test_classifier_wrapper_attaches_a_confusion_matrix():
 
 
 def test_classifier_wrapper_on_an_empty_subset():
+    """Test ClassifierWrapper metric output on an empty subset."""
     threshold = StaticThresholdWrapper(0.5)
     classifier = ClassifierWrapper([], [], threshold)
     assert classifier.metrics["acc"] == 0.0

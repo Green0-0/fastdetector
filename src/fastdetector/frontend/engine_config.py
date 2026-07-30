@@ -26,7 +26,7 @@ class EngineConfig(str, Enum):
         """True if this engine is a proprietary API model (not a local server).
 
         Proprietary models use different sampling-param semantics: they don't accept
-        temperature/top_p/top_k/presence_penalty, and disable_thinking is 
+        temperature/top_p/top_k/presence_penalty, and disable_thinking is
         translated to reasoning_effort="none" instead of a chat_template_kwarg.
 
         Returns:
@@ -42,7 +42,7 @@ class EngineConfig(str, Enum):
             List of supported parameter names.
         """
         base_params = ["temperature", "top_p", "top_k", "presence_penalty", "disable_thinking"]
-        
+
         if self == EngineConfig.VLLM:
             return base_params
         elif self == EngineConfig.APHRODITE:

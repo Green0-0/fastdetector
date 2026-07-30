@@ -115,7 +115,7 @@ def main() -> None:
 
     globals_config, config = load_config_pair(args.globals_config, args.llm_config, LLMStatConfig)
 
-    target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
+    target_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
     print(f"Loading {target_dataset} (subset index {args.batch_id})...")
     ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
 

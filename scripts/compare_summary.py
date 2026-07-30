@@ -1,9 +1,12 @@
 import argparse
 import json
 import sys
+from typing import Any
+
 from huggingface_hub import hf_hub_download
 
-METRIC_KEYS = ['acc', 'f1', 'auroc', 'tpr', 'fnr', 'fpr', 'precision', 'recall']
+METRIC_KEYS = ["acc", "f1", "auroc", "tpr", "fnr", "fpr", "precision", "recall"]
+
 
 def download_summary(repo_id: str) -> dict:
     """Download summary_stats.json from a HuggingFace dataset repo.
@@ -20,13 +23,14 @@ def download_summary(repo_id: str) -> dict:
     """
     try:
         path = hf_hub_download(repo_id=repo_id, repo_type="dataset", filename="summary_stats.json")
-        with open(path, 'r') as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         print(f"Failed to download summary_stats.json from {repo_id}: {e}")
         sys.exit(1)
 
-def is_valid(val: any) -> bool:
+
+def is_valid(val: Any) -> bool:
     """Check if a metric value is numeric and non-NaN.
 
     Args:
@@ -37,7 +41,8 @@ def is_valid(val: any) -> bool:
     """
     return isinstance(val, (int, float)) and val == val
 
-def format_single_metric(v1: any, v2: any) -> tuple[str, str, str]:
+
+def format_single_metric(v1: Any, v2: Any) -> tuple[str, str, str]:
     """Format metric values from two datasets and compute difference string.
 
     Args:
@@ -76,8 +81,10 @@ def generate_metric_table(ds1_name: str, ds2_name: str, m1: dict, m2: dict) -> s
     Returns:
         Markdown table string.
     """
-    if m1 is None: m1 = {}
-    if m2 is None: m2 = {}
+    if m1 is None:
+        m1 = {}
+    if m2 is None:
+        m2 = {}
 
     header = f"| Metric | {ds1_name} | {ds2_name} | Diff |\n|---|---|---|---|\n"
     rows = []
@@ -117,8 +124,10 @@ def generate_markdown(ds1_name: str, ds2_name: str, d1: dict, d2: dict) -> str:
         Returns:
             None.
         """
-        if m1 is None: m1 = {}
-        if m2 is None: m2 = {}
+        if m1 is None:
+            m1 = {}
+        if m2 is None:
+            m2 = {}
 
         for key in METRIC_KEYS:
             v1 = m1.get(key)
@@ -214,7 +223,7 @@ def main() -> None:
     print(f"Downloading from {args.dataset_2}...")
     d2 = download_summary(args.dataset_2)
 
-    print(f"Generating markdown...")
+    print("Generating markdown...")
     md = generate_markdown(args.dataset_1, args.dataset_2, d1, d2)
 
     with open(args.output, 'w') as f:

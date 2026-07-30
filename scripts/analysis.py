@@ -1,19 +1,3 @@
-"""CLI entry point: generate the evaluation README, its charts, and the summary JSON.
-
-The README is assembled from a fixed section list (see :func:`_build_readme`),
-in this order:
-
-1. the run configuration the script was invoked with, then a data-derived
-   summary of what the report contains,
-2. a contents list (headed "Contents" - see _build_readme),
-3. univariate stats and correlations over every statistic of interest,
-4. distance and classifier histograms over the whole dataset,
-5. a classifier comparison table and the threshold sweeps behind it,
-6. one report per classifier, broken down by prompt subset and by bin,
-7. a hardcoded full report (currently: the first classifier, per generator
-   model/genconfig).
-"""
-
 from typing import Optional
 from fastdetector.visualization.plotting import generate_table
 from fastdetector.visualization.plotting import generate_pearson_heatmap
@@ -71,6 +55,14 @@ class NumpyEncoder(json.JSONEncoder):
     """JSONEncoder subclass for serializing NumPy scalar and array types."""
 
     def default(self, obj):
+        """Serialize NumPy types into python native types for JSON encoding.
+
+        Args:
+            obj: Object to serialize.
+
+        Returns:
+            Native Python type or parent default representation.
+        """
         if isinstance(obj, np.floating): return float(obj)
         if isinstance(obj, np.integer): return int(obj)
         if isinstance(obj, np.ndarray): return obj.tolist()
@@ -197,9 +189,18 @@ class ColumnCache:
         return self._ds.column_names
 
     def __len__(self) -> int:
+        """Return the number of rows in the wrapped dataset."""
         return len(self._ds)
 
     def __getitem__(self, column: str) -> np.ndarray:
+        """Return cached NumPy array for the specified dataset column.
+
+        Args:
+            column: Name of column to fetch.
+
+        Returns:
+            NumPy array of column values.
+        """
         if column not in self._columns:
             self._columns[column] = np.asarray(self._ds[column])
         return self._columns[column]
@@ -217,6 +218,14 @@ def _column_equals_mask(column: str, value: str):
     cache: dict[int, np.ndarray] = {}
 
     def mask_fn(ds) -> np.ndarray:
+        """Evaluate equality mask for dataset rows.
+
+        Args:
+            ds: Input dataset or view.
+
+        Returns:
+            Boolean array indicating rows matching column == value.
+        """
         key = id(ds)
         if key not in cache:
             cache[key] = np.asarray(ds[column]) == value
@@ -1111,6 +1120,14 @@ def _build_summary_stats(clf_data: dict, overall: Subset, prompt_subsets: list,
         The summary stats dict (JSON-serializable with NumpyEncoder).
     """
     def scalar_metrics(cw) -> dict:
+        """Extract scalar metric dictionary omitting matrix structures.
+
+        Args:
+            cw: ClassifierWrapper object.
+
+        Returns:
+            Dictionary of scalar metric values.
+        """
         return {k: v for k, v in cw.metrics.items() if k != "confusion_matrix"}
 
     groups = [
@@ -1146,7 +1163,7 @@ def main() -> None:
 
     globals_config, eval_config = load_config_pair(args.globals_config, args.analysis_config, AnalysisConfig)
 
-    target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
+    target_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
     print(f"Loading all shards for dataset {target_dataset}...")
     result_ds = load_dataset_all_shards(target_dataset, split="train")
     rows_loaded = len(result_ds)

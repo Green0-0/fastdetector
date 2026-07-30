@@ -1,5 +1,3 @@
-"""Dataset-vs-dataset comparison report (``scripts/compare_summary.py``)."""
-
 import math
 
 import pytest

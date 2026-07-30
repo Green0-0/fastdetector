@@ -1,15 +1,3 @@
-"""Tests for the ``vllm`` tier's environment gate.
-
-The tier gates on a populated engine venv on disk, because that is what the
-pipeline actually needs: ``llm_server_context`` launches
-``<venv>/bin/vllm`` as a subprocess and nothing in ``src/``, ``scripts/`` or
-``tests/`` ever imports the package.
-
-Gating on importability instead forced the tier into ``.vllm``, which holds the
-engine but not the project's own dependencies, so the suite could not even
-import ``tests/conftest.py`` and the tier never ran to completion.
-"""
-
 import importlib.util
 import os
 from pathlib import Path
@@ -48,11 +36,13 @@ def _make_engine_venv(root: Path, executable: bool = True) -> Path:
 
 
 def test_env_override_wins(monkeypatch, tmp_path):
+    """Test that VLLM_VENV_PATH environment variable overrides default venv path."""
     monkeypatch.setenv("VLLM_VENV_PATH", str(tmp_path / "custom"))
     assert conftest._engine_venv_path() == tmp_path / "custom"
 
 
 def test_globals_toml_is_used_when_no_override(monkeypatch, tmp_path):
+    """Test that globals.toml config path is used when no environment override is present."""
     monkeypatch.delenv("VLLM_VENV_PATH", raising=False)
     monkeypatch.setattr(
         conftest,
@@ -69,7 +59,7 @@ def test_falls_back_to_dot_vllm(monkeypatch, tmp_path):
     monkeypatch.delenv("VLLM_VENV_PATH", raising=False)
     monkeypatch.setattr(conftest, "REPO_ROOT", tmp_path)
     (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "globals.toml").write_text('dataset_prefix = "x/y"\n')
+    (tmp_path / "config" / "globals.toml").write_text('raw_dataset = "x/y"\n')
     assert conftest._engine_venv_path() == tmp_path / ".vllm"
 
 
@@ -87,12 +77,12 @@ def test_relative_paths_are_anchored_to_the_repo_root(monkeypatch, tmp_path):
     assert conftest._engine_venv_path() == tmp_path / ".vllm"
 
 
-# --------------------------------------------------------------------------
-# Detecting the binary
+# Locating the engine venv
 # --------------------------------------------------------------------------
 
 
 def test_a_populated_engine_venv_is_detected(monkeypatch, tmp_path):
+    """Test that an existing engine binary in venv is detected as available."""
     monkeypatch.setenv("VLLM_VENV_PATH", str(_make_engine_venv(tmp_path / "v")))
     assert conftest._engine_binary_available() is True
 
@@ -105,6 +95,7 @@ def test_an_empty_venv_is_not_detected(monkeypatch, tmp_path):
 
 
 def test_a_non_executable_binary_is_not_detected(monkeypatch, tmp_path):
+    """Test that non-executable binary is reported as unavailable."""
     monkeypatch.setenv(
         "VLLM_VENV_PATH", str(_make_engine_venv(tmp_path / "v", executable=False))
     )

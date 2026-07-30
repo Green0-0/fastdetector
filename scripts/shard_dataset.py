@@ -114,11 +114,11 @@ def main() -> None:
 
     globals_config = GlobalsConfig(**load_toml(args.globals_config))
 
-    # filter.py reads resolve_input_dataset(raw_suffix), so the shards have to
+    # filter.py reads resolve_dataset(raw_dataset), so the shards have to
     # land there; writing them back into the source is the default for exactly
     # that reason.
-    source_dataset = args.source_dataset or globals_config.resolve_input_dataset(
-        globals_config.raw_suffix
+    source_dataset = args.source_dataset or globals_config.resolve_dataset(
+        globals_config.raw_dataset
     )
     target_dataset = args.target_dataset or source_dataset
 
@@ -135,11 +135,11 @@ def main() -> None:
         print(f"Pushing {len(shard)} rows to '{target_dataset}' (config '{config_name}')...")
         push_shard(shard, target_dataset, config_name=config_name)
 
-    if target_dataset != globals_config.resolve_input_dataset(globals_config.raw_suffix):
+    if target_dataset != globals_config.resolve_dataset(globals_config.raw_dataset):
         print(
             f"\nNote: the shards were written to '{target_dataset}', but filter.py "
-            f"reads '{globals_config.resolve_input_dataset(globals_config.raw_suffix)}'. "
-            f"Set override_dataset_input in {args.globals_config} to point at the shards."
+            f"reads '{globals_config.resolve_dataset(globals_config.raw_dataset)}'. "
+            f"Set raw_dataset in {args.globals_config} to point at the shards."
         )
 
     print("Done!")

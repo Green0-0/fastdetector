@@ -1,15 +1,3 @@
-"""Tests for the contended-push retry helper.
-
-Every stage fans out over shards but writes them back into one Hub repo, and
-the Hub serialises commits per repo, so array tasks that finish together
-collide. The stakes are asymmetric: the stage has already spent hours
-computing by the time it pushes, so a transient 409 must not discard that work
--- and a permanent 401 must not be sat on for eight rounds of backoff either.
-
-No network: the dataset and the errors are stand-ins, and `time.sleep` is
-patched out so the backoff schedule is asserted rather than waited through.
-"""
-
 import pytest
 from huggingface_hub.errors import HfHubHTTPError
 

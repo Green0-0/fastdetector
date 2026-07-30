@@ -1,18 +1,3 @@
-"""No job script may write to the shared engine venv.
-
-Running the test job while pipeline jobs were active killed 5 of 10 live filter
-tasks. The engine venv lives on NFS and running vLLM engines execute out of it,
-so `uv pip install` into it invalidated their open file handles. That surfaced
-as ESTALE inside Triton compilation and took the engines down -- a failure that
-looks like a CUDA problem and is nowhere near the venv that caused it.
-
-The blast radius is what makes this worth a lint rather than a comment: a
-routine test run silently destroying unrelated multi-hour production jobs is not
-something the next person will think to check for.
-
-Textual checks, so they run in the default tier without Slurm.
-"""
-
 import re
 
 import pytest

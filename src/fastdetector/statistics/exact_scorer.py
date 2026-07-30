@@ -18,28 +18,18 @@ PROGRESS_PRINT_INTERVAL = 500
 
 @dataclass
 class ScorerSettings:
-    """Settings controlling model loading, batching, and metric thresholds.
+    """Settings controlling model scoring, batching, and device configuration.
 
     Attributes:
-        topp_threshold: Probability mass threshold for top-p outlier flags.
-        topk_threshold: Rank threshold for top-k outlier flags.
-        max_model_len: Maximum tokens per text; longer texts are truncated.
-        max_batch_tokens: Cap on padded tokens (batch_size * max_len) per
-            forward pass.
-        head_chunk_size: Number of positions per LM-head/log-softmax chunk.
-        dtype: Model dtype ("bfloat16", "float16", or "float32"). Logits are
-            always reduced in float32.
-        attn_implementation: Attention backend. None tries
-            "flash_attention_2" and falls back to "sdpa".
-        devices: Devices to score on. "auto" uses every visible CUDA device
-            (falling back to CPU); otherwise an explicit non-empty list such
-            as ["cuda:0", "cuda:1"]. Each device gets its own replica of the
-            checkpoint(s), and batches are dispatched to replicas in
-            parallel; with cross-entropy enabled, every device holds both
-            checkpoints.
-        compute_cross_entropy: Whether to compute the per-position
-            observer->performer cross-entropy (requires two models; used by
-            the Binoculars score).
+        topp_threshold: Nucleus probability mass threshold for top-p outlier detection.
+        topk_threshold: Rank threshold for top-k outlier detection.
+        max_model_len: Maximum token sequence length.
+        max_batch_tokens: Maximum padded tokens per forward pass batch.
+        head_chunk_size: Number of sequence positions per log-softmax chunk.
+        dtype: Data type string for model loading.
+        attn_implementation: Attention backend implementation.
+        devices: Target devices for model execution.
+        compute_cross_entropy: Whether to compute observer-performer cross-entropy.
     """
 
     topp_threshold: float = 0.95
@@ -56,7 +46,7 @@ class ScorerSettings:
         """Validate threshold, sizing, and device settings.
 
         Raises:
-            ValueError: if any setting is out of range.
+            ValueError: If any setting is out of range.
         """
         if not (0 < self.topp_threshold <= 1):
             raise ValueError(f"topp_threshold must be in (0, 1], got {self.topp_threshold}")
@@ -72,12 +62,10 @@ class ScorerSettings:
             raise ValueError('devices must be "auto" or a non-empty list of device strings')
 
     def resolve_devices(self) -> list[str]:
-        """Resolve the devices setting to a concrete device list.
+        """Resolve device configuration to a list of concrete device strings.
 
         Returns:
-            The configured device list, or for "auto" every visible CUDA
-            device (respecting CUDA_VISIBLE_DEVICES), falling back to
-            ["cpu"] when no GPU is available.
+            List of device strings.
         """
         if isinstance(self.devices, list):
             return self.devices
@@ -88,25 +76,15 @@ class ScorerSettings:
 
 @dataclass
 class TextScores:
-    """Per-position sufficient statistics for one text.
-
-    All arrays share length ``m`` = (token count - 1), one entry per next-token
-    prediction. ``m`` is 0 for empty or single-token texts. ``per_model``
-    fields are lists with one array per scored model, in checkpoint order.
+    """Per-position statistics container for evaluated text sequences.
 
     Attributes:
-        token_lps: Per model, log p of each actual next token.
-        entropies: Per model, exact next-token distribution entropy H.
-            Note E[log p] = -H, used by FastDetectGPT.
-        e_lp2: Per model, exact second moment E[(log p)^2].
-        topp_outlier: Per model, True where the actual token fell outside the
-            top-p nucleus.
-        topk_outlier: Per model, True where the actual token fell outside the
-            top-k ranks.
-        cross_entropies: H(p_observer, log p_performer) per position, when
-            two models are scored with compute_cross_entropy. Model 0 is the
-            observer and model 1 the performer, matching the Binoculars
-            convention.
+        token_lps: Per-model log probabilities of target tokens.
+        entropies: Per-model position distribution entropies.
+        e_lp2: Per-model position second moments of log probabilities.
+        topp_outlier: Per-model boolean flags for top-p nucleus outliers.
+        topk_outlier: Per-model boolean flags for top-k rank outliers.
+        cross_entropies: Position cross-entropies when two models are scored.
     """
 
     token_lps: list[np.ndarray] = field(default_factory=list)
@@ -118,14 +96,14 @@ class TextScores:
 
 
 def _empty_scores(num_models: int, with_cross_entropy: bool) -> TextScores:
-    """Build a TextScores with zero positions (empty/whitespace/1-token text).
+    """Construct an empty TextScores instance.
 
     Args:
-        num_models: Number of models being scored.
-        with_cross_entropy: Whether a cross-entropy array should be present.
+        num_models: Number of scored models.
+        with_cross_entropy: Whether cross-entropy array is enabled.
 
     Returns:
-        TextScores whose arrays all have length 0.
+        Empty TextScores instance.
     """
     empty_f = np.zeros(0, dtype=np.float32)
     empty_b = np.zeros(0, dtype=bool)
@@ -140,29 +118,29 @@ def _empty_scores(num_models: int, with_cross_entropy: bool) -> TextScores:
 
 
 def _concat_to_numpy(chunks: list[torch.Tensor], dtype) -> np.ndarray:
-    """Concatenate per-chunk 1D reduction tensors into a host numpy array.
+    """Concatenate 1D tensor chunks into a NumPy array.
 
     Args:
-        chunks: Per-chunk 1D tensors.
-        dtype: Target numpy dtype.
+        chunks: List of 1D PyTorch tensors.
+        dtype: Target NumPy data type.
 
     Returns:
-        Concatenated numpy array.
+        Concatenated NumPy array.
     """
     return torch.cat(chunks).cpu().numpy().astype(dtype)
 
 
 def _resolve_dtype(dtype: str) -> torch.dtype:
-    """Map a dtype string to a torch dtype.
+    """Map string identifier to PyTorch dtype.
 
     Args:
-        dtype: One of "bfloat16", "float16", "float32".
+        dtype: Identifier string ("bfloat16", "float16", or "float32").
 
     Returns:
-        The corresponding torch dtype.
+        Corresponding PyTorch dtype.
 
     Raises:
-        ValueError: if the dtype string is not recognized.
+        ValueError: If dtype identifier is unsupported.
     """
     mapping = {
         "bfloat16": torch.bfloat16,
@@ -175,15 +153,18 @@ def _resolve_dtype(dtype: str) -> torch.dtype:
 
 
 def _load_model(model_name: str, settings: ScorerSettings, device: str) -> torch.nn.Module:
-    """Load a CausalLM in eval mode with the best available attention backend.
+    """Load causal language model onto specified device.
 
     Args:
-        model_name: HuggingFace model ID or local path.
-        settings: Scorer settings (dtype, attention backend).
-        device: Device to place the model on.
+        model_name: HuggingFace model identifier or local path.
+        settings: Scorer configuration settings.
+        device: Target execution device.
 
     Returns:
-        The loaded model.
+        Loaded PyTorch model in evaluation mode.
+
+    Raises:
+        RuntimeError: If model loading fails.
     """
     torch_dtype = _resolve_dtype(settings.dtype)
     attn_candidates = (
@@ -211,18 +192,7 @@ def _load_model(model_name: str, settings: ScorerSettings, device: str) -> torch
 
 
 class ExactScorer:
-    """Scores texts against one or two CausalLMs with exact full-vocab metrics.
-
-    When two models are provided they are co-resident so that per-position
-    cross-model statistics (Binoculars cross-entropy) can be computed without
-    persisting either model's distributions. All models are scored against the
-    tokenization of the *first* model's tokenizer; when two models are used
-    their vocab sizes must match.
-
-    For multi-GPU machines, one replica of the model group is held per device
-    and batches are dispatched to the replicas in parallel, so a single run
-    (one dataset shard) uses every configured GPU.
-    """
+    """Batch scoring engine for evaluating text sequences against Causal LMs."""
 
     def __init__(
         self,
@@ -231,20 +201,16 @@ class ExactScorer:
         settings: ScorerSettings,
         devices: list[str],
     ):
-        """Initialize the scorer.
+        """Initialize ExactScorer.
 
         Args:
-            replicas: One model group per device; each group holds the same
-                one or two loaded CausalLM models (checkpoint order).
-            tokenizer: Tokenizer shared by all models (may be None if only
-                the pre-tokenized ``score_token_lists`` entry point is used).
-            settings: Scorer settings.
-            devices: Device of each replica, aligned with ``replicas``.
+            replicas: Model replicas grouped per target device.
+            tokenizer: Shared tokenizer instance.
+            settings: Scorer configuration settings.
+            devices: Target device list.
 
         Raises:
-            ValueError: if the replica/device shapes are invalid, the model
-                count per group is invalid, cross-entropy is requested
-                without exactly two models, or vocab sizes mismatch.
+            ValueError: If replica counts, model counts, or vocab sizes are invalid.
         """
         if not replicas or len(replicas) != len(devices):
             raise ValueError(
@@ -279,17 +245,17 @@ class ExactScorer:
         self.settings = settings
 
     def score_texts(self, texts: list[str], progress_label: str = "") -> list[TextScores]:
-        """Tokenize and score a list of texts.
+        """Tokenize and score a list of text strings.
 
         Args:
-            texts: Input strings. Empty/whitespace strings yield empty scores.
-            progress_label: Optional label for progress prints.
+            texts: Input text strings.
+            progress_label: Optional label for progress output.
 
         Returns:
-            One TextScores per input text, in input order.
+            List of TextScores corresponding to input texts.
 
         Raises:
-            RuntimeError: if the scorer was constructed without a tokenizer.
+            RuntimeError: If scorer lacks a tokenizer instance.
         """
         if self.tokenizer is None:
             raise RuntimeError("score_texts requires a tokenizer; use score_token_lists instead.")
@@ -307,20 +273,14 @@ class ExactScorer:
     def score_token_lists(
         self, token_lists: list, progress_label: str = ""
     ) -> list[TextScores]:
-        """Score pre-tokenized texts.
-
-        Texts are length-sorted into padded batches capped at
-        ``max_batch_tokens`` padded tokens to minimize padding waste; results
-        are returned in the original input order.
+        """Score pre-tokenized token ID lists.
 
         Args:
-            token_lists: One token-ID sequence (list or int array) per text.
-                Sequences with fewer than 2 tokens yield empty scores (no
-                next-token prediction exists).
-            progress_label: Optional label for progress prints.
+            token_lists: List of token ID arrays.
+            progress_label: Optional label for progress output.
 
         Returns:
-            One TextScores per input, in input order.
+            List of TextScores corresponding to inputs.
         """
         # Compact int64 arrays keep corpus-scale tokenizations cheap in RAM
         # (~8 bytes/token vs ~28 for lists of Python ints).
@@ -342,11 +302,7 @@ class ExactScorer:
         label = f" [{progress_label}]" if progress_label else ""
 
         def _report(batch_size: int) -> None:
-            """Print progress roughly every PROGRESS_PRINT_INTERVAL texts.
-
-            Args:
-                batch_size: Number of texts just completed.
-            """
+            """Report progress for completed texts."""
             nonlocal completed
             completed += batch_size
             if total and (
@@ -372,14 +328,7 @@ class ExactScorer:
             idle_replicas.put(replica_idx)
 
         def _run_batch(batch_indices: list[int]) -> tuple[list[int], list[TextScores]]:
-            """Score one batch on the next idle replica.
-
-            Args:
-                batch_indices: Text indices forming the batch.
-
-            Returns:
-                The indices with their computed scores.
-            """
+            """Score batch on an idle replica."""
             replica_idx = idle_replicas.get()
             try:
                 batch_scores = self._score_batch(
@@ -402,18 +351,14 @@ class ExactScorer:
     def _plan_batches(
         self, sorted_indices: list[int], token_arrays: list[np.ndarray]
     ) -> Iterator[list[int]]:
-        """Greedily group length-sorted texts into padded-token-capped batches.
-
-        Because indices arrive sorted by length (descending), the padded cost
-        of a batch is ``len(first_text) * batch_size``. A single text longer
-        than ``max_batch_tokens`` still forms its own batch.
+        """Group length-sorted text indices into padded-token batches.
 
         Args:
-            sorted_indices: Text indices sorted by token count, descending.
-            token_arrays: All token-ID arrays (indexed by the above).
+            sorted_indices: Text indices sorted by length descending.
+            token_arrays: Token ID arrays.
 
         Yields:
-            Lists of text indices forming one batch each.
+            Lists of text indices forming batches.
         """
         batch: list[int] = []
         batch_max_len = 0
@@ -433,15 +378,14 @@ class ExactScorer:
     def _score_batch(
         self, token_arrays: list[np.ndarray], replica_idx: int = 0
     ) -> list[TextScores]:
-        """Run one padded forward pass per model and reduce to TextScores.
+        """Perform forward pass and metric reduction for a single batch.
 
         Args:
-            token_arrays: Token-ID arrays for this batch (each length >= 2).
-            replica_idx: Which replica (device) to score on. Each replica is
-                only ever used by one thread at a time.
+            token_arrays: Batch token ID arrays.
+            replica_idx: Target replica device index.
 
         Returns:
-            One TextScores per input, in batch order.
+            List of TextScores for the batch.
         """
         settings = self.settings
         device = self.devices[replica_idx]
@@ -565,18 +509,14 @@ class ExactScorer:
 
 @contextmanager
 def exact_scorer_context(checkpoints: list[str], settings: ScorerSettings):
-    """Load model replicas for scoring and free their GPU memory on exit.
-
-    One replica of every checkpoint is loaded per resolved device, so a
-    single run can spread its batches across all GPUs of the machine.
+    """Context manager initializing ExactScorer and freeing GPU memory on exit.
 
     Args:
-        checkpoints: One or two HuggingFace model IDs / local paths. The
-            first checkpoint's tokenizer is used for all models.
-        settings: Scorer settings.
+        checkpoints: List of HuggingFace model IDs or local paths.
+        settings: Scorer configuration settings.
 
     Yields:
-        A ready ExactScorer.
+        Initialized ExactScorer instance.
     """
     devices = settings.resolve_devices()
     replicas: list[list[torch.nn.Module]] = []

@@ -1,10 +1,3 @@
-"""The configs and prompt sets actually committed to this repository.
-
-Nothing here is a hypothetical: every assertion runs against the real files a
-pipeline run would load, so a typo'd operator or a renamed prompt file fails in
-CI in a second instead of twenty minutes into a GPU job.
-"""
-
 import json
 import re
 import tomllib
@@ -74,23 +67,23 @@ def test_every_committed_toml_parses(repo_root):
 
 def test_globals_config_validates(repo_root):
     config = GlobalsConfig(**load_toml(str(repo_root / "config" / "globals.toml")))
-    assert config.dataset_prefix
-    assert not config.dataset_prefix.endswith("-")
+    assert config.raw_dataset
+    assert config.stat_dataset
 
 
-def test_globals_suffixes_are_distinct(repo_root):
-    # Two stages sharing a suffix means one stage overwrites the other's
+def test_globals_datasets_are_distinct(repo_root):
+    # Two stages sharing a dataset name path means one stage overwrites the other's
     # dataset on the Hub.
     config = GlobalsConfig(**load_toml(str(repo_root / "config" / "globals.toml")))
-    suffixes = [
-        config.raw_suffix,
-        config.pre_filter_suffix,
-        config.post_filter_suffix,
-        config.gen_suffix,
-        config.stat_suffix,
-        config.eval_suffix,
+    datasets = [
+        config.raw_dataset,
+        config.pre_filter_dataset,
+        config.post_filter_dataset,
+        config.gen_dataset,
+        config.stat_dataset,
+        config.eval_dataset,
     ]
-    assert len(set(suffixes)) == len(suffixes)
+    assert len(set(datasets)) == len(datasets)
 
 
 @pytest.mark.parametrize(("relative_path", "model"), sorted(STAGE_CONFIGS.items()))
@@ -258,7 +251,7 @@ def test_llm_stats_scores_the_columns_the_pipeline_produces(repo_root):
     globals_config = GlobalsConfig(**load_toml(str(repo_root / "config" / "globals.toml")))
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
     assert config.columns_to_score
-    assert globals_config.stat_suffix  # the dataset llm_stats reads and writes
+    assert globals_config.stat_dataset  # the dataset llm_stats reads and writes
 
 
 def test_llm_stats_dtype_is_supported(repo_root):

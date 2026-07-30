@@ -1,9 +1,3 @@
-"""The resume/compute plan and metric aggregation in ``scripts/stats/llm_stats.py``.
-
-``build_compute_plan`` is what makes a re-run cheap: anything already present in
-the dataset must not be recomputed, and anything missing must not be skipped.
-"""
-
 import math
 
 import numpy as np

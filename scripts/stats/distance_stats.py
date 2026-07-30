@@ -4,9 +4,10 @@ from fastdetector.frontend.toml_config import DistanceStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
 
-from fastdetector.statistics.embeddings_api import batch_gen_embeddings, batch_soft_ngram_scores, generate_token_embeddings_pairs, batch_cross_encoder
+from fastdetector.statistics.embeddings_api import batch_cross_encoder, batch_gen_embeddings, batch_soft_ngram_scores, generate_token_embeddings_pairs
 from fastdetector.statistics.statistics_basic import pairwise_jaccards, pairwise_levenshteins
-from fastdetector.statistics.statistics_embedding import pairwise_cosdist, bertscore, moverscore
+from fastdetector.statistics.statistics_embedding import bertscore, moverscore, pairwise_cosdist
+
 
 def main() -> None:
     """Run distance-based statistics computation pipeline from configuration.
@@ -22,7 +23,7 @@ def main() -> None:
 
     globals_config, config = load_config_pair(args.globals_config, args.distance_config, DistanceStatConfig)
 
-    target_dataset = globals_config.resolve_output_dataset(globals_config.stat_suffix)
+    target_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
     print(f"Loading {target_dataset} (subset index {args.batch_id})...")
     ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
 
@@ -86,6 +87,7 @@ def main() -> None:
     print(f"Uploading dataset to {target_dataset}...")
     push_shard(ds, target_dataset, config_name=shard_config_name(args.batch_id))
     print("Done!")
+
 
 if __name__ == "__main__":
     main()

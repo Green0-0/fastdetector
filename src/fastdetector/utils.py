@@ -6,24 +6,17 @@ from huggingface_hub import HfApi, hf_hub_download
 from huggingface_hub.errors import HfHubHTTPError
 from datasets import Dataset, load_dataset, get_dataset_config_names, concatenate_datasets
 
-#: Hub statuses that mean "another commit is in flight, try again". 409 is a
-#: commit already in progress; 412 is a failed precondition because the branch
-#: moved under us. Both clear on their own. Everything else (401, 413, ...)
-#: is a permanent condition that waiting cannot fix, so it propagates.
 _RETRYABLE_PUSH_STATUS = frozenset({409, 412})
 
 
 def shard_config_name(shard_index: int) -> str:
     """Return the HF config name used for a given shard index.
 
-    Single definition shared by readers and writers so the two can never
-    drift apart.
-
     Args:
-        shard_index: Zero-based shard index (the pipeline's ``--batch-id``).
+        shard_index: Zero-based shard index.
 
     Returns:
-        The config name, e.g. ``"shard_3"``.
+        The config name, e.g. "shard_3".
     """
     return f"shard_{shard_index}"
 
@@ -38,22 +31,10 @@ def push_shard(
 ) -> None:
     """Push one shard to the Hub, retrying while the repo is contended.
 
-    Every stage fans out over shards but writes them back into a single Hub
-    repo, and the Hub serialises commits per repo. Array tasks that finish
-    together may collide with 409 or 412 status codes.
-
-    The backoff is exponential with jitter to prevent competing workers from
-    colliding repeatedly on retries.
-
     Args:
         dataset: The dataset to upload.
         dataset_name: Target Hub repo id.
-        config_name: Config (shard) name to write under. Defaults to
-            ``"default"`` to mirror ``push_to_hub``. It must not be ``None``:
-            ``push_to_hub`` does not treat that as "unset" but carries it
-            through to the data directory it derives from this name, so a
-            caller that omitted it would upload under a broken path rather
-            than fall back.
+        config_name: Config (shard) name to write under. Defaults to "default".
         max_attempts: Total attempts, including the first.
         base_delay: Seconds before the first retry; doubles thereafter.
         max_delay: Ceiling on the pre-jitter delay.
@@ -62,10 +43,7 @@ def push_shard(
         None.
 
     Raises:
-        HfHubHTTPError: on a non-contention status, or when the attempts run
-            out. Failing loudly is intentional: a silently dropped shard is
-            worse than a failed job, because the gap only surfaces at analysis
-            time.
+        HfHubHTTPError: on a non-contention status, or when the attempts run out.
     """
     for attempt in range(1, max_attempts + 1):
         try:
@@ -138,7 +116,7 @@ def load_dataset_auto_shard(
                 f"Dataset '{dataset_name}' has no config named '{wanted}'. "
                 f"Available configs: {sorted(configs)}. "
                 f"Pass a --batch-id matching one of the shard_<i> configs, or "
-                f"set override_dataset_input in globals.toml to read a "
+                f"set the dataset path in globals.toml to read a "
                 f"dataset that does not follow the shard naming convention."
             )
 
@@ -336,17 +314,27 @@ def apply_filter_conditions(
             ex_val = example[col]
 
             try:
-                if op == '==': bools.append(ex_val == val)
-                elif op == '!=': bools.append(ex_val != val)
-                elif op == '>': bools.append(float(ex_val) > float(val))
-                elif op == '<': bools.append(float(ex_val) < float(val))
-                elif op == '>=': bools.append(float(ex_val) >= float(val))
-                elif op == '<=': bools.append(float(ex_val) <= float(val))
-                else: bools.append(False)
+                if op == "==":
+                    bools.append(ex_val == val)
+                elif op == "!=":
+                    bools.append(ex_val != val)
+                elif op == ">":
+                    bools.append(float(ex_val) > float(val))
+                elif op == "<":
+                    bools.append(float(ex_val) < float(val))
+                elif op == ">=":
+                    bools.append(float(ex_val) >= float(val))
+                elif op == "<=":
+                    bools.append(float(ex_val) <= float(val))
+                else:
+                    bools.append(False)
             except (ValueError, TypeError):
-                if op == '==': bools.append(ex_val == val)
-                elif op == '!=': bools.append(ex_val != val)
-                else: bools.append(False)
+                if op == "==":
+                    bools.append(ex_val == val)
+                elif op == "!=":
+                    bools.append(ex_val != val)
+                else:
+                    bools.append(False)
 
         if filter_type.upper() == "AND":
             return all(bools)

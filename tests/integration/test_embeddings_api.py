@@ -1,11 +1,3 @@
-"""Embedding backends against real sentence-transformers checkpoints.
-
-Small public defaults keep this runnable without a GPU; override them to smoke
-the production models::
-
-    FASTDETECTOR_TEST_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B pytest -m network
-"""
-
 import os
 
 import numpy as np

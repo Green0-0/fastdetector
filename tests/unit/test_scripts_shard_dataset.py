@@ -1,10 +1,3 @@
-"""Trimming and splitting of the raw corpus (``scripts/shard_dataset.py``).
-
-This is where a run's size is decided, and every later stage indexes the shards
-it produces by --batch-id, so an off-by-one here is a whole pipeline reading the
-wrong rows.
-"""
-
 import pytest
 from datasets import Dataset
 

@@ -1,10 +1,3 @@
-"""EditLens text normalisation, checkpoint introspection, and inference.
-
-Inference runs against a tiny locally-built classifier, so the batching,
-autocast, and score-aggregation paths are all covered without downloading the
-real RoBERTa checkpoint.
-"""
-
 import json
 
 import numpy as np
@@ -93,16 +86,19 @@ def test_normed_linear_normalises_before_projecting():
 
 
 def test_local_adapter_directory_is_detected(tmp_path):
+    """Test that local directory containing adapter_config.json is detected as QLoRA."""
     (tmp_path / "adapter_config.json").write_text("{}", encoding="utf-8")
     assert is_qlora_checkpoint(str(tmp_path)) is True
 
 
 def test_local_full_checkpoint_directory_is_not_an_adapter(tmp_path):
+    """Test that local directory without adapter_config.json is not detected as QLoRA."""
     (tmp_path / "config.json").write_text("{}", encoding="utf-8")
     assert is_qlora_checkpoint(str(tmp_path)) is False
 
 
 def test_a_hub_repo_with_an_adapter_config_is_an_adapter(monkeypatch, tmp_path):
+    """Test that Hub repository with adapter_config.json is detected as QLoRA."""
     monkeypatch.setattr(
         editlens_module, "hf_hub_download", lambda repo, filename: str(tmp_path / "f")
     )
@@ -110,6 +106,7 @@ def test_a_hub_repo_with_an_adapter_config_is_an_adapter(monkeypatch, tmp_path):
 
 
 def test_a_hub_repo_without_an_adapter_config_is_not_an_adapter(monkeypatch):
+    """Test that Hub repository without adapter_config.json is not detected as QLoRA."""
     def missing(repo, filename):
         raise FileNotFoundError(filename)
 
@@ -123,6 +120,7 @@ def test_a_hub_repo_without_an_adapter_config_is_not_an_adapter(monkeypatch):
 
 
 def test_n_buckets_comes_from_the_config_for_a_full_checkpoint(tmp_path):
+    """Test infer_n_buckets reads num_labels from config for full checkpoints."""
     from transformers import BertConfig
 
     BertConfig(num_labels=7).save_pretrained(str(tmp_path))
@@ -130,6 +128,7 @@ def test_n_buckets_comes_from_the_config_for_a_full_checkpoint(tmp_path):
 
 
 def test_n_buckets_comes_from_the_head_shape_for_a_safetensors_adapter(tmp_path):
+    """Test infer_n_buckets reads weight tensor shape from safetensors adapter."""
     (tmp_path / "adapter_config.json").write_text("{}", encoding="utf-8")
     save_file(
         {"base_model.model.score.linear.weight": torch.zeros(5, 32)},
@@ -139,6 +138,7 @@ def test_n_buckets_comes_from_the_head_shape_for_a_safetensors_adapter(tmp_path)
 
 
 def test_n_buckets_ignores_unrelated_adapter_tensors(tmp_path):
+    """Test infer_n_buckets filters for linear score head tensor in safetensors."""
     (tmp_path / "adapter_config.json").write_text("{}", encoding="utf-8")
     save_file(
         {
@@ -151,6 +151,7 @@ def test_n_buckets_ignores_unrelated_adapter_tensors(tmp_path):
 
 
 def test_n_buckets_falls_back_to_the_bin_adapter(tmp_path):
+    """Test infer_n_buckets reads score weight tensor from adapter_model.bin."""
     (tmp_path / "adapter_config.json").write_text("{}", encoding="utf-8")
     torch.save(
         {"base_model.model.score.linear.weight": torch.zeros(4, 32)},
@@ -160,6 +161,7 @@ def test_n_buckets_falls_back_to_the_bin_adapter(tmp_path):
 
 
 def test_n_buckets_raises_when_the_head_cannot_be_found(tmp_path):
+    """Test infer_n_buckets raises ValueError when linear score head is missing."""
     (tmp_path / "adapter_config.json").write_text("{}", encoding="utf-8")
     save_file(
         {"base_model.model.layers.0.q_proj.lora_A.weight": torch.zeros(8, 32)},
@@ -170,6 +172,7 @@ def test_n_buckets_raises_when_the_head_cannot_be_found(tmp_path):
 
 
 def test_n_buckets_raises_for_an_adapter_with_no_weights_at_all(tmp_path):
+    """Test infer_n_buckets raises ValueError when adapter contains no weights."""
     (tmp_path / "adapter_config.json").write_text("{}", encoding="utf-8")
     with pytest.raises(ValueError, match="Could not infer n_buckets"):
         infer_n_buckets(str(tmp_path))
@@ -200,6 +203,7 @@ def run_scores(model, tokenizer, texts, n_buckets=5, batch_size=2):
 
 
 def test_scores_have_one_entry_per_text(editlens_model, tiny_tokenizer):
+    """Test compute_editlens_scores outputs one bucket/score prediction per text."""
     texts = ["w1 w2 w3", "w4 w5", "w6 w7 w8 w9"]
     buckets, scores = run_scores(editlens_model, tiny_tokenizer, texts)
     assert len(buckets) == 3
@@ -207,11 +211,13 @@ def test_scores_have_one_entry_per_text(editlens_model, tiny_tokenizer):
 
 
 def test_bucket_predictions_are_valid_indices(editlens_model, tiny_tokenizer):
+    """Test compute_editlens_scores bucket indices fall in range [0, n_buckets)."""
     buckets, _ = run_scores(editlens_model, tiny_tokenizer, ["w1 w2", "w3 w4"])
     assert all(0 <= bucket < 5 for bucket in buckets)
 
 
 def test_scores_are_normalised_to_the_unit_interval(editlens_model, tiny_tokenizer):
+    """Test compute_editlens_scores scale to [0, 1]."""
     _, scores = run_scores(
         editlens_model, tiny_tokenizer, ["w1 w2 w3", "w4", "w5 w6 w7 w8"]
     )
@@ -219,6 +225,7 @@ def test_scores_are_normalised_to_the_unit_interval(editlens_model, tiny_tokeniz
 
 
 def test_batching_does_not_change_the_scores(editlens_model, tiny_tokenizer):
+    """Test compute_editlens_scores returns identical scores across batch sizes."""
     texts = ["w1 w2 w3", "w4", "w5 w6 w7 w8", "w9 w10"]
     _, small = run_scores(editlens_model, tiny_tokenizer, texts, batch_size=1)
     _, large = run_scores(editlens_model, tiny_tokenizer, texts, batch_size=16)
@@ -226,6 +233,7 @@ def test_batching_does_not_change_the_scores(editlens_model, tiny_tokenizer):
 
 
 def test_padding_does_not_change_the_scores(editlens_model, tiny_tokenizer):
+    """Test batch padding does not alter score output for short sequences."""
     # A long text in the same batch pads the short one; its score must not move.
     alone = run_scores(editlens_model, tiny_tokenizer, ["w1 w2"], batch_size=8)[1]
     padded = run_scores(
@@ -238,6 +246,7 @@ def test_padding_does_not_change_the_scores(editlens_model, tiny_tokenizer):
 
 
 def test_a_single_bucket_model_scores_everything_zero(tiny_sequence_classifier, tiny_tokenizer):
+    """Test compute_editlens_scores handles 1-bucket models by returning 0.0 scores."""
     # (n_buckets - 1) would be a division by zero.
     model = tiny_sequence_classifier(num_labels=1)
     _, scores = run_scores(model, tiny_tokenizer, ["w1 w2", "w3"], n_buckets=1)
@@ -245,10 +254,12 @@ def test_a_single_bucket_model_scores_everything_zero(tiny_sequence_classifier, 
 
 
 def test_no_texts_returns_empty_lists(editlens_model, tiny_tokenizer):
+    """Test compute_editlens_scores returns empty lists for empty text input."""
     assert run_scores(editlens_model, tiny_tokenizer, []) == ([], [])
 
 
 def test_texts_are_cleaned_before_tokenisation(editlens_model, tiny_tokenizer):
+    """Test compute_editlens_scores runs clean_text on texts prior to tokenization."""
     # The <think> block is stripped, so both inputs must score identically.
     plain = run_scores(editlens_model, tiny_tokenizer, ["w1 w2 w3"])[1]
     noisy = run_scores(
@@ -258,6 +269,7 @@ def test_texts_are_cleaned_before_tokenisation(editlens_model, tiny_tokenizer):
 
 
 def test_score_is_the_probability_weighted_bucket_index(editlens_model, tiny_tokenizer):
+    """Test that editlens score equals normalized expected bucket index."""
     from scipy.special import softmax
 
     texts = ["w1 w2 w3", "w4 w5"]
@@ -277,6 +289,7 @@ def test_score_is_the_probability_weighted_bucket_index(editlens_model, tiny_tok
 
 
 def test_qlora_models_use_a_reduced_batch_size(editlens_model, tiny_tokenizer, monkeypatch):
+    """Test that QLoRA inference uses reduced effective batch size of 4."""
     seen = []
     real_dataloader = editlens_module.DataLoader
 

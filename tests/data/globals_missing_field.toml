@@ -1,2 +1,2 @@
-dataset_prefix = "testuser/testds"
-raw_suffix = "raw"
+dataset_prefix = "testuser"
+raw_dataset = "raw"

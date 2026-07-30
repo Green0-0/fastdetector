@@ -1,10 +1,3 @@
-"""README table rendering and chart output.
-
-Charts are only checked for "is a valid PNG that did not raise" — pixel
-comparisons would be brittle. The markdown builders are checked exactly, since
-they are what a reader of the dataset card actually sees.
-"""
-
 import numpy as np
 import pytest
 
