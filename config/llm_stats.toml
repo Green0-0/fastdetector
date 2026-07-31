@@ -1,21 +1,5 @@
 columns_to_score = ["original", "final_response"]
 
-perplexity = true
-entropy = true
-topp_outlier = true
-topk_outlier = true
-binoculars_score = true
-fastdetectgpt_score = true
-
-# With binoculars enabled, the first checkpoint is the observer and the
-# second the performer; both must share a tokenizer/vocab.
-llm_checkpoints = [
-    "unsloth/Llama-3.2-3B-Instruct",
-    "unsloth/Llama-3.2-3B"
-]
-col_suffixes = ["_llama_instruct", "_llama_base"]
-
-[scorer]
 # Maximum tokens per text; longer texts are truncated.
 max_model_len = 16000
 
@@ -34,5 +18,20 @@ dtype = "bfloat16"
 devices = "auto"
 # attn_implementation = "sdpa"  # default: try flash_attention_2, fall back to sdpa
 
+perplexity = true
+entropy = true
+topp_outlier = true
+topk_outlier = true
+binoculars_score = true
+fastdetectgpt_score = true
+
 topp_threshold = 0.95
 topk_threshold = 50
+
+# With binoculars enabled, the first checkpoint is the observer and the
+# second the performer; both must share a tokenizer/vocab.
+llm_checkpoints = [
+    "unsloth/Llama-3.2-3B-Instruct",
+    "unsloth/Llama-3.2-3B"
+]
+col_suffixes = ["_llama_instruct", "_llama_base"]

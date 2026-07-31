@@ -6,7 +6,7 @@ import numpy as np
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
-from fastdetector.statistics.exact_scorer import exact_scorer_context
+from fastdetector.statistics.llm_scoring import score_columns
 from fastdetector.statistics import statistics_llm
 
 
@@ -173,11 +173,10 @@ def main() -> None:
             print(f"Metrics for {checkpoints} already computed for all columns. Skipping...")
             continue
         print(f"Loading checkpoint(s) {checkpoints} (suffixes: {suffixes})...")
-        with exact_scorer_context(checkpoints, config.scorer) as scorer:
-            for col, pass_cols in pass_plan.items():
-                print(f"Scoring column '{col}'...")
-                sums = scorer.score_texts(ds[col], progress_label=col)
-                new_columns.update(compute_metric_columns(sums, col, pass_cols, suffixes))
+        # A generator, so only one column's text is materialised at a time.
+        scored = score_columns(checkpoints, config, ((col, ds[col]) for col in pass_plan))
+        for col, sums in scored.items():
+            new_columns.update(compute_metric_columns(sums, col, pass_plan[col], suffixes))
 
     for name, values in new_columns.items():
         ds = ds.add_column(name, values)

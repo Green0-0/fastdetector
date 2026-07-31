@@ -3,9 +3,9 @@ import os
 
 import pytest
 
-from fastdetector.frontend.toml_config import ScorerSettings
+from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.statistics import statistics_llm
-from fastdetector.statistics.exact_scorer import exact_scorer_context
+from fastdetector.statistics.llm_scoring import score_columns
 
 pytestmark = [pytest.mark.network, pytest.mark.slow]
 
@@ -18,19 +18,38 @@ TEXTS = [
 ]
 
 
+def make_cpu_config(**overrides) -> LLMStatConfig:
+    """Build a config small enough to score on CPU.
+
+    The scorer reads only the sizing and threshold fields; the pipeline fields
+    are required by the schema and unused here.
+    """
+    base = {
+        "columns_to_score": ["text"],
+        "perplexity": True,
+        "entropy": True,
+        "topp_outlier": True,
+        "topk_outlier": True,
+        "binoculars_score": False,
+        "fastdetectgpt_score": True,
+        "llm_checkpoints": ["a/model"],
+        "col_suffixes": ["_a"],
+        "topk_threshold": 5,
+        "topp_threshold": 0.9,
+        "max_model_len": 128,
+        "max_batch_tokens": 512,
+        "head_chunk_size": 64,
+        "dtype": "float32",
+        "attn_implementation": "eager",
+        "devices": ["cpu"],
+    }
+    return LLMStatConfig(**{**base, **overrides})
+
+
 @pytest.fixture(scope="module")
-def cpu_settings() -> ScorerSettings:
-    """Scorer settings small enough to run on CPU."""
-    return ScorerSettings(
-        topk_threshold=5,
-        topp_threshold=0.9,
-        max_model_len=128,
-        max_batch_tokens=512,
-        head_chunk_size=64,
-        dtype="float32",
-        attn_implementation="eager",
-        devices=["cpu"],
-    )
+def cpu_settings() -> LLMStatConfig:
+    """Scorer config small enough to run on CPU."""
+    return make_cpu_config()
 
 
 def test_scoring_real_texts_with_a_real_checkpoint(
@@ -38,8 +57,7 @@ def test_scoring_real_texts_with_a_real_checkpoint(
 ):
     """Test scoring real text strings with a model checkpoint."""
     try:
-        with exact_scorer_context([hub_model_id], cpu_settings) as scorer:
-            sums = scorer.score_texts(TEXTS)
+        sums = score_columns([hub_model_id], cpu_settings, [("text", TEXTS)])["text"]
     except Exception as exc:  # noqa: BLE001 - re-raised unless it is connectivity
         skip_if_unreachable(exc, hub_model_id)
 
@@ -57,8 +75,7 @@ def test_metrics_computed_from_real_scores_are_finite(
 ):
     """Test that metrics derived from real model scores produce finite values."""
     try:
-        with exact_scorer_context([hub_model_id], cpu_settings) as scorer:
-            sums = scorer.score_texts(TEXTS[:2])
+        sums = score_columns([hub_model_id], cpu_settings, [("text", TEXTS[:2])])["text"]
     except Exception as exc:  # noqa: BLE001
         skip_if_unreachable(exc, hub_model_id)
 
@@ -77,20 +94,16 @@ def test_binoculars_needs_two_co_resident_checkpoints(
     """Test Binoculars scoring requiring two co-resident model checkpoints."""
     # Scoring a model against itself makes the cross-entropy equal the entropy,
     # which is the degenerate but well-defined case; what matters here is that
-    # two checkpoints load together and produce an aligned cross-entropy array.
-    settings = ScorerSettings(
-        topk_threshold=5,
-        max_model_len=128,
-        max_batch_tokens=512,
-        head_chunk_size=64,
-        dtype="float32",
-        attn_implementation="eager",
-        devices=["cpu"],
-        compute_cross_entropy=True,
+    # two checkpoints load together and produce a cross-entropy total.
+    settings = make_cpu_config(
+        binoculars_score=True,
+        llm_checkpoints=[hub_model_id, hub_model_id],
+        col_suffixes=["_obs", "_perf"],
     )
     try:
-        with exact_scorer_context([hub_model_id, hub_model_id], settings) as scorer:
-            sums = scorer.score_texts(TEXTS[:2])
+        sums = score_columns(
+            [hub_model_id, hub_model_id], settings, [("text", TEXTS[:2])]
+        )["text"]
     except Exception as exc:  # noqa: BLE001
         skip_if_unreachable(exc, hub_model_id)
 

@@ -8,10 +8,9 @@ from fastdetector.frontend.toml_config import (
     DistanceStatConfig,
     EditLensStatConfig,
     LLMStatConfig,
-    ScorerSettings,
 )
 from fastdetector.frontend.toml_loader import load_toml
-from fastdetector.statistics.exact_scorer import exact_scorer_context
+from fastdetector.statistics.llm_scoring import score_columns
 
 # Every test needs a GPU and is slow; the ones that pull real checkpoints are
 # additionally marked `network` so `-m "gpu and not network"` still does
@@ -70,25 +69,23 @@ def assert_within_budget(label: str) -> None:
     )
 
 
-def worst_case_token_lists(settings: ScorerSettings, vocab_size: int) -> list[np.ndarray]:
-    """Build the largest batch ``_plan_batches`` would ever assemble.
+def worst_case_texts(config: LLMStatConfig) -> list[str]:
+    """Build the largest batch the batch planner would ever assemble.
 
     Every text is as long as the model allows, and there are as many of them as
     ``max_batch_tokens`` permits — this is the shape that OOMs in production.
+    Going through the tokenizer rather than synthesising token ids keeps this
+    on the same path the pipeline uses.
 
     Args:
-        settings: The settings the run will use.
-        vocab_size: Vocabulary size, so the ids are valid.
+        config: The config the run will use.
 
     Returns:
-        Token-id arrays for one worst-case batch.
+        Texts that each saturate the sequence cap after truncation.
     """
-    length = min(settings.max_model_len, settings.max_batch_tokens)
-    count = max(1, settings.max_batch_tokens // length)
-    rng = np.random.default_rng(0)
-    return [
-        rng.integers(0, vocab_size, size=length, dtype=np.int64) for _ in range(count)
-    ]
+    length = min(config.max_model_len, config.max_batch_tokens)
+    count = max(1, config.max_batch_tokens // length)
+    return saturating_texts(count, length)
 
 
 def saturating_texts(count: int, max_tokens: int) -> list[str]:
@@ -215,11 +212,10 @@ def test_llm_stats_config_fits_in_vram(repo_root):
     """Load the configured checkpoint(s) and score a worst-case batch."""
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
 
+    batch = worst_case_texts(config)
+
     reset_peaks()
-    with exact_scorer_context(config.llm_checkpoints, config.scorer) as scorer:
-        vocab_size = scorer.replicas[0][0].get_output_embeddings().weight.shape[0]
-        batch = worst_case_token_lists(config.scorer, vocab_size)
-        sums = scorer.score_token_lists(batch)
+    sums = score_columns(config.llm_checkpoints, config, [("worst_case", batch)])["worst_case"]
 
     assert sums.shape == (len(batch), len(config.llm_checkpoints))
     assert_within_budget("llm_stats (worst-case batch)")
@@ -237,8 +233,7 @@ def test_llm_stats_config_scores_realistic_text(repo_root):
     texts = [paragraph * 40, paragraph * 5, "short one", ""]
 
     reset_peaks()
-    with exact_scorer_context(config.llm_checkpoints, config.scorer) as scorer:
-        sums = scorer.score_texts(texts)
+    sums = score_columns(config.llm_checkpoints, config, [("real_text", texts)])["real_text"]
 
     assert sums.shape == (len(texts), len(config.llm_checkpoints))
     assert sums["n"][-1, 0] == 0
@@ -249,21 +244,22 @@ def test_llm_stats_config_scores_realistic_text(repo_root):
 
 @pytest.mark.network
 def test_llm_stats_memory_is_released_after_scoring(repo_root):
-    """The context manager must hand the VRAM back for the next stage."""
+    """Scoring must hand the VRAM back for the next stage."""
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    settings = config.scorer.model_copy(
-        update={"max_model_len": 512, "max_batch_tokens": 512}
-    )
+    settings = config.model_copy(update={"max_model_len": 512, "max_batch_tokens": 512})
 
     reset_peaks()
     before = torch.cuda.memory_allocated()
-    with exact_scorer_context(config.llm_checkpoints, settings) as scorer:
-        scorer.score_texts(["a short sentence to force a forward pass"])
+    score_columns(
+        config.llm_checkpoints,
+        settings,
+        [("short", ["a short sentence to force a forward pass"])],
+    )
     torch.cuda.empty_cache()
     after = torch.cuda.memory_allocated()
 
     leaked_gib = (after - before) / 1024**3
-    assert leaked_gib < 0.5, f"{leaked_gib:.2f} GiB still allocated after the context"
+    assert leaked_gib < 0.5, f"{leaked_gib:.2f} GiB still allocated after scoring"
 
 
 # --------------------------------------------------------------------------

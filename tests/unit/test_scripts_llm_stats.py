@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from fastdetector.frontend.toml_config import LLMStatConfig
-from fastdetector.statistics.exact_scorer import SUMS
+from fastdetector.statistics.llm_scoring import SUMS
 from llm_stats import (
     BINOCULARS_STEM,
     PER_MODEL_METRICS,
@@ -61,18 +61,21 @@ def all_stems() -> list[str]:
 
 
 def test_every_metric_flag_exists_on_the_config():
+    """Test that all metrics in PER_MODEL_METRICS map to attributes on LLMStatConfig."""
     config = make_config()
     for flag in PER_MODEL_METRICS:
         assert hasattr(config, flag)
 
 
 def test_metric_stems_are_unique():
+    """Test that all metric stems are unique across metric definitions."""
     stems = all_stems()
     assert len(set(stems)) == len(stems)
     assert BINOCULARS_STEM not in stems
 
 
 def test_metric_column_omits_the_suffix_for_cross_model_metrics():
+    """Test that metric_column formatting handles per-model suffixes and cross-model stems."""
     assert metric_column("original", "perplexity", "_a") == "original_perplexity_a"
     assert metric_column("original", BINOCULARS_STEM) == "original_binoculars"
 
@@ -83,6 +86,7 @@ def test_metric_column_omits_the_suffix_for_cross_model_metrics():
 
 
 def test_plan_requests_every_metric_for_a_fresh_dataset():
+    """Test build_compute_plan includes all enabled metrics for fresh dataset."""
     plan = build_compute_plan(["original", "final_response"], make_config())
     assert set(plan) == {"original", "final_response"}
     assert plan["original"] == {
@@ -95,6 +99,7 @@ def test_plan_requests_every_metric_for_a_fresh_dataset():
 
 
 def test_plan_skips_columns_that_already_exist():
+    """Test build_compute_plan filters out already existing columns."""
     existing = ["original", "original_perplexity_a", "original_entropy_a"]
     plan = build_compute_plan(existing, make_config(columns_to_score=["original"]))
     assert plan["original"] == {
@@ -105,12 +110,14 @@ def test_plan_skips_columns_that_already_exist():
 
 
 def test_plan_omits_a_fully_computed_column():
+    """Test build_compute_plan returns empty dict if all metrics are present."""
     config = make_config(columns_to_score=["original"])
     complete = ["original"] + [metric_column("original", stem, "_a") for stem in all_stems()]
     assert build_compute_plan(complete, config) == {}
 
 
 def test_plan_only_includes_enabled_metrics():
+    """Test build_compute_plan respects disabled metric flags in config."""
     config = make_config(
         columns_to_score=["original"], entropy=False, topp_outlier=False
     )
@@ -123,6 +130,7 @@ def test_plan_only_includes_enabled_metrics():
 
 
 def test_plan_covers_every_checkpoint_suffix():
+    """Test build_compute_plan includes metric column names for each checkpoint suffix."""
     config = make_config(
         columns_to_score=["original"],
         llm_checkpoints=["a/model", "b/model"],
@@ -134,6 +142,7 @@ def test_plan_covers_every_checkpoint_suffix():
 
 
 def test_plan_adds_a_single_binoculars_column_per_text_column():
+    """Test build_compute_plan adds single un-suffixed binoculars column per text column."""
     config = make_config(
         columns_to_score=["original"],
         binoculars_score=True,
@@ -147,6 +156,7 @@ def test_plan_adds_a_single_binoculars_column_per_text_column():
 
 
 def test_plan_skips_an_existing_binoculars_column():
+    """Test build_compute_plan skips binoculars column if already in dataset."""
     config = make_config(
         columns_to_score=["original"],
         binoculars_score=True,
@@ -158,6 +168,7 @@ def test_plan_skips_an_existing_binoculars_column():
 
 
 def test_plan_is_empty_when_no_metrics_are_enabled():
+    """Test build_compute_plan returns empty plan when all metric flags are False."""
     config = make_config(
         columns_to_score=["original"],
         perplexity=False,
@@ -175,6 +186,7 @@ def test_plan_is_empty_when_no_metrics_are_enabled():
 
 
 def test_a_pass_claims_only_its_own_suffix():
+    """Test output_columns filters for suffixes matching current pass."""
     config = make_config(
         columns_to_score=["original"],
         llm_checkpoints=["a/model", "b/model"],
@@ -186,6 +198,7 @@ def test_a_pass_claims_only_its_own_suffix():
 
 
 def test_the_passes_together_cover_every_planned_column():
+    """Test that combined passes cover all planned metric columns."""
     config = make_config(
         columns_to_score=["original"],
         llm_checkpoints=["a/model", "b/model"],
@@ -199,6 +212,7 @@ def test_the_passes_together_cover_every_planned_column():
 
 
 def test_a_co_resident_pass_claims_the_binoculars_column():
+    """Test that multi-checkpoint co-resident pass claims binoculars column."""
     config = make_config(
         columns_to_score=["original"],
         binoculars_score=True,
@@ -210,11 +224,13 @@ def test_a_co_resident_pass_claims_the_binoculars_column():
 
 
 def test_a_pass_with_nothing_left_to_do_selects_nothing():
+    """Test output_columns returns empty set when pass has no missing columns."""
     config = make_config(columns_to_score=["original"])
     assert {"original_perplexity_b"} & output_columns("original", ["_a"], config) == set()
 
 
 def test_disabled_metrics_are_never_claimed_by_a_pass():
+    """Test output_columns omits disabled metrics."""
     config = make_config(columns_to_score=["original"], entropy=False)
     assert "original_entropy_a" not in output_columns("original", ["_a"], config)
 
@@ -225,6 +241,7 @@ def test_disabled_metrics_are_never_claimed_by_a_pass():
 
 
 def test_metric_columns_are_computed_for_every_row():
+    """Test compute_metric_columns produces value list per row for requested metrics."""
     needed = {"original_perplexity_a", "original_entropy_a"}
     result = compute_metric_columns(make_sums(rows=3), "original", needed, ["_a"])
     assert set(result) == needed
@@ -232,6 +249,7 @@ def test_metric_columns_are_computed_for_every_row():
 
 
 def test_only_the_requested_columns_are_produced():
+    """Test compute_metric_columns only computes requested output columns."""
     result = compute_metric_columns(
         make_sums(), "original", {"original_entropy_a"}, ["_a"]
     )
@@ -239,6 +257,7 @@ def test_only_the_requested_columns_are_produced():
 
 
 def test_metric_values_match_the_underlying_statistic():
+    """Test compute_metric_columns matches underlying statistical calculation."""
     from fastdetector.statistics import statistics_llm
 
     sums = make_sums()
@@ -249,6 +268,7 @@ def test_metric_values_match_the_underlying_statistic():
 
 
 def test_each_model_reads_its_own_slot():
+    """Test compute_metric_columns extracts scores from corresponding model index slot."""
     sums = make_sums(num_models=2)
     result = compute_metric_columns(
         sums,
@@ -260,6 +280,7 @@ def test_each_model_reads_its_own_slot():
 
 
 def test_binoculars_uses_the_performer_row():
+    """Test compute_metric_columns extracts binoculars score from performer model index."""
     from fastdetector.statistics import statistics_llm
 
     sums = make_sums(num_models=2, with_ce=True)
@@ -274,6 +295,7 @@ def test_binoculars_uses_the_performer_row():
 
 
 def test_binoculars_is_skipped_when_not_requested():
+    """Test compute_metric_columns omits binoculars score when not requested."""
     sums = make_sums(num_models=2, with_ce=True)
     result = compute_metric_columns(
         sums, "original", {"original_perplexity_a"}, ["_a", "_b"]
@@ -282,6 +304,7 @@ def test_binoculars_is_skipped_when_not_requested():
 
 
 def test_empty_texts_produce_the_documented_sentinels():
+    """Test compute_metric_columns output for empty texts yields standard sentinel values."""
     empty = np.zeros((1, 1), dtype=SUMS)
     needed = {metric_column("original", stem, "_a") for stem in all_stems()}
     result = compute_metric_columns(empty, "original", needed, ["_a"])
@@ -293,6 +316,7 @@ def test_empty_texts_produce_the_documented_sentinels():
 
 
 def test_scoring_no_rows_produces_empty_columns():
+    """Test compute_metric_columns with 0 rows yields empty value lists."""
     result = compute_metric_columns(
         np.zeros((0, 1), dtype=SUMS), "original", {"original_entropy_a"}, ["_a"]
     )
@@ -300,6 +324,7 @@ def test_scoring_no_rows_produces_empty_columns():
 
 
 def test_plan_and_compute_agree_on_column_names():
+    """Test consistency between build_compute_plan and compute_metric_columns column names."""
     # The plan decides what to compute and the aggregator decides what to name
     # the output; a mismatch would recompute the same metric on every run.
     config = make_config(columns_to_score=["original"])

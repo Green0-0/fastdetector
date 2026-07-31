@@ -2,14 +2,9 @@ import numpy as np
 
 
 # Every metric here is a ratio of position sums, so each function takes rows of
-# the structured array the scorer returns (exact_scorer.SUMS) and returns one
+# the structured array the scorer returns (llm_scoring.SUMS) and returns one
 # value per row. A text with no scoreable positions has an all-zero row; the
 # guards below turn that into the documented sentinel for each metric.
-
-# Below these totals the denominator is noise rather than signal, and the
-# metric is reported as 0.0 instead of dividing by (near) zero.
-MIN_VARIANCE = 1e-6
-MIN_CROSS_ENTROPY = 1e-6
 
 
 def perplexity(sums: np.ndarray) -> np.ndarray:
@@ -76,13 +71,12 @@ def fastdetectgpt_score(sums: np.ndarray) -> np.ndarray:
         Curvature score per row; 0.0 when the total variance is negligible,
         which covers a text with no positions.
     """
-    variance = sums["variance"]
-    return np.where(
-        variance > MIN_VARIANCE,
+    with np.errstate(divide="ignore", invalid="ignore"):
         # sum(mu_j) = -sum(H_j), so the numerator is a sum, not a difference.
-        (sums["lp"] + sums["entropy"]) / np.sqrt(np.maximum(variance, MIN_VARIANCE)),
-        0.0,
-    )
+        score = (sums["lp"] + sums["entropy"]) / np.sqrt(sums["variance"])
+    # Below this total the spread is rounding noise rather than signal, so the
+    # division above is discarded rather than reported as a huge z-score.
+    return np.where(sums["variance"] > 1e-6, score, 0.0)
 
 
 def binoculars_score(sums: np.ndarray) -> np.ndarray:
@@ -98,15 +92,22 @@ def binoculars_score(sums: np.ndarray) -> np.ndarray:
         Binoculars score per row; 0.0 when the total cross-entropy is
         negligible, which covers a text with no positions.
     """
-    cross_entropy = sums["ce"]
-    return np.where(
-        cross_entropy > MIN_CROSS_ENTROPY,
-        -sums["lp"] / np.maximum(cross_entropy, MIN_CROSS_ENTROPY),
-        0.0,
-    )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        score = -sums["lp"] / sums["ce"]
+    # Below this total the denominator is rounding noise rather than signal,
+    # so the division above is discarded rather than reported as a huge ratio.
+    return np.where(sums["ce"] > 1e-6, score, 0.0)
 
 
 def _fraction(count: np.ndarray, n: np.ndarray) -> np.ndarray:
-    """Divide a flag count by the position count, yielding NaN for empty rows."""
+    """Divide a flag count by position count, yielding NaN for empty rows.
+
+    Args:
+        count: Array of outlier count sums.
+        n: Array of total position counts.
+
+    Returns:
+        Fraction array per row.
+    """
     with np.errstate(divide="ignore", invalid="ignore"):
         return count / n

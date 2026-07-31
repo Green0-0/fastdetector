@@ -65,8 +65,8 @@ Directories are for humans; the markers are what the runner selects on.
 The model-dependent tests do not download anything: `tests/conftest.py` builds
 randomly-initialised checkpoints in-process (a two-layer Llama, a two-layer
 BERT classifier, and a word-level tokenizer). That is enough to run the real
-`ExactScorer`, the real EditLens inference loop, and the real `transformers`
-code paths — `tests/unit/test_exact_scorer.py` checks every reduction against a
+the real LLM scoring pass, the real EditLens inference loop, and the real `transformers`
+code paths — `tests/unit/test_llm_scoring.py` checks every reduction against a
 naive per-position reference implementation.
 
 `batch_generate` is likewise tested against a real OpenAI-compatible server

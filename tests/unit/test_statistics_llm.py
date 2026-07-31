@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from fastdetector.statistics.exact_scorer import SUMS
+from fastdetector.statistics.llm_scoring import SUMS
 from fastdetector.statistics.statistics_llm import (
     binoculars_score,
     fastdetectgpt_score,

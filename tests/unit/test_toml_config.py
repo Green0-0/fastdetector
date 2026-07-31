@@ -203,22 +203,14 @@ def test_analysis_config_defaults_and_nesting():
 
 def test_llm_stat_defaults():
     config = make_llm_stat_config()
-    assert config.scorer.max_model_len == 16000
-    assert config.scorer.max_batch_tokens == 16384
-    assert config.scorer.head_chunk_size == 512
-    assert config.scorer.dtype == "bfloat16"
-    assert config.scorer.attn_implementation is None
-    assert config.scorer.devices == "auto"
-    assert config.scorer.topp_threshold == 0.95
-    assert config.scorer.topk_threshold == 50
-
-
-def test_llm_stat_reads_a_scorer_table():
-    config = make_llm_stat_config(scorer={"max_model_len": 512, "dtype": "float32"})
-    assert config.scorer.max_model_len == 512
-    assert config.scorer.dtype == "float32"
-    # Unset keys still fall back to the scorer's own defaults.
-    assert config.scorer.head_chunk_size == 512
+    assert config.max_model_len == 16000
+    assert config.max_batch_tokens == 16384
+    assert config.head_chunk_size == 512
+    assert config.dtype == "bfloat16"
+    assert config.attn_implementation is None
+    assert config.devices == "auto"
+    assert config.topp_threshold == 0.95
+    assert config.topk_threshold == 50
 
 
 def test_llm_stat_rejects_checkpoint_suffix_length_mismatch():
@@ -252,20 +244,13 @@ def test_binoculars_accepts_two_checkpoints():
 
 
 def test_devices_accepts_a_string_or_a_list():
-    assert make_llm_stat_config(scorer={"devices": "auto"}).scorer.devices == "auto"
-    assert make_llm_stat_config(
-        scorer={"devices": ["cuda:0", "cuda:1"]}
-    ).scorer.devices == ["cuda:0", "cuda:1"]
+    assert make_llm_stat_config(devices="auto").devices == "auto"
+    assert make_llm_stat_config(devices=["cuda:0", "cuda:1"]).devices == ["cuda:0", "cuda:1"]
 
 
-def test_cross_entropy_follows_the_binoculars_flag():
-    # The scorer's cross-model term exists only to serve binoculars, so it is
-    # derived rather than configured.
-    assert make_llm_stat_config().scorer.compute_cross_entropy is False
-    paired = make_llm_stat_config(
-        binoculars_score=True, llm_checkpoints=["a", "b"], col_suffixes=["_a", "_b"]
-    )
-    assert paired.scorer.compute_cross_entropy is True
+def test_devices_rejects_an_empty_list():
+    with pytest.raises(ValidationError, match="devices"):
+        make_llm_stat_config(devices=[])
 
 
 # --------------------------------------------------------------------------

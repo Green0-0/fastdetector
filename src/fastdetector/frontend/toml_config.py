@@ -191,14 +191,21 @@ class DistanceStatConfig(BaseModel):
     reranker_model: str
 
 
-class ScorerSettings(BaseModel):
-    """Settings controlling model scoring, batching, and device configuration.
+class LLMStatConfig(BaseModel):
+    """Configuration for exact LLM-based metric extraction (llm_stats.py).
 
-    Consumed by :mod:`fastdetector.statistics.exact_scorer`, and declared here
-    so it can nest inside :class:`LLMStatConfig` and be validated when the TOML
-    is loaded. It stays free of torch imports for that reason; device
-    resolution lives with the scorer.
+    Models are loaded in-process via transformers; metrics are computed from
+    exact full-vocabulary distributions with fused reductions (no logprobs
+    are stored). Batch-id sharding splits the dataset across machines (one
+    shard per run, as elsewhere in the pipeline); within a run, the
+    checkpoint(s) are replicated onto every configured GPU and all replicas
+    work that single shard in parallel.
+
+    Also passed straight to :mod:`fastdetector.statistics.llm_scoring`, which
+    reads the scoring and batching fields below; this module stays free of
+    torch imports so that loading a config never pays for it.
     """
+    columns_to_score: List[str]
 
     # Nucleus probability mass threshold for top-p outlier detection.
     topp_threshold: float = Field(default=0.95, gt=0.0, le=1.0)
@@ -228,43 +235,6 @@ class ScorerSettings(BaseModel):
     # each device holds both checkpoints.
     devices: Union[str, List[str]] = "auto"
 
-    # Whether to compute observer-performer cross-entropy. Set from
-    # LLMStatConfig.binoculars_score rather than configured directly.
-    compute_cross_entropy: bool = False
-
-    @model_validator(mode="after")
-    def normalize_devices(self) -> "ScorerSettings":
-        """Wrap a single device string in a list, keeping "auto" as-is.
-
-        Returns:
-            Self instance if validation succeeds.
-
-        Raises:
-            ValueError: If devices is an empty list.
-        """
-        if isinstance(self.devices, str):
-            if self.devices != "auto":
-                self.devices = [self.devices]
-        elif not self.devices:
-            raise ValueError('devices must be "auto" or a non-empty list of device strings')
-        return self
-
-
-class LLMStatConfig(BaseModel):
-    """Configuration for exact LLM-based metric extraction (llm_stats.py).
-
-    Models are loaded in-process via transformers; metrics are computed from
-    exact full-vocabulary distributions with fused reductions (no logprobs
-    are stored). Batch-id sharding splits the dataset across machines (one
-    shard per run, as elsewhere in the pipeline); within a run, the
-    checkpoint(s) are replicated onto every configured GPU and all replicas
-    work that single shard in parallel.
-    """
-    columns_to_score: List[str]
-
-    # How the scorer loads models and sizes its batches.
-    scorer: ScorerSettings = Field(default_factory=ScorerSettings)
-
     # LLM & Generation Metrics
     perplexity: bool
     entropy: bool
@@ -281,17 +251,19 @@ class LLMStatConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_llm_settings(self) -> "LLMStatConfig":
-        """Validate checkpoint/suffix alignment and wire up cross-entropy.
+        """Validate device, checkpoint, and suffix settings.
 
         Returns:
             Self instance if validation succeeds.
 
         Raises:
-            ValueError: If llm_checkpoints and col_suffixes lengths differ or binoculars requirements are unmet.
+            ValueError: If devices is empty, llm_checkpoints and col_suffixes lengths differ, or binoculars requirements are unmet.
         """
-        # The cross-model term exists only to serve binoculars, so the scorer
-        # never has to be told about it separately.
-        self.scorer.compute_cross_entropy = self.binoculars_score
+        if isinstance(self.devices, str):
+            if self.devices != "auto":
+                self.devices = [self.devices]
+        elif not self.devices:
+            raise ValueError('devices must be "auto" or a non-empty list of device strings')
         if len(self.llm_checkpoints) != len(self.col_suffixes):
             raise ValueError(
                 f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) "

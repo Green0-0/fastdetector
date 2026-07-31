@@ -255,17 +255,20 @@ def test_llm_stats_scores_the_columns_the_pipeline_produces(repo_root):
 
 
 def test_llm_stats_dtype_is_supported(repo_root):
-    from fastdetector.statistics.exact_scorer import _resolve_dtype
+    # A typo here only surfaces once a job has queued and started downloading
+    # weights, so it is worth catching at config-parse time.
+    import torch
 
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    _resolve_dtype(config.scorer.dtype)
+    resolved = getattr(torch, config.dtype, None)
+    assert isinstance(resolved, torch.dtype) and resolved.is_floating_point
 
 
 def test_llm_stats_batch_budget_admits_a_full_length_text(repo_root):
     # max_batch_tokens below max_model_len means the longest texts each get a
     # batch of one, which is legal but usually a config mistake.
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    assert config.scorer.max_batch_tokens >= config.scorer.max_model_len
+    assert config.max_batch_tokens >= config.max_model_len
 
 
 def test_stat_configs_agree_on_the_text_columns(repo_root):
