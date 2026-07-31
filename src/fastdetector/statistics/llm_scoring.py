@@ -13,25 +13,17 @@ from fastdetector.frontend.toml_config import LLMStatConfig
 
 PROGRESS_PRINT_INTERVAL = 500
 
-# Every metric in statistics_llm is a sum over token positions, so per-position
-# values never leave the device: each forward pass reduces straight into one
-# row of running totals per (text, model), and this is the whole interchange
-# format between the scoring here and the metrics there.
 SUMS = np.dtype(
     [
-        ("n", np.int64),  # scoreable positions, i.e. tokens - 1
-        ("lp", np.float64),  # sum of log p(target)
-        ("entropy", np.float64),  # sum of H
-        ("variance", np.float64),  # sum of max(0, E[(log p)^2] - H^2)
-        ("topp", np.float64),  # number of top-p nucleus outliers
-        ("topk", np.float64),  # number of top-k rank outliers
-        ("ce", np.float64),  # sum of H(p_observer, p_performer)
+        ("n", np.int64),
+        ("lp", np.float64),
+        ("entropy", np.float64),
+        ("variance", np.float64),
+        ("topp", np.float64),
+        ("topk", np.float64),
+        ("ce", np.float64),
     ]
 )
-
-# The per-model accumulators, in the order _score_batch stacks them. "n" comes
-# from the token lengths and "ce" is cross-model, so neither belongs here.
-ACCUMULATED = ("lp", "entropy", "variance", "topp", "topk")
 
 
 def score_columns(
@@ -52,8 +44,6 @@ def score_columns(
     Raises:
         ValueError: If checkpoint count is unsupported or model vocabs mismatch.
     """
-    # Checked before anything downloads, so a misconfiguration fails in
-    # seconds rather than after pulling several GB of weights.
     if len(checkpoints) not in (1, 2):
         raise ValueError(f"Scoring supports 1 or 2 checkpoints, got {len(checkpoints)}.")
 
@@ -88,15 +78,12 @@ def score_columns(
         results = {}
         for name, texts in columns:
             print(f"Scoring column '{name}'...")
-            # Blank rows tokenize to nothing and keep their all-zero sums row.
             nonempty = [i for i, text in enumerate(texts) if text and text.strip()]
             encoded = tokenizer(
                 [texts[i] for i in nonempty],
                 truncation=True,
                 max_length=config.max_model_len,
             )["input_ids"]
-            # Compact int64 arrays keep corpus-scale tokenizations cheap in RAM
-            # (~8 bytes/token vs ~28 for lists of Python ints).
             token_arrays = [np.zeros(0, dtype=np.int64)] * len(texts)
             for i, ids in zip(nonempty, encoded):
                 token_arrays[i] = np.asarray(ids, dtype=np.int64)
@@ -178,21 +165,13 @@ def _score_tokens(
     """
     token_arrays = [np.asarray(ids, dtype=np.int64) for ids in token_lists]
     num_models = len(replicas[0])
-    # Two co-resident models is exactly the Binoculars setup: nothing else
-    # loads a second checkpoint alongside the first, so the cross-model term
-    # is derived rather than configured.
     cross_entropy = num_models == 2
 
-    # Texts too short to have a next-token prediction keep their all-zero
-    # row, which is exactly the "no positions" sentinel the metrics expect.
     sums = np.zeros((len(token_arrays), num_models), dtype=SUMS)
 
     scoreable = [i for i, ids in enumerate(token_arrays) if ids.shape[0] >= 2]
     scoreable.sort(key=lambda i: token_arrays[i].shape[0], reverse=True)
 
-    # Greedy packing of the length-sorted texts. A batch is padded out to its
-    # longest member, so the cap is on batch_size * max_len, not the token
-    # total; sorting first keeps the padding waste inside a batch small.
     batches: list[list[int]] = []
     batch: list[int] = []
     batch_max_len = 0
@@ -212,9 +191,6 @@ def _score_tokens(
     total = len(scoreable)
     label = f" [{progress_label}]" if progress_label else ""
 
-    # Workers check a replica out of the queue per batch, so load stays
-    # balanced even when batch runtimes vary. With one replica this
-    # degenerates to a single-worker executor.
     idle_replicas: queue.SimpleQueue[int] = queue.SimpleQueue()
     for replica_idx in range(len(replicas)):
         idle_replicas.put(replica_idx)
@@ -279,8 +255,6 @@ def _score_batch(
     input_ids = torch.from_numpy(input_ids_np).to(device)
     attention_mask = torch.from_numpy(attention_mask_np).to(device)
 
-    # Flat indices of every predicting position: position j of row r
-    # predicts token j+1, valid for j in [0, len_r - 2].
     position_counts = [n - 1 for n in lengths]
     rows_np = np.repeat(np.arange(batch_size), position_counts)
     cols_np = np.concatenate([np.arange(m) for m in position_counts])
@@ -290,8 +264,6 @@ def _score_batch(
     targets_t = torch.from_numpy(targets_np).to(device)
     num_positions = rows_t.shape[0]
 
-    # Backbone forward per model (padding is right-side, so causal
-    # attention never attends to pad tokens at valid positions).
     flat_hiddens = []
     for model in models:
         hidden = model.get_decoder()(
@@ -300,13 +272,8 @@ def _score_batch(
         flat_hiddens.append(hidden[rows_t, cols_t])
         del hidden
 
-    # One running total per (text, accumulator). rows_t already says which
-    # text each flat position belongs to, so index_add_ scatters a chunk's
-    # positions onto their texts without ever building per-position arrays.
-    # float64 preserves the accumulation precision the metrics used to get
-    # from summing with NumPy.
     totals = [
-        torch.zeros((batch_size, len(ACCUMULATED)), dtype=torch.float64, device=device)
+        torch.zeros((batch_size, 5), dtype=torch.float64, device=device)
         for _ in models
     ]
     ce_totals = torch.zeros(batch_size, dtype=torch.float64, device=device)
@@ -330,9 +297,6 @@ def _score_batch(
             entropy = -(p * logp).sum(dim=-1)
             e_lp2 = (p * logp.square()).sum(dim=-1)
 
-            # One descending sort serves both outlier metrics: the k-th
-            # largest logprob for top-k, and the nucleus boundary for
-            # top-p.
             sorted_lp, _ = torch.sort(logp, descending=True, dim=-1)
             kth_lp = sorted_lp[:, config.topk_threshold - 1]
 
@@ -340,17 +304,10 @@ def _score_batch(
             thresholds = torch.full(
                 (end - start, 1), config.topp_threshold, device=cum.device
             )
-            # First index where cumulative mass reaches the threshold;
-            # clamp covers the (float-rounding) case where it never does,
-            # falling back to the smallest logprob.
             idx = torch.searchsorted(cum, thresholds).clamp(max=logp.shape[-1] - 1)
             threshold_lp = sorted_lp.gather(1, idx).squeeze(1)
             del sorted_lp, cum
 
-            # E[(log p)^2] lands close to H^2 where the distribution is
-            # peaked, so the difference is taken at double precision and
-            # clamped: the leftover rounding artefact is not a real
-            # negative variance, and fastdetectgpt takes its square root.
             entropy64 = entropy.double()
             variance = (e_lp2.double() - entropy64.square()).clamp(min=0.0)
 
@@ -362,8 +319,6 @@ def _score_batch(
                         token_lp.double(),
                         entropy64,
                         variance,
-                        # The slack absorbs float32 rounding, so a token that
-                        # *is* the nucleus or k-th boundary is not flagged.
                         (token_lp < threshold_lp - 1e-5).double(),
                         (token_lp < kth_lp - 1e-5).double(),
                     ],
@@ -378,7 +333,6 @@ def _score_batch(
             del logp, p
 
         if cross_entropy:
-            # H(p_observer, log p_performer) = -sum_v p_obs(v) log p_perf(v)
             ce_totals.index_add_(
                 0, rows_chunk, -(chunk_p_obs * chunk_logp_perf).sum(dim=-1).double()
             )
@@ -389,11 +343,15 @@ def _score_batch(
     sums = np.zeros((batch_size, len(models)), dtype=SUMS)
     sums["n"] = np.asarray(position_counts, dtype=np.int64)[:, None]
     for model_idx, model_totals in enumerate(totals):
-        model_totals_np = model_totals.cpu().numpy()
-        for field_idx, name in enumerate(ACCUMULATED):
-            sums[name][:, model_idx] = model_totals_np[:, field_idx]
+        # Named in the order the chunk loop stacks them; a stack that stopped
+        # matching would fail here on the unpack rather than silently swapping
+        # two columns.
+        lp, entropy, variance, topp, topk = model_totals.cpu().numpy().T
+        sums["lp"][:, model_idx] = lp
+        sums["entropy"][:, model_idx] = entropy
+        sums["variance"][:, model_idx] = variance
+        sums["topp"][:, model_idx] = topp
+        sums["topk"][:, model_idx] = topk
     if cross_entropy:
-        # Binoculars divides the performer's total logprob by this, so the
-        # cross-model total lives on the performer's row.
         sums["ce"][:, 1] = ce_totals.cpu().numpy()
     return sums

@@ -30,8 +30,8 @@ def make_cpu_config(**overrides) -> LLMStatConfig:
         "entropy": True,
         "topp_outlier": True,
         "topk_outlier": True,
-        "binoculars_score": False,
-        "fastdetectgpt_score": True,
+        "binoculars": False,
+        "fastdetectgpt": True,
         "llm_checkpoints": ["a/model"],
         "col_suffixes": ["_a"],
         "topk_threshold": 5,
@@ -96,7 +96,7 @@ def test_binoculars_needs_two_co_resident_checkpoints(
     # which is the degenerate but well-defined case; what matters here is that
     # two checkpoints load together and produce a cross-entropy total.
     settings = make_cpu_config(
-        binoculars_score=True,
+        binoculars=True,
         llm_checkpoints=[hub_model_id, hub_model_id],
         col_suffixes=["_obs", "_perf"],
     )
@@ -124,7 +124,7 @@ def test_the_configured_production_checkpoints_share_a_vocabulary(
     from fastdetector.frontend.toml_loader import load_toml
 
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    if not config.binoculars_score:
+    if not config.binoculars:
         pytest.skip("binoculars is disabled in config/llm_stats.toml")
 
     try:

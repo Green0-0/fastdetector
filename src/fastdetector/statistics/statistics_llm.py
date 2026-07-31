@@ -1,12 +1,6 @@
 import numpy as np
 
 
-# Every metric here is a ratio of position sums, so each function takes rows of
-# the structured array the scorer returns (llm_scoring.SUMS) and returns one
-# value per row. A text with no scoreable positions has an all-zero row; the
-# guards below turn that into the documented sentinel for each metric.
-
-
 def perplexity(sums: np.ndarray) -> np.ndarray:
     """Compute perplexity from summed target token log-probabilities.
 
@@ -72,10 +66,7 @@ def fastdetectgpt_score(sums: np.ndarray) -> np.ndarray:
         which covers a text with no positions.
     """
     with np.errstate(divide="ignore", invalid="ignore"):
-        # sum(mu_j) = -sum(H_j), so the numerator is a sum, not a difference.
         score = (sums["lp"] + sums["entropy"]) / np.sqrt(sums["variance"])
-    # Below this total the spread is rounding noise rather than signal, so the
-    # division above is discarded rather than reported as a huge z-score.
     return np.where(sums["variance"] > 1e-6, score, 0.0)
 
 
@@ -94,8 +85,6 @@ def binoculars_score(sums: np.ndarray) -> np.ndarray:
     """
     with np.errstate(divide="ignore", invalid="ignore"):
         score = -sums["lp"] / sums["ce"]
-    # Below this total the denominator is rounding noise rather than signal,
-    # so the division above is discarded rather than reported as a huge ratio.
     return np.where(sums["ce"] > 1e-6, score, 0.0)
 
 

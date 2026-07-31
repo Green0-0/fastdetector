@@ -10,14 +10,15 @@ from fastdetector.statistics.llm_scoring import score_columns
 from fastdetector.statistics import statistics_llm
 
 
-# Config flag -> (output column stem, aggregator over one model's summed
-# scores). The stem is placed between the text column and the model suffix.
-PER_MODEL_METRICS: dict[str, tuple[str, Callable[[np.ndarray], np.ndarray]]] = {
-    "perplexity": ("perplexity", statistics_llm.perplexity),
-    "entropy": ("entropy", statistics_llm.mean_entropy),
-    "topp_outlier": ("topp_outlier", statistics_llm.topp_outlier_percentage),
-    "topk_outlier": ("topk_outlier", statistics_llm.topk_outlier_percentage),
-    "fastdetectgpt_score": ("fastdetectgpt", statistics_llm.fastdetectgpt_score),
+# Metric name -> aggregator over one model's summed scores. The name doubles as
+# the config flag that enables it and as the output column stem, which is
+# placed between the text column and the model suffix.
+PER_MODEL_METRICS: dict[str, Callable[[np.ndarray], np.ndarray]] = {
+    "perplexity": statistics_llm.perplexity,
+    "entropy": statistics_llm.mean_entropy,
+    "topp_outlier": statistics_llm.topp_outlier_percentage,
+    "topk_outlier": statistics_llm.topk_outlier_percentage,
+    "fastdetectgpt": statistics_llm.fastdetectgpt_score,
 }
 
 # Binoculars is a cross-model score, so its column carries no model suffix.
@@ -55,33 +56,14 @@ def output_columns(col: str, suffixes: list[str], config: LLMStatConfig) -> set[
         metric is enabled, which always means a single co-resident pass.
     """
     names = {
-        metric_column(col, stem, suffix)
+        metric_column(col, name, suffix)
         for suffix in suffixes
-        for flag, (stem, _) in PER_MODEL_METRICS.items()
-        if getattr(config, flag)
+        for name in PER_MODEL_METRICS
+        if getattr(config, name)
     }
-    if config.binoculars_score:
+    if config.binoculars:
         names.add(metric_column(col, BINOCULARS_STEM))
     return names
-
-
-def build_compute_plan(column_names: list[str], config: LLMStatConfig) -> dict[str, set[str]]:
-    """Determine which output columns are missing for each text column.
-
-    Args:
-        column_names: Existing dataset column names.
-        config: LLMStatConfig with metric flags, checkpoints, and suffixes.
-
-    Returns:
-        Mapping of text column -> set of missing output column names. Text
-        columns with nothing missing are omitted.
-    """
-    plan = {}
-    for col in config.columns_to_score:
-        needed = output_columns(col, config.col_suffixes, config) - set(column_names)
-        if needed:
-            plan[col] = needed
-    return plan
 
 
 def compute_metric_columns(
@@ -104,8 +86,8 @@ def compute_metric_columns(
     """
     result: dict[str, list[float]] = {}
     for model_idx, suffix in enumerate(suffixes):
-        for stem, aggregate in PER_MODEL_METRICS.values():
-            out_col = metric_column(col, stem, suffix)
+        for name, aggregate in PER_MODEL_METRICS.items():
+            out_col = metric_column(col, name, suffix)
             if out_col in needed:
                 result[out_col] = aggregate(sums[:, model_idx]).tolist()
 
@@ -121,7 +103,7 @@ def main() -> None:
 
     Models are loaded in-process via transformers and each text column is
     scored with fused full-vocabulary reductions; no logprobs are persisted.
-    When binoculars_score is enabled, both checkpoints are co-resident and
+    When binoculars is enabled, both checkpoints are co-resident and
     every metric is computed in a single pass over the texts. Otherwise
     checkpoints are loaded and freed one at a time.
 
@@ -147,14 +129,9 @@ def main() -> None:
             f"(available: {ds.column_names})"
         )
 
-    plan = build_compute_plan(ds.column_names, config)
-    if not plan:
-        print("All requested metrics already computed for all columns. Nothing to do.")
-        return
-
     # Binoculars needs both checkpoints co-resident to compute the cross-model
     # term; otherwise checkpoints are loaded and freed one at a time.
-    if config.binoculars_score:
+    if config.binoculars:
         passes = [(config.llm_checkpoints, config.col_suffixes)]
     else:
         passes = [
@@ -162,13 +139,14 @@ def main() -> None:
             for checkpoint, suffix in zip(config.llm_checkpoints, config.col_suffixes)
         ]
 
+    existing = set(ds.column_names)
     new_columns: dict[str, list[float]] = {}
     for checkpoints, suffixes in passes:
-        pass_plan = {}
-        for col, needed in plan.items():
-            pass_cols = needed & output_columns(col, suffixes, config)
-            if pass_cols:
-                pass_plan[col] = pass_cols
+        pass_plan = {
+            col: missing
+            for col in config.columns_to_score
+            if (missing := output_columns(col, suffixes, config) - existing)
+        }
         if not pass_plan:
             print(f"Metrics for {checkpoints} already computed for all columns. Skipping...")
             continue
@@ -177,6 +155,10 @@ def main() -> None:
         scored = score_columns(checkpoints, config, ((col, ds[col]) for col in pass_plan))
         for col, sums in scored.items():
             new_columns.update(compute_metric_columns(sums, col, pass_plan[col], suffixes))
+
+    if not new_columns:
+        print("All requested metrics already computed for all columns. Nothing to do.")
+        return
 
     for name, values in new_columns.items():
         ds = ds.add_column(name, values)

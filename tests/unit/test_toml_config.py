@@ -41,8 +41,8 @@ def make_llm_stat_config(**overrides) -> LLMStatConfig:
         "entropy": True,
         "topp_outlier": True,
         "topk_outlier": True,
-        "binoculars_score": False,
-        "fastdetectgpt_score": True,
+        "binoculars": False,
+        "fastdetectgpt": True,
         "llm_checkpoints": ["a/model"],
         "col_suffixes": ["_a"],
     }
@@ -227,10 +227,10 @@ def test_llm_stat_rejects_duplicate_suffixes():
 
 def test_binoculars_requires_exactly_two_checkpoints():
     with pytest.raises(ValidationError, match="Binoculars"):
-        make_llm_stat_config(binoculars_score=True)
+        make_llm_stat_config(binoculars=True)
     with pytest.raises(ValidationError, match="Binoculars"):
         make_llm_stat_config(
-            binoculars_score=True,
+            binoculars=True,
             llm_checkpoints=["a", "b", "c"],
             col_suffixes=["_a", "_b", "_c"],
         )
@@ -238,9 +238,9 @@ def test_binoculars_requires_exactly_two_checkpoints():
 
 def test_binoculars_accepts_two_checkpoints():
     config = make_llm_stat_config(
-        binoculars_score=True, llm_checkpoints=["a", "b"], col_suffixes=["_a", "_b"]
+        binoculars=True, llm_checkpoints=["a", "b"], col_suffixes=["_a", "_b"]
     )
-    assert config.binoculars_score is True
+    assert config.binoculars is True
 
 
 def test_devices_accepts_a_string_or_a_list():

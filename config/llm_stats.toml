@@ -22,8 +22,8 @@ perplexity = true
 entropy = true
 topp_outlier = true
 topk_outlier = true
-binoculars_score = true
-fastdetectgpt_score = true
+binoculars = true
+fastdetectgpt = true
 
 topp_threshold = 0.95
 topk_threshold = 50

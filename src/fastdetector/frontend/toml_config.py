@@ -240,8 +240,8 @@ class LLMStatConfig(BaseModel):
     entropy: bool
     topp_outlier: bool
     topk_outlier: bool
-    binoculars_score: bool
-    fastdetectgpt_score: bool
+    binoculars: bool
+    fastdetectgpt: bool
 
     # Model checkpoints and their aligned output-column suffixes. With
     # binoculars enabled, the first checkpoint is the observer and the second
@@ -271,7 +271,7 @@ class LLMStatConfig(BaseModel):
             )
         if len(set(self.col_suffixes)) != len(self.col_suffixes):
             raise ValueError(f"col_suffixes must be unique, got {self.col_suffixes}")
-        if self.binoculars_score and len(self.llm_checkpoints) != 2:
+        if self.binoculars and len(self.llm_checkpoints) != 2:
             raise ValueError(
                 f"Binoculars score requires exactly 2 llm_checkpoints, "
                 f"but {len(self.llm_checkpoints)} were provided."

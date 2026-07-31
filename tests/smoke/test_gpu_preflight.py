@@ -237,7 +237,7 @@ def test_llm_stats_config_scores_realistic_text(repo_root):
 
     assert sums.shape == (len(texts), len(config.llm_checkpoints))
     assert sums["n"][-1, 0] == 0
-    if config.binoculars_score:
+    if config.binoculars:
         assert sums["ce"][0, 1] > 0
     assert_within_budget("llm_stats (real text)")
 
