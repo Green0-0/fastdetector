@@ -26,140 +26,6 @@ SUMS = np.dtype(
 )
 
 
-def score_columns(
-    checkpoints: list[str],
-    config: LLMStatConfig,
-    columns: Iterable[tuple[str, list[str]]],
-) -> dict[str, np.ndarray]:
-    """Score dataset columns using loaded model checkpoints across available devices.
-
-    Args:
-        checkpoints: List of HuggingFace model IDs or local paths.
-        config: Pipeline configuration providing device and scoring settings.
-        columns: Iterable of (column name, list of text samples) tuples.
-
-    Returns:
-        Dictionary mapping column names to structured SUMS NumPy arrays.
-
-    Raises:
-        ValueError: If checkpoint count is unsupported or model vocabs mismatch.
-    """
-    if len(checkpoints) not in (1, 2):
-        raise ValueError(f"Scoring supports 1 or 2 checkpoints, got {len(checkpoints)}.")
-
-    if isinstance(config.devices, list):
-        devices = config.devices
-    elif torch.cuda.is_available():
-        devices = [f"cuda:{i}" for i in range(torch.cuda.device_count())]
-    else:
-        devices = ["cpu"]
-
-    cross_entropy = len(checkpoints) == 2
-
-    replicas: list[list[torch.nn.Module]] = []
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(checkpoints[0])
-        print(f"Loading {len(checkpoints)} checkpoint(s) onto {len(devices)} device(s): {devices}")
-        for device in devices:
-            replicas.append(
-                [_load_model(checkpoint, config, device) for checkpoint in checkpoints]
-            )
-
-        vocabs = [m.get_output_embeddings().weight.shape[0] for m in replicas[0]]
-        if len(set(vocabs)) > 1:
-            raise ValueError(
-                f"Vocab size mismatch between co-resident models: {vocabs}. "
-                f"Cross-model scoring requires a shared tokenizer/vocab."
-            )
-        if config.topk_threshold > min(vocabs):
-            raise ValueError(
-                f"topk_threshold ({config.topk_threshold}) exceeds the model "
-                f"vocab size ({min(vocabs)})."
-            )
-
-        idle_replicas: queue.SimpleQueue[int] = queue.SimpleQueue()
-        for replica_idx in range(len(replicas)):
-            idle_replicas.put(replica_idx)
-
-        def run_batch(batch: list[np.ndarray]) -> np.ndarray:
-            """Score one batch on whichever replica is idle."""
-            replica_idx = idle_replicas.get()
-            try:
-                return _score_batch(
-                    batch,
-                    replicas[replica_idx],
-                    devices[replica_idx],
-                    config,
-                    cross_entropy,
-                )
-            finally:
-                idle_replicas.put(replica_idx)
-
-        results = {}
-        with ThreadPoolExecutor(max_workers=len(replicas)) as pool:
-            for name, texts in columns:
-                print(f"Scoring column '{name}'...")
-
-                nonempty = [i for i, text in enumerate(texts) if text and text.strip()]
-                encoded = (
-                    tokenizer(
-                        [texts[i] for i in nonempty],
-                        truncation=True,
-                        max_length=config.max_model_len,
-                    )["input_ids"]
-                    if nonempty
-                    else []
-                )
-                tokens = [np.zeros(0, dtype=np.int64)] * len(texts)
-                for i, ids in zip(nonempty, encoded):
-                    tokens[i] = np.asarray(ids, dtype=np.int64)
-
-                scoreable = sorted(
-                    (i for i, ids in enumerate(tokens) if ids.shape[0] >= 2),
-                    key=lambda i: tokens[i].shape[0],
-                    reverse=True,
-                )
-                batches: list[list[int]] = []
-                batch: list[int] = []
-                batch_max_len = 0
-                for i in scoreable:
-                    new_max = max(batch_max_len, tokens[i].shape[0])
-                    if batch and new_max * (len(batch) + 1) > config.max_batch_tokens:
-                        batches.append(batch)
-                        batch, new_max = [], tokens[i].shape[0]
-                    batch.append(i)
-                    batch_max_len = new_max
-                if batch:
-                    batches.append(batch)
-
-                sums = np.zeros((len(tokens), len(checkpoints)), dtype=SUMS)
-                futures = {
-                    pool.submit(run_batch, [tokens[i] for i in rows]): rows
-                    for rows in batches
-                }
-                scored = 0
-                next_report = PROGRESS_PRINT_INTERVAL
-                for future in as_completed(futures):
-                    rows = futures[future]
-                    sums[rows] = future.result()
-                    scored += len(rows)
-                    if scored >= next_report or scored == len(scoreable):
-                        next_report = scored + PROGRESS_PRINT_INTERVAL
-                        print(
-                            f"  Progress [{name}]: {scored}/{len(scoreable)} texts scored",
-                            flush=True,
-                        )
-                results[name] = sums
-        return results
-    finally:
-        print("Freeing scoring model(s)...")
-        replicas.clear()
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        print("Scoring model(s) freed.")
-
-
 def _load_model(model_name: str, config: LLMStatConfig, device: str) -> torch.nn.Module:
     """Load causal language model onto specified device.
 
@@ -334,3 +200,137 @@ def _score_batch(
     if cross_entropy:
         sums["ce"][:, 1] = ce_totals.cpu().numpy()
     return sums
+
+
+def score_columns(
+    checkpoints: list[str],
+    config: LLMStatConfig,
+    columns: Iterable[tuple[str, list[str]]],
+) -> dict[str, np.ndarray]:
+    """Score dataset columns using loaded model checkpoints across available devices.
+
+    Args:
+        checkpoints: List of HuggingFace model IDs or local paths.
+        config: Pipeline configuration providing device and scoring settings.
+        columns: Iterable of (column name, list of text samples) tuples.
+
+    Returns:
+        Dictionary mapping column names to structured SUMS NumPy arrays.
+
+    Raises:
+        ValueError: If checkpoint count is unsupported or model vocabs mismatch.
+    """
+    if len(checkpoints) not in (1, 2):
+        raise ValueError(f"Scoring supports 1 or 2 checkpoints, got {len(checkpoints)}.")
+
+    if isinstance(config.devices, list):
+        devices = config.devices
+    elif torch.cuda.is_available():
+        devices = [f"cuda:{i}" for i in range(torch.cuda.device_count())]
+    else:
+        devices = ["cpu"]
+
+    cross_entropy = len(checkpoints) == 2
+
+    replicas: list[list[torch.nn.Module]] = []
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(checkpoints[0])
+        print(f"Loading {len(checkpoints)} checkpoint(s) onto {len(devices)} device(s): {devices}")
+        for device in devices:
+            replicas.append(
+                [_load_model(checkpoint, config, device) for checkpoint in checkpoints]
+            )
+
+        vocabs = [m.get_output_embeddings().weight.shape[0] for m in replicas[0]]
+        if len(set(vocabs)) > 1:
+            raise ValueError(
+                f"Vocab size mismatch between co-resident models: {vocabs}. "
+                f"Cross-model scoring requires a shared tokenizer/vocab."
+            )
+        if config.topk_threshold > min(vocabs):
+            raise ValueError(
+                f"topk_threshold ({config.topk_threshold}) exceeds the model "
+                f"vocab size ({min(vocabs)})."
+            )
+
+        idle_replicas: queue.SimpleQueue[int] = queue.SimpleQueue()
+        for replica_idx in range(len(replicas)):
+            idle_replicas.put(replica_idx)
+
+        def run_batch(batch: list[np.ndarray]) -> np.ndarray:
+            """Score one batch on whichever replica is idle."""
+            replica_idx = idle_replicas.get()
+            try:
+                return _score_batch(
+                    batch,
+                    replicas[replica_idx],
+                    devices[replica_idx],
+                    config,
+                    cross_entropy,
+                )
+            finally:
+                idle_replicas.put(replica_idx)
+
+        results = {}
+        with ThreadPoolExecutor(max_workers=len(replicas)) as pool:
+            for name, texts in columns:
+                print(f"Scoring column '{name}'...")
+
+                nonempty = [i for i, text in enumerate(texts) if text and text.strip()]
+                encoded = (
+                    tokenizer(
+                        [texts[i] for i in nonempty],
+                        truncation=True,
+                        max_length=config.max_model_len,
+                    )["input_ids"]
+                    if nonempty
+                    else []
+                )
+                tokens = [np.zeros(0, dtype=np.int64)] * len(texts)
+                for i, ids in zip(nonempty, encoded):
+                    tokens[i] = np.asarray(ids, dtype=np.int64)
+
+                scoreable = sorted(
+                    (i for i, ids in enumerate(tokens) if ids.shape[0] >= 2),
+                    key=lambda i: tokens[i].shape[0],
+                    reverse=True,
+                )
+                batches: list[list[int]] = []
+                batch: list[int] = []
+                batch_max_len = 0
+                for i in scoreable:
+                    new_max = max(batch_max_len, tokens[i].shape[0])
+                    if batch and new_max * (len(batch) + 1) > config.max_batch_tokens:
+                        batches.append(batch)
+                        batch, new_max = [], tokens[i].shape[0]
+                    batch.append(i)
+                    batch_max_len = new_max
+                if batch:
+                    batches.append(batch)
+
+                sums = np.zeros((len(tokens), len(checkpoints)), dtype=SUMS)
+                futures = {
+                    pool.submit(run_batch, [tokens[i] for i in rows]): rows
+                    for rows in batches
+                }
+                scored = 0
+                next_report = PROGRESS_PRINT_INTERVAL
+                for future in as_completed(futures):
+                    rows = futures[future]
+                    sums[rows] = future.result()
+                    scored += len(rows)
+                    if scored >= next_report or scored == len(scoreable):
+                        next_report = scored + PROGRESS_PRINT_INTERVAL
+                        print(
+                            f"  Progress [{name}]: {scored}/{len(scoreable)} texts scored",
+                            flush=True,
+                        )
+                results[name] = sums
+        return results
+    finally:
+        print("Freeing scoring model(s)...")
+        replicas.clear()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print("Scoring model(s) freed.")
