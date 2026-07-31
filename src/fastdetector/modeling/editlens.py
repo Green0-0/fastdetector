@@ -5,6 +5,8 @@ import re
 import emoji
 import numpy as np
 import torch
+from peft import PeftModel
+from transformers import BitsAndBytesConfig
 from datasets import Dataset
 from huggingface_hub import hf_hub_download
 from safetensors import safe_open
@@ -147,9 +149,6 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
     is_qlora = is_qlora_checkpoint(checkpoint_path)
 
     if is_qlora:
-        from peft import PeftModel
-        from transformers import BitsAndBytesConfig
-
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
