@@ -192,19 +192,7 @@ class DistanceStatConfig(BaseModel):
 
 
 class LLMStatConfig(BaseModel):
-    """Configuration for exact LLM-based metric extraction (llm_stats.py).
-
-    Models are loaded in-process via transformers; metrics are computed from
-    exact full-vocabulary distributions with fused reductions (no logprobs
-    are stored). Batch-id sharding splits the dataset across machines (one
-    shard per run, as elsewhere in the pipeline); within a run, the
-    checkpoint(s) are replicated onto every configured GPU and all replicas
-    work that single shard in parallel.
-
-    Also passed straight to :mod:`fastdetector.statistics.llm_scoring`, which
-    reads the scoring and batching fields below; this module stays free of
-    torch imports so that loading a config never pays for it.
-    """
+    """Configuration for exact LLM-based metric extraction (llm_stats.py)."""
     columns_to_score: List[str]
 
     # Nucleus probability mass threshold for top-p outlier detection.
@@ -243,9 +231,7 @@ class LLMStatConfig(BaseModel):
     binoculars: bool
     fastdetectgpt: bool
 
-    # Model checkpoints and their aligned output-column suffixes. With
-    # binoculars enabled, the first checkpoint is the observer and the second
-    # the performer, and both must share a tokenizer/vocab.
+    # Model checkpoints and their aligned output-column suffixes
     llm_checkpoints: List[str]
     col_suffixes: List[str]
 

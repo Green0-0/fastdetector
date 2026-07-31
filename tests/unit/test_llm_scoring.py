@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.statistics import llm_scoring
-from fastdetector.statistics.llm_scoring import SUMS, _score_tokens, score_columns
+from fastdetector.statistics.llm_scoring import SUMS, score_columns
 
 TOPK = 5
 TOPP = 0.9
@@ -40,10 +40,32 @@ def make_settings(**overrides) -> LLMStatConfig:
     return LLMStatConfig(**{**base, **overrides})
 
 
-def score(token_lists, replicas, config=None) -> np.ndarray:
-    """Score token lists on CPU replicas, defaulting the config."""
-    config = config or make_settings()
-    return _score_tokens(token_lists, replicas, ["cpu"] * len(replicas), config)
+def text_for(ids) -> str:
+    """Render token ids as text the tiny tokenizer maps straight back to them."""
+    return " ".join(f"w{int(i)}" for i in ids)
+
+
+@pytest.fixture
+def score(monkeypatch, tiny_tokenizer):
+    """Score token-id arrays against injected models, via ``score_columns``.
+
+    Substituting the loader is what lets the real scoring path run against
+    in-process models instead of a downloaded checkpoint.
+    """
+    def _score(token_lists, replicas, config=None) -> np.ndarray:
+        config = config or make_settings(devices=["cpu"] * len(replicas))
+        models = iter(replicas[0] * len(replicas))
+        monkeypatch.setattr(llm_scoring, "_load_model", lambda *a, **k: next(models))
+        monkeypatch.setattr(
+            llm_scoring.AutoTokenizer,
+            "from_pretrained",
+            classmethod(lambda cls, *a, **k: tiny_tokenizer),
+        )
+        checkpoints = [f"model/{i}" for i in range(len(replicas[0]))]
+        texts = [text_for(ids) for ids in token_lists]
+        return score_columns(checkpoints, config, [("text", texts)])["text"]
+
+    return _score
 
 
 def reference_sums(model, ids: np.ndarray, config: LLMStatConfig) -> np.ndarray:
@@ -169,8 +191,8 @@ def test_loading_rejects_anything_but_a_float_dtype(name):
 # --------------------------------------------------------------------------
 
 
-def test_sums_match_a_naive_reference(tiny_lm):
-    """Test that _score_tokens matches naive reference calculation exactly."""
+def test_sums_match_a_naive_reference(score, tiny_lm):
+    """Test that scoring matches the naive reference calculation exactly."""
     config = make_settings()
     ids = np.array([3, 9, 14, 2, 7, 30, 1], dtype=np.int64)
 
@@ -185,45 +207,45 @@ def test_sums_match_a_naive_reference(tiny_lm):
     assert got["topk"] == want["topk"]
 
 
-def test_scored_columns_use_the_declared_dtype(tiny_lm):
+def test_scored_columns_use_the_declared_dtype(score, tiny_lm):
     """Test that output arrays use SUMS structured NumPy dtype."""
     sums = score([np.arange(2, 12, dtype=np.int64)], [[tiny_lm]])
     assert sums.dtype == SUMS
     assert sums.shape == (1, 1)
 
 
-def test_position_count_is_one_less_than_the_token_count(tiny_lm):
+def test_position_count_is_one_less_than_the_token_count(score, tiny_lm):
     """Test that position count n equals token length minus 1."""
     assert score([np.arange(2, 12, dtype=np.int64)], [[tiny_lm]])["n"][0, 0] == 9
 
 
-def test_mean_entropy_is_non_negative_and_bounded_by_log_vocab(tiny_lm):
+def test_mean_entropy_is_non_negative_and_bounded_by_log_vocab(score, tiny_lm):
     """Test mean entropy bounds relative to log vocabulary size."""
     vocab = tiny_lm.get_output_embeddings().weight.shape[0]
     sums = score([np.arange(2, 12, dtype=np.int64)], [[tiny_lm]])[0, 0]
     assert 0 <= sums["entropy"] / sums["n"] <= np.log(vocab) + 1e-4
 
 
-def test_total_logprob_is_negative(tiny_lm):
+def test_total_logprob_is_negative(score, tiny_lm):
     """Test that total log probability is less than or equal to zero."""
     assert score([np.arange(2, 12, dtype=np.int64)], [[tiny_lm]])["lp"][0, 0] <= 0
 
 
-def test_total_variance_is_non_negative(tiny_lm):
+def test_total_variance_is_non_negative(score, tiny_lm):
     """Test that total variance stays non-negative across tokens."""
     # fastdetectgpt takes a square root of this, so the reduction clamps the
     # rounding artefact where E[(log p)^2] lands just below H^2.
     assert score([np.arange(2, 12, dtype=np.int64)], [[tiny_lm]])["variance"][0, 0] >= 0
 
 
-def test_outlier_counts_never_exceed_the_position_count(tiny_lm):
+def test_outlier_counts_never_exceed_the_position_count(score, tiny_lm):
     """Test outlier counts are bounded between 0 and position count n."""
     sums = score([np.arange(2, 20, dtype=np.int64)], [[tiny_lm]])[0, 0]
     assert 0 <= sums["topp"] <= sums["n"]
     assert 0 <= sums["topk"] <= sums["n"]
 
 
-def test_padding_does_not_change_the_scores(tiny_lm):
+def test_padding_does_not_change_the_scores(score, tiny_lm):
     """Test that sequence padding inside batch does not alter sequence scores."""
     config = make_settings(max_batch_tokens=4096)
     long_ids = np.array([3, 9, 14, 2, 7, 30, 1], dtype=np.int64)
@@ -236,7 +258,7 @@ def test_padding_does_not_change_the_scores(tiny_lm):
     assert padded["entropy"] == pytest.approx(alone["entropy"], abs=2e-3)
 
 
-def test_head_chunk_size_does_not_change_the_scores(tiny_lm):
+def test_head_chunk_size_does_not_change_the_scores(score, tiny_lm):
     """Test that logit reduction chunk size does not alter score results."""
     ids = [np.arange(2, 20, dtype=np.int64)]
     small = score(ids, [[tiny_lm]], make_settings(head_chunk_size=1))
@@ -244,7 +266,7 @@ def test_head_chunk_size_does_not_change_the_scores(tiny_lm):
     assert small["lp"][0, 0] == pytest.approx(large["lp"][0, 0], abs=1e-4)
 
 
-def test_batch_size_does_not_change_the_scores(tiny_lm):
+def test_batch_size_does_not_change_the_scores(score, tiny_lm):
     """Test that varying batch size produces identical score results."""
     texts = [np.arange(2, 2 + n, dtype=np.int64) for n in (12, 7, 5, 9)]
     one_at_a_time = score(texts, [[tiny_lm]], make_settings(max_batch_tokens=1))
@@ -252,7 +274,7 @@ def test_batch_size_does_not_change_the_scores(tiny_lm):
     assert one_at_a_time["lp"] == pytest.approx(all_at_once["lp"], abs=2e-3)
 
 
-def test_results_are_returned_in_input_order_despite_length_sorting(tiny_lm):
+def test_results_are_returned_in_input_order_despite_length_sorting(score, tiny_lm):
     """Test that output scores retain input order despite internal sorting."""
     # Batches are planned longest-first; a bug here silently attaches one row's
     # scores to another row's text.
@@ -269,7 +291,7 @@ def test_results_are_returned_in_input_order_despite_length_sorting(tiny_lm):
         assert sums["lp"][i, 0] == pytest.approx(want["lp"], abs=2e-3)
 
 
-def test_texts_with_fewer_than_two_tokens_score_as_all_zero(tiny_lm):
+def test_texts_with_fewer_than_two_tokens_score_as_all_zero(score, tiny_lm):
     """Test that short texts (<2 tokens) return all zero scores."""
     sums = score(
         [np.zeros(0, dtype=np.int64), np.array([7], dtype=np.int64)], [[tiny_lm]]
@@ -279,14 +301,14 @@ def test_texts_with_fewer_than_two_tokens_score_as_all_zero(tiny_lm):
         assert sums[name].tolist() == [[0], [0]]
 
 
-def test_scoring_nothing_returns_no_rows(tiny_lm):
+def test_scoring_nothing_returns_no_rows(score, tiny_lm):
     """Test scoring empty text list returns 0-row SUMS array."""
     sums = score([], [[tiny_lm]])
     assert sums.shape == (0, 1)
     assert sums.dtype == SUMS
 
 
-def test_scoring_accepts_plain_python_lists(tiny_lm):
+def test_scoring_accepts_plain_python_lists(score, tiny_lm):
     """Test that scoring accepts plain Python lists of token IDs."""
     assert score([[2, 3, 4]], [[tiny_lm]])["n"][0, 0] == 2
 
@@ -296,7 +318,7 @@ def test_scoring_accepts_plain_python_lists(tiny_lm):
 # --------------------------------------------------------------------------
 
 
-def test_two_models_produce_aligned_per_model_rows(tiny_lm_pair):
+def test_two_models_produce_aligned_per_model_rows(score, tiny_lm_pair):
     """Test that two co-resident models produce aligned output rows for each model."""
     config = make_settings()
     ids = np.array([3, 9, 14, 2, 7], dtype=np.int64)
@@ -308,7 +330,7 @@ def test_two_models_produce_aligned_per_model_rows(tiny_lm_pair):
         assert sums["lp"][0, model_index] == pytest.approx(want["lp"], abs=1e-3)
 
 
-def test_cross_entropy_matches_the_naive_reference(tiny_lm_pair):
+def test_cross_entropy_matches_the_naive_reference(score, tiny_lm_pair):
     """Test cross entropy output matches reference cross entropy calculation."""
     ids = np.array([3, 9, 14, 2, 7], dtype=np.int64)
     sums = score([ids], [tiny_lm_pair])
@@ -318,7 +340,7 @@ def test_cross_entropy_matches_the_naive_reference(tiny_lm_pair):
     assert sums["ce"][0, 0] == 0.0
 
 
-def test_a_single_model_run_leaves_the_cross_entropy_at_zero(tiny_lm):
+def test_a_single_model_run_leaves_the_cross_entropy_at_zero(score, tiny_lm):
     """Test single model scoring leaves cross-entropy at 0.0."""
     # Nothing loads a second checkpoint except binoculars, so a one-model run
     # has no cross-model term to accumulate.
@@ -326,7 +348,7 @@ def test_a_single_model_run_leaves_the_cross_entropy_at_zero(tiny_lm):
     assert sums["ce"].tolist() == [[0.0]]
 
 
-def test_cross_entropy_is_at_least_the_observer_entropy(tiny_lm_pair):
+def test_cross_entropy_is_at_least_the_observer_entropy(score, tiny_lm_pair):
     """Test that cross-entropy H(p, q) is at least observer entropy H(p)."""
     # H(p, q) >= H(p), with equality only when the two distributions agree.
     sums = score([np.arange(2, 14, dtype=np.int64)], [tiny_lm_pair])
@@ -338,7 +360,7 @@ def test_cross_entropy_is_at_least_the_observer_entropy(tiny_lm_pair):
 # --------------------------------------------------------------------------
 
 
-def test_multiple_replicas_produce_the_same_results_as_one(make_causal_lm):
+def test_multiple_replicas_produce_the_same_results_as_one(score, make_causal_lm):
     """Test that multi-replica thread dispatch yields identical scores to single replica."""
     # Two replicas of identical weights: the threaded dispatch path must not
     # reorder or corrupt results.
@@ -400,9 +422,7 @@ def test_score_columns_returns_one_array_per_column(fake_loading):
     assert scored["first"].dtype == SUMS
 
 
-def test_score_columns_matches_scoring_the_tokens_directly(
-    fake_loading, make_causal_lm, tiny_tokenizer
-):
+def test_score_columns_matches_scoring_the_tokens_directly(score, fake_loading, make_causal_lm, tiny_tokenizer):
     """Test score_columns results match direct token scoring."""
     config = make_settings()
     text = "w1 w2 w3 w4"

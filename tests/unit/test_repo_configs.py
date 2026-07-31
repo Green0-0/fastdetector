@@ -301,7 +301,7 @@ def committed_stat_columns(repo_root) -> set[str]:
     names, EditLens appends its configured suffix, and llm_stats writes
     ``<column>_<metric><col_suffix>`` plus a suffix-less binoculars column.
     """
-    from llm_stats import output_columns
+    from llm_stats import PER_MODEL_METRICS
 
     distance = DistanceStatConfig(**load_toml(str(repo_root / "config" / "distance_stats.toml")))
     llm = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
@@ -322,7 +322,14 @@ def committed_stat_columns(repo_root) -> set[str]:
         }
 
     for col in llm.columns_to_score:
-        columns |= output_columns(col, llm.col_suffixes, llm)
+        columns |= {
+            f"{col}_{metric}{suffix}"
+            for suffix in llm.col_suffixes
+            for metric in PER_MODEL_METRICS
+            if getattr(llm, metric)
+        }
+        if llm.binoculars:
+            columns.add(f"{col}_binoculars")
     return columns
 
 
