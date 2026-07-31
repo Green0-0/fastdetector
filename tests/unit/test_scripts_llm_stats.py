@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 
 from fastdetector.frontend.toml_config import LLMStatConfig
-from fastdetector.statistics.exact_scorer import TextScores
+from fastdetector.statistics.exact_scorer import SUMS
 from llm_stats import (
     BINOCULARS_STEM,
     PER_MODEL_METRICS,
     build_compute_plan,
     compute_metric_columns,
     metric_column,
-    select_pass_columns,
+    output_columns,
 )
 
 ALL_FLAGS = {
@@ -35,17 +35,24 @@ def make_config(**overrides) -> LLMStatConfig:
     return LLMStatConfig(**{**base, **overrides})
 
 
-def make_scores(num_models: int = 1, length: int = 4, with_ce: bool = False) -> TextScores:
-    """Build TextScores with plausible per-position statistics."""
+def make_sums(rows: int = 2, num_models: int = 1, with_ce: bool = False) -> np.ndarray:
+    """Build a column of plausible summed scores, shaped as the scorer returns."""
     rng = np.random.default_rng(0)
-    return TextScores(
-        token_lps=[rng.uniform(-5, 0, length).astype(np.float32) for _ in range(num_models)],
-        entropies=[rng.uniform(0, 3, length).astype(np.float32) for _ in range(num_models)],
-        e_lp2=[rng.uniform(3, 9, length).astype(np.float32) for _ in range(num_models)],
-        topp_outlier=[rng.random(length) > 0.5 for _ in range(num_models)],
-        topk_outlier=[rng.random(length) > 0.5 for _ in range(num_models)],
-        cross_entropies=rng.uniform(0, 3, length).astype(np.float32) if with_ce else None,
-    )
+    sums = np.zeros((rows, num_models), dtype=SUMS)
+    sums["n"] = rng.integers(4, 20, size=(rows, num_models))
+    sums["lp"] = -rng.uniform(1, 40, size=(rows, num_models))
+    sums["entropy"] = rng.uniform(1, 30, size=(rows, num_models))
+    sums["variance"] = rng.uniform(1, 10, size=(rows, num_models))
+    sums["topp"] = rng.integers(0, 4, size=(rows, num_models))
+    sums["topk"] = rng.integers(0, 4, size=(rows, num_models))
+    if with_ce:
+        sums["ce"][:, -1] = rng.uniform(1, 30, size=rows)
+    return sums
+
+
+def all_stems() -> list[str]:
+    """Every per-model output column stem."""
+    return [stem for stem, _ in PER_MODEL_METRICS.values()]
 
 
 # --------------------------------------------------------------------------
@@ -55,12 +62,12 @@ def make_scores(num_models: int = 1, length: int = 4, with_ce: bool = False) -> 
 
 def test_every_metric_flag_exists_on_the_config():
     config = make_config()
-    for metric in PER_MODEL_METRICS:
-        assert hasattr(config, metric.flag)
+    for flag in PER_MODEL_METRICS:
+        assert hasattr(config, flag)
 
 
 def test_metric_stems_are_unique():
-    stems = [metric.stem for metric in PER_MODEL_METRICS]
+    stems = all_stems()
     assert len(set(stems)) == len(stems)
     assert BINOCULARS_STEM not in stems
 
@@ -99,9 +106,7 @@ def test_plan_skips_columns_that_already_exist():
 
 def test_plan_omits_a_fully_computed_column():
     config = make_config(columns_to_score=["original"])
-    complete = ["original"] + [
-        metric_column("original", metric.stem, "_a") for metric in PER_MODEL_METRICS
-    ]
+    complete = ["original"] + [metric_column("original", stem, "_a") for stem in all_stems()]
     assert build_compute_plan(complete, config) == {}
 
 
@@ -165,98 +170,7 @@ def test_plan_is_empty_when_no_metrics_are_enabled():
 
 
 # --------------------------------------------------------------------------
-# compute_metric_columns
-# --------------------------------------------------------------------------
-
-
-def test_metric_columns_are_computed_for_every_row():
-    needed = {"original_perplexity_a", "original_entropy_a"}
-    scored = [make_scores(), make_scores(length=6)]
-    result = compute_metric_columns(scored, "original", needed, ["_a"])
-    assert set(result) == needed
-    assert all(len(values) == 2 for values in result.values())
-
-
-def test_only_the_requested_columns_are_produced():
-    result = compute_metric_columns(
-        [make_scores()], "original", {"original_entropy_a"}, ["_a"]
-    )
-    assert set(result) == {"original_entropy_a"}
-
-
-def test_metric_values_match_the_underlying_statistic():
-    from fastdetector.statistics import statistics_llm
-
-    scores = make_scores()
-    result = compute_metric_columns(
-        [scores], "original", {"original_perplexity_a"}, ["_a"]
-    )
-    assert result["original_perplexity_a"][0] == pytest.approx(
-        statistics_llm.perplexity(scores.token_lps[0])
-    )
-
-
-def test_each_model_reads_its_own_slot():
-    scores = make_scores(num_models=2)
-    result = compute_metric_columns(
-        [scores],
-        "original",
-        {"original_perplexity_a", "original_perplexity_b"},
-        ["_a", "_b"],
-    )
-    assert result["original_perplexity_a"] != result["original_perplexity_b"]
-
-
-def test_binoculars_uses_the_performer_and_the_cross_entropies():
-    from fastdetector.statistics import statistics_llm
-
-    scores = make_scores(num_models=2, with_ce=True)
-    result = compute_metric_columns(
-        [scores], "original", {"original_binoculars"}, ["_obs", "_perf"]
-    )
-    # Model 1 is the performer, per the checkpoint order in the config.
-    assert result["original_binoculars"][0] == pytest.approx(
-        statistics_llm.binoculars_score(scores.token_lps[1], scores.cross_entropies)
-    )
-
-
-def test_binoculars_is_skipped_when_not_requested():
-    scores = make_scores(num_models=2, with_ce=True)
-    result = compute_metric_columns(
-        [scores], "original", {"original_perplexity_a"}, ["_a", "_b"]
-    )
-    assert "original_binoculars" not in result
-
-
-def test_empty_texts_produce_the_documented_sentinels():
-    empty = TextScores.empty(num_models=1, with_cross_entropy=False)
-    needed = {
-        metric_column("original", metric.stem, "_a") for metric in PER_MODEL_METRICS
-    }
-    result = compute_metric_columns([empty], "original", needed, ["_a"])
-    assert math.isnan(result["original_perplexity_a"][0])
-    assert math.isnan(result["original_topp_outlier_a"][0])
-    assert result["original_entropy_a"][0] == 0.0
-    assert result["original_fastdetectgpt_a"][0] == 0.0
-
-
-def test_scoring_no_rows_produces_empty_columns():
-    result = compute_metric_columns([], "original", {"original_entropy_a"}, ["_a"])
-    assert result == {"original_entropy_a": []}
-
-
-def test_plan_and_compute_agree_on_column_names():
-    # The plan decides what to compute and the aggregator decides what to name
-    # the output; a mismatch would recompute the same metric on every run.
-    config = make_config(columns_to_score=["original"])
-    plan = build_compute_plan(["original"], config)
-    result = compute_metric_columns([make_scores()], "original", plan["original"], ["_a"])
-    assert set(result) == plan["original"]
-    assert build_compute_plan(["original", *result], config) == {}
-
-
-# --------------------------------------------------------------------------
-# select_pass_columns
+# output_columns
 # --------------------------------------------------------------------------
 
 
@@ -266,9 +180,8 @@ def test_a_pass_claims_only_its_own_suffix():
         llm_checkpoints=["a/model", "b/model"],
         col_suffixes=["_a", "_b"],
     )
-    needed = build_compute_plan(["original"], config)["original"]
-    assert select_pass_columns(needed, "original", ["_a"]) == {
-        metric_column("original", metric.stem, "_a") for metric in PER_MODEL_METRICS
+    assert output_columns("original", ["_a"], config) == {
+        metric_column("original", stem, "_a") for stem in all_stems()
     }
 
 
@@ -279,8 +192,8 @@ def test_the_passes_together_cover_every_planned_column():
         col_suffixes=["_a", "_b"],
     )
     needed = build_compute_plan(["original"], config)["original"]
-    covered = select_pass_columns(needed, "original", ["_a"]) | select_pass_columns(
-        needed, "original", ["_b"]
+    covered = output_columns("original", ["_a"], config) | output_columns(
+        "original", ["_b"], config
     )
     assert covered == needed
 
@@ -293,8 +206,104 @@ def test_a_co_resident_pass_claims_the_binoculars_column():
         col_suffixes=["_a", "_b"],
     )
     needed = build_compute_plan(["original"], config)["original"]
-    assert select_pass_columns(needed, "original", ["_a", "_b"]) == needed
+    assert output_columns("original", ["_a", "_b"], config) == needed
 
 
 def test_a_pass_with_nothing_left_to_do_selects_nothing():
-    assert select_pass_columns({"original_perplexity_b"}, "original", ["_a"]) == set()
+    config = make_config(columns_to_score=["original"])
+    assert {"original_perplexity_b"} & output_columns("original", ["_a"], config) == set()
+
+
+def test_disabled_metrics_are_never_claimed_by_a_pass():
+    config = make_config(columns_to_score=["original"], entropy=False)
+    assert "original_entropy_a" not in output_columns("original", ["_a"], config)
+
+
+# --------------------------------------------------------------------------
+# compute_metric_columns
+# --------------------------------------------------------------------------
+
+
+def test_metric_columns_are_computed_for_every_row():
+    needed = {"original_perplexity_a", "original_entropy_a"}
+    result = compute_metric_columns(make_sums(rows=3), "original", needed, ["_a"])
+    assert set(result) == needed
+    assert all(len(values) == 3 for values in result.values())
+
+
+def test_only_the_requested_columns_are_produced():
+    result = compute_metric_columns(
+        make_sums(), "original", {"original_entropy_a"}, ["_a"]
+    )
+    assert set(result) == {"original_entropy_a"}
+
+
+def test_metric_values_match_the_underlying_statistic():
+    from fastdetector.statistics import statistics_llm
+
+    sums = make_sums()
+    result = compute_metric_columns(sums, "original", {"original_perplexity_a"}, ["_a"])
+    assert result["original_perplexity_a"] == pytest.approx(
+        statistics_llm.perplexity(sums[:, 0]).tolist()
+    )
+
+
+def test_each_model_reads_its_own_slot():
+    sums = make_sums(num_models=2)
+    result = compute_metric_columns(
+        sums,
+        "original",
+        {"original_perplexity_a", "original_perplexity_b"},
+        ["_a", "_b"],
+    )
+    assert result["original_perplexity_a"] != result["original_perplexity_b"]
+
+
+def test_binoculars_uses_the_performer_row():
+    from fastdetector.statistics import statistics_llm
+
+    sums = make_sums(num_models=2, with_ce=True)
+    result = compute_metric_columns(
+        sums, "original", {"original_binoculars"}, ["_obs", "_perf"]
+    )
+    # Model 1 is the performer, per the checkpoint order in the config, and the
+    # scorer accumulates the cross-entropy onto that row.
+    assert result["original_binoculars"] == pytest.approx(
+        statistics_llm.binoculars_score(sums[:, 1]).tolist()
+    )
+
+
+def test_binoculars_is_skipped_when_not_requested():
+    sums = make_sums(num_models=2, with_ce=True)
+    result = compute_metric_columns(
+        sums, "original", {"original_perplexity_a"}, ["_a", "_b"]
+    )
+    assert "original_binoculars" not in result
+
+
+def test_empty_texts_produce_the_documented_sentinels():
+    empty = np.zeros((1, 1), dtype=SUMS)
+    needed = {metric_column("original", stem, "_a") for stem in all_stems()}
+    result = compute_metric_columns(empty, "original", needed, ["_a"])
+    assert math.isnan(result["original_perplexity_a"][0])
+    assert math.isnan(result["original_topp_outlier_a"][0])
+    assert math.isnan(result["original_topk_outlier_a"][0])
+    assert result["original_entropy_a"][0] == 0.0
+    assert result["original_fastdetectgpt_a"][0] == 0.0
+
+
+def test_scoring_no_rows_produces_empty_columns():
+    result = compute_metric_columns(
+        np.zeros((0, 1), dtype=SUMS), "original", {"original_entropy_a"}, ["_a"]
+    )
+    assert result == {"original_entropy_a": []}
+
+
+def test_plan_and_compute_agree_on_column_names():
+    # The plan decides what to compute and the aggregator decides what to name
+    # the output; a mismatch would recompute the same metric on every run.
+    config = make_config(columns_to_score=["original"])
+    plan = build_compute_plan(["original"], config)
+    result = compute_metric_columns(make_sums(), "original", plan["original"], ["_a"])
+    assert set(result) == plan["original"]
+    assert build_compute_plan(["original", *result], config) == {}

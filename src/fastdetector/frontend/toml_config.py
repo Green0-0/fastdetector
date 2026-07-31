@@ -1,4 +1,4 @@
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Any, Optional, List, Union
 
 from fastdetector.frontend.engine_config import EngineConfig
@@ -191,6 +191,65 @@ class DistanceStatConfig(BaseModel):
     reranker_model: str
 
 
+class ScorerSettings(BaseModel):
+    """Settings controlling model scoring, batching, and device configuration.
+
+    Consumed by :mod:`fastdetector.statistics.exact_scorer`, and declared here
+    so it can nest inside :class:`LLMStatConfig` and be validated when the TOML
+    is loaded. It stays free of torch imports for that reason; device
+    resolution lives with the scorer.
+    """
+
+    # Nucleus probability mass threshold for top-p outlier detection.
+    topp_threshold: float = Field(default=0.95, gt=0.0, le=1.0)
+
+    # Rank threshold for top-k outlier detection.
+    topk_threshold: int = Field(default=50, ge=1)
+
+    # Maximum tokens per text; longer texts are truncated.
+    max_model_len: int = Field(default=16000, ge=1)
+
+    # Cap on padded tokens (batch_size * max_len) per forward pass.
+    max_batch_tokens: int = Field(default=16384, ge=1)
+
+    # Positions per LM-head/log-softmax reduction chunk. Peak activation memory
+    # scales with head_chunk_size * vocab_size (per co-resident model).
+    head_chunk_size: int = Field(default=512, ge=1)
+
+    # Model dtype: any floating-point torch dtype name, e.g. "bfloat16".
+    dtype: str = "bfloat16"
+
+    # Attention backend. None tries flash_attention_2, then falls back to sdpa.
+    attn_implementation: Optional[str] = None
+
+    # Devices to score on. "auto" replicates the checkpoint(s) onto every
+    # visible CUDA device (falling back to CPU); an explicit list such as
+    # ["cuda:0", "cuda:1"] selects specific GPUs. With binoculars enabled,
+    # each device holds both checkpoints.
+    devices: Union[str, List[str]] = "auto"
+
+    # Whether to compute observer-performer cross-entropy. Set from
+    # LLMStatConfig.binoculars_score rather than configured directly.
+    compute_cross_entropy: bool = False
+
+    @model_validator(mode="after")
+    def normalize_devices(self) -> "ScorerSettings":
+        """Wrap a single device string in a list, keeping "auto" as-is.
+
+        Returns:
+            Self instance if validation succeeds.
+
+        Raises:
+            ValueError: If devices is an empty list.
+        """
+        if isinstance(self.devices, str):
+            if self.devices != "auto":
+                self.devices = [self.devices]
+        elif not self.devices:
+            raise ValueError('devices must be "auto" or a non-empty list of device strings')
+        return self
+
+
 class LLMStatConfig(BaseModel):
     """Configuration for exact LLM-based metric extraction (llm_stats.py).
 
@@ -203,26 +262,8 @@ class LLMStatConfig(BaseModel):
     """
     columns_to_score: List[str]
 
-    # Maximum tokens per text; longer texts are truncated.
-    max_model_len: int = 16000
-
-    # Cap on padded tokens (batch_size * max_len) per forward pass.
-    max_batch_tokens: int = 16384
-
-    # Positions per LM-head/log-softmax reduction chunk.
-    head_chunk_size: int = 512
-
-    # Model dtype: "bfloat16", "float16", or "float32".
-    dtype: str = "bfloat16"
-
-    # Attention backend. None tries flash_attention_2, then falls back to sdpa.
-    attn_implementation: Optional[str] = None
-
-    # Devices to score on. "auto" replicates the checkpoint(s) onto every
-    # visible CUDA device (falling back to CPU); an explicit list such as
-    # ["cuda:0", "cuda:1"] selects specific GPUs. With binoculars enabled,
-    # each device holds both checkpoints.
-    devices: Union[str, List[str]] = "auto"
+    # How the scorer loads models and sizes its batches.
+    scorer: ScorerSettings = Field(default_factory=ScorerSettings)
 
     # LLM & Generation Metrics
     perplexity: bool
@@ -232,9 +273,6 @@ class LLMStatConfig(BaseModel):
     binoculars_score: bool
     fastdetectgpt_score: bool
 
-    topp_threshold: float = 0.95
-    topk_threshold: int = 50
-
     # Model checkpoints and their aligned output-column suffixes. With
     # binoculars enabled, the first checkpoint is the observer and the second
     # the performer, and both must share a tokenizer/vocab.
@@ -243,7 +281,7 @@ class LLMStatConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_llm_settings(self) -> "LLMStatConfig":
-        """Validate alignment of LLM checkpoints, column suffixes, and binoculars configuration.
+        """Validate checkpoint/suffix alignment and wire up cross-entropy.
 
         Returns:
             Self instance if validation succeeds.
@@ -251,6 +289,9 @@ class LLMStatConfig(BaseModel):
         Raises:
             ValueError: If llm_checkpoints and col_suffixes lengths differ or binoculars requirements are unmet.
         """
+        # The cross-model term exists only to serve binoculars, so the scorer
+        # never has to be told about it separately.
+        self.scorer.compute_cross_entropy = self.binoculars_score
         if len(self.llm_checkpoints) != len(self.col_suffixes):
             raise ValueError(
                 f"Length mismatch: llm_checkpoints ({len(self.llm_checkpoints)}) "

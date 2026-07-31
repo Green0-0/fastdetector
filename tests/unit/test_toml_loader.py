@@ -93,6 +93,7 @@ def test_load_config_pair_is_generic_over_the_stage_class(data_dir, tmp_path):
                 "fastdetectgpt_score = false",
                 'llm_checkpoints = ["a/b"]',
                 'col_suffixes = ["_ab"]',
+                "[scorer]",
                 'devices = ["cuda:0"]',
             ]
         ),
@@ -100,4 +101,4 @@ def test_load_config_pair_is_generic_over_the_stage_class(data_dir, tmp_path):
     )
     _, config = load_config_pair(str(data_dir / "globals.toml"), str(stage), LLMStatConfig)
     assert isinstance(config, LLMStatConfig)
-    assert config.devices == ["cuda:0"]
+    assert config.scorer.devices == ["cuda:0"]

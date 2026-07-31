@@ -1,95 +1,112 @@
-import math
-
 import numpy as np
 
 
-def perplexity(token_lps: np.ndarray) -> float:
-    """Compute perplexity from target token log-probabilities.
+# Every metric here is a ratio of position sums, so each function takes rows of
+# the structured array the scorer returns (exact_scorer.SUMS) and returns one
+# value per row. A text with no scoreable positions has an all-zero row; the
+# guards below turn that into the documented sentinel for each metric.
+
+# Below these totals the denominator is noise rather than signal, and the
+# metric is reported as 0.0 instead of dividing by (near) zero.
+MIN_VARIANCE = 1e-6
+MIN_CROSS_ENTROPY = 1e-6
+
+
+def perplexity(sums: np.ndarray) -> np.ndarray:
+    """Compute perplexity from summed target token log-probabilities.
 
     Args:
-        token_lps: Array of token log-probabilities.
+        sums: SUMS-dtype rows.
 
     Returns:
-        Perplexity float value.
+        Perplexity per row; NaN for a text with no positions, so empty rows are
+        visibly excluded from downstream stats rather than dragging a mean
+        towards zero. Saturates to infinity rather than overflowing.
     """
-    if token_lps.size == 0:
-        return float("nan")
-    avg_logprob = float(np.mean(token_lps, dtype=np.float64))
-    try:
-        return math.exp(-avg_logprob)
-    except OverflowError:
-        return float("inf")
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        return np.exp(-sums["lp"] / sums["n"])
 
 
-def mean_entropy(entropies: np.ndarray) -> float:
+def mean_entropy(sums: np.ndarray) -> np.ndarray:
     """Compute mean next-token entropy.
 
     Args:
-        entropies: Array of position distribution entropies.
+        sums: SUMS-dtype rows.
 
     Returns:
-        Mean entropy float value.
+        Mean entropy per row; 0.0 for a text with no positions.
     """
-    if entropies.size == 0:
-        return 0.0
-    return float(np.mean(entropies, dtype=np.float64))
+    return np.where(sums["n"] > 0, sums["entropy"] / np.maximum(sums["n"], 1), 0.0)
 
 
-def outlier_percentage(outlier_flags: np.ndarray) -> float:
-    """Compute proportion of outlier token positions.
+def topp_outlier_percentage(sums: np.ndarray) -> np.ndarray:
+    """Compute the proportion of top-p nucleus outlier positions.
 
     Args:
-        outlier_flags: Boolean array of outlier flags.
+        sums: SUMS-dtype rows.
 
     Returns:
-        Proportion of outlier tokens.
+        Proportion per row; NaN for a text with no positions.
     """
-    if outlier_flags.size == 0:
-        return float("nan")
-    return float(np.mean(outlier_flags, dtype=np.float64))
+    return _fraction(sums["topp"], sums["n"])
 
 
-def fastdetectgpt_score(
-    token_lps: np.ndarray, entropies: np.ndarray, e_lp2: np.ndarray
-) -> float:
+def topk_outlier_percentage(sums: np.ndarray) -> np.ndarray:
+    """Compute the proportion of top-k rank outlier positions.
+
+    Args:
+        sums: SUMS-dtype rows.
+
+    Returns:
+        Proportion per row; NaN for a text with no positions.
+    """
+    return _fraction(sums["topk"], sums["n"])
+
+
+def fastdetectgpt_score(sums: np.ndarray) -> np.ndarray:
     """Compute FastDetectGPT conditional log-probability curvature score.
 
+    The score is the z-score of the text's total log-probability under the
+    per-position mean mu_j = -H_j and variance E[(log p)^2] - mu_j^2.
+
     Args:
-        token_lps: Target token log-probabilities.
-        entropies: Position distribution entropies.
-        e_lp2: Position second moments of log-probabilities.
+        sums: SUMS-dtype rows.
 
     Returns:
-        Curvature score float value.
+        Curvature score per row; 0.0 when the total variance is negligible,
+        which covers a text with no positions.
     """
-    if token_lps.size == 0:
-        return 0.0
-    expected_lps = -entropies.astype(np.float64)
-    variances = np.maximum(0.0, e_lp2.astype(np.float64) - expected_lps**2)
-    total_variance = float(np.sum(variances))
-    if total_variance <= 1e-6:
-        return 0.0
-    total_lp = float(np.sum(token_lps, dtype=np.float64))
-    total_expected_lp = float(np.sum(expected_lps))
-    return (total_lp - total_expected_lp) / math.sqrt(total_variance)
+    variance = sums["variance"]
+    return np.where(
+        variance > MIN_VARIANCE,
+        # sum(mu_j) = -sum(H_j), so the numerator is a sum, not a difference.
+        (sums["lp"] + sums["entropy"]) / np.sqrt(np.maximum(variance, MIN_VARIANCE)),
+        0.0,
+    )
 
 
-def binoculars_score(
-    token_lps_performer: np.ndarray, cross_entropies: np.ndarray
-) -> float:
+def binoculars_score(sums: np.ndarray) -> np.ndarray:
     """Compute Binoculars cross-model score ratio.
 
+    Reads both totals off the performer's row, where the scorer accumulates the
+    observer-performer cross-entropy.
+
     Args:
-        token_lps_performer: Performer model token log-probabilities.
-        cross_entropies: Observer-performer position cross-entropies.
+        sums: SUMS-dtype rows for the performer model.
 
     Returns:
-        Binoculars score float value.
+        Binoculars score per row; 0.0 when the total cross-entropy is
+        negligible, which covers a text with no positions.
     """
-    if token_lps_performer.size == 0 or cross_entropies.size == 0:
-        return 0.0
-    total_cross_entropy = float(np.sum(cross_entropies, dtype=np.float64))
-    if total_cross_entropy <= 1e-6:
-        return 0.0
-    total_lp = float(np.sum(token_lps_performer, dtype=np.float64))
-    return -total_lp / total_cross_entropy
+    cross_entropy = sums["ce"]
+    return np.where(
+        cross_entropy > MIN_CROSS_ENTROPY,
+        -sums["lp"] / np.maximum(cross_entropy, MIN_CROSS_ENTROPY),
+        0.0,
+    )
+
+
+def _fraction(count: np.ndarray, n: np.ndarray) -> np.ndarray:
+    """Divide a flag count by the position count, yielding NaN for empty rows."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return count / n

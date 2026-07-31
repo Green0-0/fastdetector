@@ -1,11 +1,11 @@
 import math
 import os
 
-import numpy as np
 import pytest
 
+from fastdetector.frontend.toml_config import ScorerSettings
 from fastdetector.statistics import statistics_llm
-from fastdetector.statistics.exact_scorer import ScorerSettings, exact_scorer_context
+from fastdetector.statistics.exact_scorer import exact_scorer_context
 
 pytestmark = [pytest.mark.network, pytest.mark.slow]
 
@@ -39,18 +39,17 @@ def test_scoring_real_texts_with_a_real_checkpoint(
     """Test scoring real text strings with a model checkpoint."""
     try:
         with exact_scorer_context([hub_model_id], cpu_settings) as scorer:
-            scored = scorer.score_texts(TEXTS)
+            sums = scorer.score_texts(TEXTS)
     except Exception as exc:  # noqa: BLE001 - re-raised unless it is connectivity
         skip_if_unreachable(exc, hub_model_id)
 
-    assert len(scored) == len(TEXTS)
+    assert sums.shape == (len(TEXTS), 1)
     # Empty and whitespace-only rows have no next-token predictions.
-    assert scored[2].token_lps[0].shape == (0,)
-    assert scored[3].token_lps[0].shape == (0,)
-    for scores in scored[:2]:
-        assert scores.token_lps[0].shape[0] > 0
-        assert (scores.token_lps[0] <= 0).all()
-        assert (scores.entropies[0] >= 0).all()
+    assert sums["n"][2, 0] == 0
+    assert sums["n"][3, 0] == 0
+    assert (sums["n"][:2, 0] > 0).all()
+    assert (sums["lp"][:2, 0] <= 0).all()
+    assert (sums["entropy"][:2, 0] >= 0).all()
 
 
 def test_metrics_computed_from_real_scores_are_finite(
@@ -59,20 +58,17 @@ def test_metrics_computed_from_real_scores_are_finite(
     """Test that metrics derived from real model scores produce finite values."""
     try:
         with exact_scorer_context([hub_model_id], cpu_settings) as scorer:
-            scored = scorer.score_texts(TEXTS[:2])
+            sums = scorer.score_texts(TEXTS[:2])
     except Exception as exc:  # noqa: BLE001
         skip_if_unreachable(exc, hub_model_id)
 
-    for scores in scored:
-        perplexity = statistics_llm.perplexity(scores.token_lps[0])
-        entropy = statistics_llm.mean_entropy(scores.entropies[0])
-        curvature = statistics_llm.fastdetectgpt_score(
-            scores.token_lps[0], scores.entropies[0], scores.e_lp2[0]
-        )
-        assert perplexity > 0 and math.isfinite(perplexity)
-        assert entropy >= 0
-        assert math.isfinite(curvature)
-        assert 0.0 <= statistics_llm.outlier_percentage(scores.topp_outlier[0]) <= 1.0
+    scored = sums[:, 0]
+    assert (statistics_llm.perplexity(scored) > 0).all()
+    assert all(math.isfinite(value) for value in statistics_llm.perplexity(scored))
+    assert (statistics_llm.mean_entropy(scored) >= 0).all()
+    assert all(math.isfinite(value) for value in statistics_llm.fastdetectgpt_score(scored))
+    outliers = statistics_llm.topp_outlier_percentage(scored)
+    assert ((0.0 <= outliers) & (outliers <= 1.0)).all()
 
 
 def test_binoculars_needs_two_co_resident_checkpoints(
@@ -94,18 +90,15 @@ def test_binoculars_needs_two_co_resident_checkpoints(
     )
     try:
         with exact_scorer_context([hub_model_id, hub_model_id], settings) as scorer:
-            scored = scorer.score_texts(TEXTS[:2])
+            sums = scorer.score_texts(TEXTS[:2])
     except Exception as exc:  # noqa: BLE001
         skip_if_unreachable(exc, hub_model_id)
 
-    for scores in scored:
-        assert scores.cross_entropies is not None
-        assert scores.cross_entropies.shape == scores.token_lps[0].shape
-        assert np.allclose(scores.cross_entropies, scores.entropies[0], atol=1e-3)
-        score = statistics_llm.binoculars_score(
-            scores.token_lps[1], scores.cross_entropies
-        )
-        assert math.isfinite(score)
+    # Scoring a model against itself makes the cross-entropy total equal the
+    # observer's own entropy total.
+    assert sums["ce"][:, 1] == pytest.approx(sums["entropy"][:, 0], rel=1e-3)
+    scores = statistics_llm.binoculars_score(sums[:, 1])
+    assert all(math.isfinite(value) for value in scores)
 
 
 def test_the_configured_production_checkpoints_share_a_vocabulary(

@@ -258,14 +258,14 @@ def test_llm_stats_dtype_is_supported(repo_root):
     from fastdetector.statistics.exact_scorer import _resolve_dtype
 
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    _resolve_dtype(config.dtype)
+    _resolve_dtype(config.scorer.dtype)
 
 
 def test_llm_stats_batch_budget_admits_a_full_length_text(repo_root):
     # max_batch_tokens below max_model_len means the longest texts each get a
     # batch of one, which is legal but usually a config mistake.
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    assert config.max_batch_tokens >= config.max_model_len
+    assert config.scorer.max_batch_tokens >= config.scorer.max_model_len
 
 
 def test_stat_configs_agree_on_the_text_columns(repo_root):
@@ -298,7 +298,7 @@ def committed_stat_columns(repo_root) -> set[str]:
     names, EditLens appends its configured suffix, and llm_stats writes
     ``<column>_<metric><col_suffix>`` plus a suffix-less binoculars column.
     """
-    from llm_stats import BINOCULARS_STEM, PER_MODEL_METRICS, metric_column
+    from llm_stats import output_columns
 
     distance = DistanceStatConfig(**load_toml(str(repo_root / "config" / "distance_stats.toml")))
     llm = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
@@ -319,12 +319,7 @@ def committed_stat_columns(repo_root) -> set[str]:
         }
 
     for col in llm.columns_to_score:
-        for suffix in llm.col_suffixes:
-            for metric in PER_MODEL_METRICS:
-                if getattr(llm, metric.flag):
-                    columns.add(metric_column(col, metric.stem, suffix))
-        if llm.binoculars_score:
-            columns.add(metric_column(col, BINOCULARS_STEM))
+        columns |= output_columns(col, llm.col_suffixes, llm)
     return columns
 
 

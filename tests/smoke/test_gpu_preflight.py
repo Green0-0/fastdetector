@@ -8,9 +8,10 @@ from fastdetector.frontend.toml_config import (
     DistanceStatConfig,
     EditLensStatConfig,
     LLMStatConfig,
+    ScorerSettings,
 )
 from fastdetector.frontend.toml_loader import load_toml
-from fastdetector.statistics.exact_scorer import ScorerSettings, exact_scorer_context
+from fastdetector.statistics.exact_scorer import exact_scorer_context
 
 # Every test needs a GPU and is slow; the ones that pull real checkpoints are
 # additionally marked `network` so `-m "gpu and not network"` still does
@@ -213,25 +214,14 @@ def test_a_gpu_is_actually_usable(cuda_device):
 def test_llm_stats_config_fits_in_vram(repo_root):
     """Load the configured checkpoint(s) and score a worst-case batch."""
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    settings = ScorerSettings(
-        topp_threshold=config.topp_threshold,
-        topk_threshold=config.topk_threshold,
-        max_model_len=config.max_model_len,
-        max_batch_tokens=config.max_batch_tokens,
-        head_chunk_size=config.head_chunk_size,
-        dtype=config.dtype,
-        attn_implementation=config.attn_implementation,
-        devices=config.devices,
-        compute_cross_entropy=config.binoculars_score,
-    )
 
     reset_peaks()
-    with exact_scorer_context(config.llm_checkpoints, settings) as scorer:
+    with exact_scorer_context(config.llm_checkpoints, config.scorer) as scorer:
         vocab_size = scorer.replicas[0][0].get_output_embeddings().weight.shape[0]
-        batch = worst_case_token_lists(settings, vocab_size)
-        scored = scorer.score_token_lists(batch)
+        batch = worst_case_token_lists(config.scorer, vocab_size)
+        sums = scorer.score_token_lists(batch)
 
-    assert len(scored) == len(batch)
+    assert sums.shape == (len(batch), len(config.llm_checkpoints))
     assert_within_budget("llm_stats (worst-case batch)")
 
 
@@ -239,17 +229,6 @@ def test_llm_stats_config_fits_in_vram(repo_root):
 def test_llm_stats_config_scores_realistic_text(repo_root):
     """Same checkpoints, but through the tokenizer path the pipeline uses."""
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    settings = ScorerSettings(
-        topp_threshold=config.topp_threshold,
-        topk_threshold=config.topk_threshold,
-        max_model_len=config.max_model_len,
-        max_batch_tokens=config.max_batch_tokens,
-        head_chunk_size=config.head_chunk_size,
-        dtype=config.dtype,
-        attn_implementation=config.attn_implementation,
-        devices=config.devices,
-        compute_cross_entropy=config.binoculars_score,
-    )
 
     paragraph = (
         "The committee approved the proposal after a long and careful debate, "
@@ -258,13 +237,13 @@ def test_llm_stats_config_scores_realistic_text(repo_root):
     texts = [paragraph * 40, paragraph * 5, "short one", ""]
 
     reset_peaks()
-    with exact_scorer_context(config.llm_checkpoints, settings) as scorer:
-        scored = scorer.score_texts(texts)
+    with exact_scorer_context(config.llm_checkpoints, config.scorer) as scorer:
+        sums = scorer.score_texts(texts)
 
-    assert len(scored) == len(texts)
-    assert scored[-1].token_lps[0].shape == (0,)
+    assert sums.shape == (len(texts), len(config.llm_checkpoints))
+    assert sums["n"][-1, 0] == 0
     if config.binoculars_score:
-        assert scored[0].cross_entropies is not None
+        assert sums["ce"][0, 1] > 0
     assert_within_budget("llm_stats (real text)")
 
 
@@ -272,14 +251,8 @@ def test_llm_stats_config_scores_realistic_text(repo_root):
 def test_llm_stats_memory_is_released_after_scoring(repo_root):
     """The context manager must hand the VRAM back for the next stage."""
     config = LLMStatConfig(**load_toml(str(repo_root / "config" / "llm_stats.toml")))
-    settings = ScorerSettings(
-        max_model_len=512,
-        max_batch_tokens=512,
-        head_chunk_size=config.head_chunk_size,
-        dtype=config.dtype,
-        attn_implementation=config.attn_implementation,
-        devices=config.devices,
-        compute_cross_entropy=config.binoculars_score,
+    settings = config.scorer.model_copy(
+        update={"max_model_len": 512, "max_batch_tokens": 512}
     )
 
     reset_peaks()

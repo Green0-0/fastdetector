@@ -2,162 +2,75 @@ import gc
 import queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Iterator, Optional, Union
+from typing import Iterator, Optional
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from fastdetector.frontend.toml_config import ScorerSettings
+
 
 LOG_TOLERANCE = 1e-5
 
 PROGRESS_PRINT_INTERVAL = 500
 
-# Per-model TextScores fields and the NumPy dtype each is stored as. Every
-# stage of scoring accumulates, concatenates and slices all of them the same
-# way, so this table is the only place they are enumerated.
-PER_MODEL_FIELDS: dict[str, type] = {
-    "token_lps": np.float32,
-    "entropies": np.float32,
-    "e_lp2": np.float32,
-    "topp_outlier": bool,
-    "topk_outlier": bool,
-}
+# Every metric in statistics_llm is a sum over token positions, so per-position
+# values never leave the device: each forward pass reduces straight into one
+# row of running totals per (text, model), and this is the whole interchange
+# format between the scorer and the metrics.
+SUMS = np.dtype(
+    [
+        ("n", np.int64),  # scoreable positions, i.e. tokens - 1
+        ("lp", np.float64),  # sum of log p(target)
+        ("entropy", np.float64),  # sum of H
+        ("variance", np.float64),  # sum of max(0, E[(log p)^2] - H^2)
+        ("topp", np.float64),  # number of top-p nucleus outliers
+        ("topk", np.float64),  # number of top-k rank outliers
+        ("ce", np.float64),  # sum of H(p_observer, p_performer)
+    ]
+)
 
-
-@dataclass
-class ScorerSettings:
-    """Settings controlling model scoring, batching, and device configuration.
-
-    Attributes:
-        topp_threshold: Nucleus probability mass threshold for top-p outlier detection.
-        topk_threshold: Rank threshold for top-k outlier detection.
-        max_model_len: Maximum token sequence length.
-        max_batch_tokens: Maximum padded tokens per forward pass batch.
-        head_chunk_size: Number of sequence positions per log-softmax chunk.
-        dtype: Data type string for model loading.
-        attn_implementation: Attention backend implementation.
-        devices: Target devices for model execution.
-        compute_cross_entropy: Whether to compute observer-performer cross-entropy.
-    """
-
-    topp_threshold: float = 0.95
-    topk_threshold: int = 50
-    max_model_len: int = 16000
-    max_batch_tokens: int = 16384
-    head_chunk_size: int = 512
-    dtype: str = "bfloat16"
-    attn_implementation: Optional[str] = None
-    devices: Union[str, list[str]] = "auto"
-    compute_cross_entropy: bool = False
-
-    def __post_init__(self) -> None:
-        """Validate threshold, sizing, and device settings.
-
-        Raises:
-            ValueError: If any setting is out of range.
-        """
-        if not (0 < self.topp_threshold <= 1):
-            raise ValueError(f"topp_threshold must be in (0, 1], got {self.topp_threshold}")
-        if self.topk_threshold < 1:
-            raise ValueError(f"topk_threshold must be >= 1, got {self.topk_threshold}")
-        for name in ("max_model_len", "max_batch_tokens", "head_chunk_size"):
-            if getattr(self, name) < 1:
-                raise ValueError(f"{name} must be >= 1, got {getattr(self, name)}")
-        if isinstance(self.devices, str):
-            if self.devices != "auto":
-                self.devices = [self.devices]
-        elif not self.devices:
-            raise ValueError('devices must be "auto" or a non-empty list of device strings')
-
-    def resolve_devices(self) -> list[str]:
-        """Resolve device configuration to a list of concrete device strings.
-
-        Returns:
-            List of device strings.
-        """
-        if isinstance(self.devices, list):
-            return self.devices
-        if torch.cuda.is_available():
-            return [f"cuda:{i}" for i in range(torch.cuda.device_count())]
-        return ["cpu"]
-
-
-@dataclass
-class TextScores:
-    """Per-position statistics container for evaluated text sequences.
-
-    Attributes:
-        token_lps: Per-model log probabilities of target tokens.
-        entropies: Per-model position distribution entropies.
-        e_lp2: Per-model position second moments of log probabilities.
-        topp_outlier: Per-model boolean flags for top-p nucleus outliers.
-        topk_outlier: Per-model boolean flags for top-k rank outliers.
-        cross_entropies: Position cross-entropies when two models are scored.
-    """
-
-    token_lps: list[np.ndarray] = field(default_factory=list)
-    entropies: list[np.ndarray] = field(default_factory=list)
-    e_lp2: list[np.ndarray] = field(default_factory=list)
-    topp_outlier: list[np.ndarray] = field(default_factory=list)
-    topk_outlier: list[np.ndarray] = field(default_factory=list)
-    cross_entropies: Optional[np.ndarray] = None
-
-    @classmethod
-    def empty(cls, num_models: int, with_cross_entropy: bool) -> "TextScores":
-        """Construct scores for a text with no scoreable positions.
-
-        Args:
-            num_models: Number of scored models.
-            with_cross_entropy: Whether cross-entropy array is enabled.
-
-        Returns:
-            TextScores whose every array is length zero.
-        """
-        return cls(
-            **{
-                name: [np.zeros(0, dtype=dtype) for _ in range(num_models)]
-                for name, dtype in PER_MODEL_FIELDS.items()
-            },
-            cross_entropies=np.zeros(0, dtype=np.float32) if with_cross_entropy else None,
-        )
-
-
-def _concat_to_numpy(chunks: list[torch.Tensor], dtype) -> np.ndarray:
-    """Concatenate 1D tensor chunks into a NumPy array.
-
-    Args:
-        chunks: List of 1D PyTorch tensors.
-        dtype: Target NumPy data type.
-
-    Returns:
-        Concatenated NumPy array.
-    """
-    return torch.cat(chunks).cpu().numpy().astype(dtype)
+# The per-model accumulators, in the order _score_batch stacks them. "n" comes
+# from the token lengths and "ce" is cross-model, so neither belongs here.
+ACCUMULATED = ("lp", "entropy", "variance", "topp", "topk")
 
 
 def _resolve_dtype(dtype: str) -> torch.dtype:
     """Map string identifier to PyTorch dtype.
 
     Args:
-        dtype: Identifier string ("bfloat16", "float16", or "float32").
+        dtype: Identifier string, e.g. "bfloat16", "float16" or "float32".
 
     Returns:
         Corresponding PyTorch dtype.
 
     Raises:
-        ValueError: If dtype identifier is unsupported.
+        ValueError: If dtype identifier does not name a floating-point dtype.
     """
-    mapping = {
-        "bfloat16": torch.bfloat16,
-        "float16": torch.float16,
-        "float32": torch.float32,
-    }
-    if dtype not in mapping:
-        raise ValueError(f"Unsupported dtype {dtype!r}; expected one of {sorted(mapping)}")
-    return mapping[dtype]
+    resolved = getattr(torch, dtype, None)
+    if not isinstance(resolved, torch.dtype) or not resolved.is_floating_point:
+        raise ValueError(
+            f"Unsupported dtype {dtype!r}; expected a floating-point torch dtype."
+        )
+    return resolved
+
+
+def _resolve_devices(settings: ScorerSettings) -> list[str]:
+    """Resolve the configured devices to a list of concrete device strings.
+
+    Args:
+        settings: Scorer configuration settings.
+
+    Returns:
+        List of device strings.
+    """
+    if isinstance(settings.devices, list):
+        return settings.devices
+    if torch.cuda.is_available():
+        return [f"cuda:{i}" for i in range(torch.cuda.device_count())]
+    return ["cpu"]
 
 
 def _load_model(model_name: str, settings: ScorerSettings, device: str) -> torch.nn.Module:
@@ -252,7 +165,7 @@ class ExactScorer:
         self.tokenizer = tokenizer
         self.settings = settings
 
-    def score_texts(self, texts: list[str], progress_label: str = "") -> list[TextScores]:
+    def score_texts(self, texts: list[str], progress_label: str = "") -> np.ndarray:
         """Tokenize and score a list of text strings.
 
         Args:
@@ -260,7 +173,7 @@ class ExactScorer:
             progress_label: Optional label for progress output.
 
         Returns:
-            List of TextScores corresponding to input texts.
+            SUMS-dtype array of shape (len(texts), num_models).
 
         Raises:
             RuntimeError: If scorer lacks a tokenizer instance.
@@ -278,9 +191,7 @@ class ExactScorer:
             token_lists[i] = np.asarray(ids, dtype=np.int64)
         return self.score_token_lists(token_lists, progress_label=progress_label)
 
-    def score_token_lists(
-        self, token_lists: list, progress_label: str = ""
-    ) -> list[TextScores]:
+    def score_token_lists(self, token_lists: list, progress_label: str = "") -> np.ndarray:
         """Score pre-tokenized token ID lists.
 
         Args:
@@ -288,21 +199,17 @@ class ExactScorer:
             progress_label: Optional label for progress output.
 
         Returns:
-            List of TextScores corresponding to inputs.
+            SUMS-dtype array of shape (len(token_lists), num_models).
         """
         # Compact int64 arrays keep corpus-scale tokenizations cheap in RAM
         # (~8 bytes/token vs ~28 for lists of Python ints).
         token_arrays = [np.asarray(ids, dtype=np.int64) for ids in token_lists]
-        num_models = self.num_models
-        with_ce = self.settings.compute_cross_entropy
-        results: list[Optional[TextScores]] = [None] * len(token_arrays)
 
-        scoreable = []
-        for i, ids in enumerate(token_arrays):
-            if ids.shape[0] < 2:
-                results[i] = TextScores.empty(num_models, with_ce)
-            else:
-                scoreable.append(i)
+        # Texts too short to have a next-token prediction keep their all-zero
+        # row, which is exactly the "no positions" sentinel the metrics expect.
+        sums = np.zeros((len(token_arrays), self.num_models), dtype=SUMS)
+
+        scoreable = [i for i, ids in enumerate(token_arrays) if ids.shape[0] >= 2]
         scoreable.sort(key=lambda i: token_arrays[i].shape[0], reverse=True)
 
         completed = 0
@@ -327,26 +234,25 @@ class ExactScorer:
         for replica_idx in range(len(self.replicas)):
             idle_replicas.put(replica_idx)
 
-        def _run_batch(batch_indices: list[int]) -> tuple[list[int], list[TextScores]]:
+        def _run_batch(batch_indices: list[int]) -> tuple[list[int], np.ndarray]:
             """Score one batch on whichever replica is idle."""
             replica_idx = idle_replicas.get()
             try:
-                batch_scores = self._score_batch(
+                batch_sums = self._score_batch(
                     [token_arrays[i] for i in batch_indices], replica_idx=replica_idx
                 )
             finally:
                 idle_replicas.put(replica_idx)
-            return batch_indices, batch_scores
+            return batch_indices, batch_sums
 
         with ThreadPoolExecutor(max_workers=len(self.replicas)) as executor:
             futures = [executor.submit(_run_batch, batch) for batch in batches]
             for future in as_completed(futures):
-                batch_indices, batch_scores = future.result()
-                for i, scores in zip(batch_indices, batch_scores):
-                    results[i] = scores
+                batch_indices, batch_sums = future.result()
+                sums[batch_indices] = batch_sums
                 _report(len(batch_indices))
 
-        return results  # type: ignore[return-value]
+        return sums
 
     def _plan_batches(
         self, sorted_indices: list[int], token_arrays: list[np.ndarray]
@@ -375,9 +281,7 @@ class ExactScorer:
             yield batch
 
     @torch.inference_mode()
-    def _score_batch(
-        self, token_arrays: list[np.ndarray], replica_idx: int = 0
-    ) -> list[TextScores]:
+    def _score_batch(self, token_arrays: list[np.ndarray], replica_idx: int = 0) -> np.ndarray:
         """Perform forward pass and metric reduction for a single batch.
 
         Args:
@@ -385,7 +289,7 @@ class ExactScorer:
             replica_idx: Target replica device index.
 
         Returns:
-            List of TextScores for the batch.
+            SUMS-dtype array of shape (len(token_arrays), num_models).
         """
         settings = self.settings
         device = self.devices[replica_idx]
@@ -423,13 +327,20 @@ class ExactScorer:
             flat_hiddens.append(hidden[rows_t, cols_t])
             del hidden
 
-        per_model_chunks: list[dict[str, list[torch.Tensor]]] = [
-            {name: [] for name in PER_MODEL_FIELDS} for _ in models
+        # One running total per (text, accumulator). rows_t already says which
+        # text each flat position belongs to, so index_add_ scatters a chunk's
+        # positions onto their texts without ever building per-position arrays.
+        # float64 preserves the accumulation precision the metrics used to get
+        # from summing with NumPy.
+        totals = [
+            torch.zeros((batch_size, len(ACCUMULATED)), dtype=torch.float64, device=device)
+            for _ in models
         ]
-        ce_chunks: list[torch.Tensor] = []
+        ce_totals = torch.zeros(batch_size, dtype=torch.float64, device=device)
 
         for start in range(0, num_positions, settings.head_chunk_size):
             end = min(start + settings.head_chunk_size, num_positions)
+            rows_chunk = rows_t[start:end]
             targets_chunk = targets_t[start:end]
             chunk_p_obs: Optional[torch.Tensor] = None
             chunk_logp_perf: Optional[torch.Tensor] = None
@@ -442,18 +353,15 @@ class ExactScorer:
                 del logits
                 p = logp.exp()
 
-                out = per_model_chunks[model_idx]
                 token_lp = logp.gather(1, targets_chunk[:, None]).squeeze(1)
-                out["token_lps"].append(token_lp)
-                out["entropies"].append(-(p * logp).sum(dim=-1))
-                out["e_lp2"].append((p * logp.square()).sum(dim=-1))
+                entropy = -(p * logp).sum(dim=-1)
+                e_lp2 = (p * logp.square()).sum(dim=-1)
 
                 # One descending sort serves both outlier metrics: the k-th
                 # largest logprob for top-k, and the nucleus boundary for
                 # top-p.
                 sorted_lp, _ = torch.sort(logp, descending=True, dim=-1)
                 kth_lp = sorted_lp[:, settings.topk_threshold - 1]
-                out["topk_outlier"].append(token_lp < kth_lp - LOG_TOLERANCE)
 
                 cum = sorted_lp.exp().cumsum(dim=-1)
                 thresholds = torch.full(
@@ -464,8 +372,29 @@ class ExactScorer:
                 # falling back to the smallest logprob.
                 idx = torch.searchsorted(cum, thresholds).clamp(max=logp.shape[-1] - 1)
                 threshold_lp = sorted_lp.gather(1, idx).squeeze(1)
-                out["topp_outlier"].append(token_lp < threshold_lp - LOG_TOLERANCE)
                 del sorted_lp, cum
+
+                # E[(log p)^2] lands close to H^2 where the distribution is
+                # peaked, so the difference is taken at double precision and
+                # clamped: the leftover rounding artefact is not a real
+                # negative variance, and fastdetectgpt takes its square root.
+                entropy64 = entropy.double()
+                variance = (e_lp2.double() - entropy64.square()).clamp(min=0.0)
+
+                totals[model_idx].index_add_(
+                    0,
+                    rows_chunk,
+                    torch.stack(
+                        [
+                            token_lp.double(),
+                            entropy64,
+                            variance,
+                            (token_lp < threshold_lp - LOG_TOLERANCE).double(),
+                            (token_lp < kth_lp - LOG_TOLERANCE).double(),
+                        ],
+                        dim=1,
+                    ),
+                )
 
                 if settings.compute_cross_entropy and model_idx == 0:
                     chunk_p_obs = p
@@ -475,34 +404,24 @@ class ExactScorer:
 
             if settings.compute_cross_entropy:
                 # H(p_observer, log p_performer) = -sum_v p_obs(v) log p_perf(v)
-                ce_chunks.append(-(chunk_p_obs * chunk_logp_perf).sum(dim=-1))
+                ce_totals.index_add_(
+                    0, rows_chunk, -(chunk_p_obs * chunk_logp_perf).sum(dim=-1).double()
+                )
                 del chunk_p_obs, chunk_logp_perf
 
         del flat_hiddens
 
-        # field name -> one concatenated batch-wide array per model.
-        arrays = {
-            name: [_concat_to_numpy(chunks[name], dtype) for chunks in per_model_chunks]
-            for name, dtype in PER_MODEL_FIELDS.items()
-        }
-        ce = _concat_to_numpy(ce_chunks, np.float32) if settings.compute_cross_entropy else None
-
-        results = []
-        offset = 0
-        for ids in token_arrays:
-            m = ids.shape[0] - 1
-            sl = slice(offset, offset + m)
-            results.append(
-                TextScores(
-                    **{
-                        name: [arr[sl] for arr in per_model]
-                        for name, per_model in arrays.items()
-                    },
-                    cross_entropies=ce[sl] if ce is not None else None,
-                )
-            )
-            offset += m
-        return results
+        sums = np.zeros((batch_size, len(models)), dtype=SUMS)
+        sums["n"] = np.asarray(position_counts, dtype=np.int64)[:, None]
+        for model_idx, model_totals in enumerate(totals):
+            model_totals_np = model_totals.cpu().numpy()
+            for field_idx, name in enumerate(ACCUMULATED):
+                sums[name][:, model_idx] = model_totals_np[:, field_idx]
+        if settings.compute_cross_entropy:
+            # Binoculars divides the performer's total logprob by this, so the
+            # cross-model total lives on the performer's row.
+            sums["ce"][:, 1] = ce_totals.cpu().numpy()
+        return sums
 
 
 @contextmanager
@@ -516,7 +435,7 @@ def exact_scorer_context(checkpoints: list[str], settings: ScorerSettings):
     Yields:
         Initialized ExactScorer instance.
     """
-    devices = settings.resolve_devices()
+    devices = _resolve_devices(settings)
     replicas: list[list[torch.nn.Module]] = []
     try:
         tokenizer = AutoTokenizer.from_pretrained(checkpoints[0])
