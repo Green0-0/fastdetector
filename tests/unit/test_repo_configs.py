@@ -233,8 +233,8 @@ def test_analysis_threshold_types_are_known(repo_root):
 
     valid = {"accuracy", "f1", *FPR_TARGETS}
     config = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
-    assert config.threshold_type_score in valid
-    assert config.threshold_type_bin in valid
+    for clf in config.classifiers:
+        assert clf.threshold_type in valid, clf.name
 
 
 def test_analysis_validation_size_is_a_fraction(repo_root):
@@ -355,12 +355,6 @@ def test_analysis_classifier_columns_are_scored_columns(repo_root):
     for clf in analysis.classifiers:
         columns = {f"{base}{clf.suffix}" for base in analysis.base_columns}
         assert columns <= computed, f"{clf.name} reads columns nothing writes: {sorted(columns - computed)}"
-
-
-def test_analysis_bin_column_is_a_computed_statistic(repo_root):
-    analysis = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
-    if analysis.bin_column is not None:
-        assert analysis.bin_column in committed_stat_columns(repo_root)
 
 
 def test_llm_classifier_directions_follow_the_detectors(repo_root):

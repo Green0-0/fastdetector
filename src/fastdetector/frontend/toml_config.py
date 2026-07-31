@@ -96,31 +96,21 @@ class FilterConfig(BaseModel):
 
 
 class ClassifierConfig(BaseModel):
-    """Configuration for individual score/bin classifier evaluation settings."""
+    """Configuration for one classifier's evaluation settings."""
 
     name: str
     suffix: str
+
+    # Criterion this classifier's threshold is swept for on the validation
+    # split: "accuracy", "f1", or one of the fpr_* targets.
+    threshold_type: str
+
     direction: str = "higher_is_ai"
-    # Which of the global threshold settings apply to this classifier:
-    # "score" -> threshold_type_score / manual_threshold_score
-    # "bin"   -> threshold_type_bin / manual_threshold_bin
-    threshold_kind: str = "score"
 
-    @model_validator(mode="after")
-    def _check_threshold_kind(self):
-        """Validate threshold_kind attribute to ensure it is 'score' or 'bin'.
+    # Pin the threshold outright instead of sweeping for one, which also takes
+    # this classifier out of the validation split.
+    manual_threshold: Optional[float] = None
 
-        Returns:
-            Self instance if valid.
-
-        Raises:
-            ValueError: If threshold_kind is not 'score' or 'bin'.
-        """
-        if self.threshold_kind not in ("score", "bin"):
-            raise ValueError(
-                f'threshold_kind must be "score" or "bin", got {self.threshold_kind!r}.'
-            )
-        return self
 
 class AnalysisConfig(BaseModel):
     """Configuration for universal evaluation and subset breakdowns (analysis.py)."""
@@ -135,12 +125,8 @@ class AnalysisConfig(BaseModel):
     prompt_metadata_column: str
     model_metadata_column: str
 
-    # Thresholds & Splits.
+    # Fraction of rows held out to sweep thresholds on.
     validation_size: float
-    threshold_type_bin: str
-    threshold_type_score: str
-    manual_threshold_score: Optional[float] = None
-    manual_threshold_bin: Optional[float] = None
 
     # Dataset Filtering
     filter_type: str = "OR"
@@ -151,9 +137,6 @@ class AnalysisConfig(BaseModel):
 
     # Classifiers to Evaluate
     classifiers: List[ClassifierConfig] = []
-
-    bin_column: Optional[str] = None
-    num_bins: int = 4
 
 
 class DistanceStatConfig(BaseModel):

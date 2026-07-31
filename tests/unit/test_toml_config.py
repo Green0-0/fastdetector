@@ -164,20 +164,20 @@ def test_condition_value_is_untyped():
 # --------------------------------------------------------------------------
 
 
-def test_classifier_defaults():
-    clf = ClassifierConfig(name="EditLens", suffix="_editlens")
-    assert clf.direction == "higher_is_ai"
-    assert clf.threshold_kind == "score"
+def test_a_classifier_must_name_its_threshold_criterion():
+    with pytest.raises(ValidationError, match="threshold_type"):
+        ClassifierConfig(name="n", suffix="_s")
 
 
-@pytest.mark.parametrize("kind", ["score", "bin"])
-def test_classifier_accepts_valid_threshold_kinds(kind):
-    assert ClassifierConfig(name="n", suffix="_s", threshold_kind=kind).threshold_kind == kind
+def test_a_classifier_carries_its_own_threshold_criterion():
+    clf = ClassifierConfig(name="n", suffix="_s", threshold_type="f1")
+    assert clf.threshold_type == "f1"
+    assert clf.manual_threshold is None
 
 
-def test_classifier_rejects_unknown_threshold_kind():
-    with pytest.raises(ValidationError, match="threshold_kind"):
-        ClassifierConfig(name="n", suffix="_s", threshold_kind="binn")
+def test_a_classifier_can_pin_its_threshold():
+    clf = ClassifierConfig(name="n", suffix="_s", threshold_type="f1", manual_threshold=0.5)
+    assert clf.manual_threshold == 0.5
 
 
 def test_analysis_config_defaults_and_nesting():
@@ -186,13 +186,11 @@ def test_analysis_config_defaults_and_nesting():
         prompt_metadata_column="prompt",
         model_metadata_column="generator_model",
         validation_size=0.1,
-        threshold_type_bin="f1",
-        threshold_type_score="accuracy",
-        classifiers=[{"name": "c", "suffix": "_c", "threshold_kind": "bin"}],
+        classifiers=[{"name": "c", "suffix": "_c", "threshold_type": "f1"}],
     )
     assert config.filter_type == "OR"
     assert config.distance_metrics == []
-    assert config.manual_threshold_score is None
+    assert config.classifiers[0].manual_threshold is None
     assert isinstance(config.classifiers[0], ClassifierConfig)
 
 

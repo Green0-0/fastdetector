@@ -1,172 +1,82 @@
-from typing import Dict
-from typing import Optional
-from typing import Sequence
-from typing import Tuple
-from typing import List
+"""Renderers for the analysis report: three charts and one markdown table.
+
+Each function takes plain arrays and labels and returns finished bytes (or, for
+the table, finished markdown), so nothing here knows what a classifier is.
+"""
+
+from typing import Iterable, NamedTuple, Optional, Sequence
 import io
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from fastdetector.visualization.metrics import _prf
+class Column(NamedTuple):
+    """One column of a markdown metric table.
 
-#: A plottable series: array of values plus its legend label.
-Series = Tuple[np.ndarray, str]
+    Attributes:
+        header: Column heading.
+        key: Key read from each row's values mapping.
+        format: Format spec applied to the value.
+    """
+
+    header: str
+    key: str
+    format: str = "{value:.4f}"
 
 
-def _save_fig_to_png() -> bytes:
-    """Save active matplotlib figure to PNG bytes and close canvas."""
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight")
-    buf.seek(0)
+def _png(dpi: Optional[int] = None) -> bytes:
+    """Save the active matplotlib figure as PNG bytes and close its canvas.
+
+    Args:
+        dpi: Resolution override; the figure's own dpi by default.
+
+    Returns:
+        PNG image bytes.
+    """
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format="png", bbox_inches="tight", dpi=dpi or "figure")
     plt.close()
-    return buf.read()
+    return buffer.getvalue()
 
 
-def _finite(values) -> np.ndarray:
-    """Filter non-finite entries from an array-like sequence.
-
-    Args:
-        values: Array-like sequence or None.
-
-    Returns:
-        1D NumPy float array containing finite values.
-    """
-    if values is None:
-        return np.array([], dtype=float)
-    arr = np.asarray(values, dtype=float).ravel()
-    return arr[np.isfinite(arr)]
-
-
-def get_histogram(series: List[Series], title: str, bins: int = 50, figsize: Tuple[int, int] = (8, 5)) -> bytes:
-    """Render overlaid histogram plot for multiple series.
+def histogram(series: Sequence[tuple], title: str, bins: int = 50, figsize: tuple = (8, 5)) -> bytes:
+    """Overlay several labelled series as histograms on shared bin edges.
 
     Args:
-        series: List of (values, label) tuples.
-        title: Figure title string.
-        bins: Number of histogram bins.
+        series: (values, label) pairs.
+        title: Figure title.
+        bins: Number of bins spanning the pooled range.
         figsize: Figure dimensions (width, height).
 
     Returns:
         PNG image bytes.
     """
+    finite = [(values[np.isfinite(values)], label)
+              for values, label in ((np.asarray(v, dtype=float).ravel(), l) for v, l in series)]
+    pooled = np.concatenate([values for values, _ in finite]) if finite else np.array([])
+    low, high = (float(pooled.min()), float(pooled.max())) if pooled.size else (0.0, 1.0)
+    pad = abs(low) * 1e-6 + 1e-6 if low == high else 0.0
+    edges = np.linspace(low - pad, high + pad, bins + 1)
+
     plt.figure(figsize=figsize)
-
-    finite_series = [(_finite(arr), label) for arr, label in series]
-
-    all_values = np.concatenate([arr for arr, _ in finite_series if arr.size]) if any(
-        arr.size for arr, _ in finite_series
-    ) else np.array([])
-
-    if all_values.size:
-        lo, hi = float(np.min(all_values)), float(np.max(all_values))
-        if lo == hi:
-            pad = abs(lo) * 1e-6 + 1e-6
-            lo, hi = lo - pad, hi + pad
-        shared_edges = np.linspace(lo, hi, bins + 1)
-    else:
-        shared_edges = np.linspace(0.0, 1.0, bins + 1)
-
-    drawn = False
-    for arr, label in finite_series:
-        if arr.size:
-            plt.hist(arr, bins=shared_edges, alpha=0.5, label=label)
-            drawn = True
-
-    if drawn:
+    for values, label in finite:
+        if values.size:
+            plt.hist(values, bins=edges, alpha=0.5, label=label)
+    if pooled.size:
         plt.legend()
     plt.title(title)
     plt.grid(True)
+    return _png()
 
-    return _save_fig_to_png()
 
-
-def get_scatterplot(
-    x_values: Sequence,
-    y_series: List[Series],
-    title: str,
-    xlabel: str = "X",
-    ylabel: str = "Y",
-    point_alpha: float = 0.5,
-    rolling_mean_window: int = 0,
-    figsize: Tuple[int, int] = (8, 5),
-) -> bytes:
-    """Render scatter plot with optional rolling mean trendline.
+def _correlation_label(value: float) -> str:
+    """Format a correlation coefficient to fit inside a heatmap cell.
 
     Args:
-        x_values: Sequence of X values (shared or per-series list).
-        y_series: List of (values, label) tuples.
-        title: Figure title string.
-        xlabel: X-axis label string.
-        ylabel: Y-axis label string.
-        point_alpha: Alpha transparency for scatter points.
-        rolling_mean_window: Rolling mean window size (0 to disable).
-        figsize: Figure dimensions (width, height).
+        value: Correlation coefficient.
 
     Returns:
-        PNG image bytes.
-    """
-    plt.figure(figsize=figsize)
-
-    if len(x_values) > 0 and isinstance(x_values[0], (list, np.ndarray)):
-        x_lists = x_values
-    else:
-        x_lists = [x_values] * len(y_series)
-
-    drawn = False
-    for x_vals, (y_vals, label) in zip(x_lists, y_series):
-        if x_vals is None or y_vals is None:
-            continue
-        x_arr = np.asarray(x_vals, dtype=float)
-        y_arr = np.asarray(y_vals, dtype=float)
-        if len(x_arr) != len(y_arr) or len(x_arr) == 0:
-            continue
-
-        plt.scatter(x_arr, y_arr, alpha=point_alpha, label=label, marker="o", s=15)
-        drawn = True
-
-        if rolling_mean_window > 0 and len(x_arr) >= rolling_mean_window:
-            sort_idx = np.argsort(x_arr)
-            x_sorted = x_arr[sort_idx]
-            y_sorted = y_arr[sort_idx]
-            rolling_mean = np.convolve(
-                y_sorted, np.ones(rolling_mean_window) / rolling_mean_window, mode="valid"
-            )
-            plt.plot(
-                x_sorted[rolling_mean_window - 1:],
-                rolling_mean,
-                label=f"{label} (Rolling Mean)",
-                linewidth=2,
-            )
-
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    if drawn:
-        plt.legend()
-    plt.title(title)
-    plt.grid(True)
-
-    return _save_fig_to_png()
-
-
-#: Physical size of one heatmap cell, in inches. The figure grows with the
-#: number of statistics instead of shrinking their labels, so a 6-variable and
-#: a 40-variable heatmap are equally readable once opened at full size.
-HEATMAP_CELL_INCHES = 0.62
-
-#: Past this many statistics even a cell-sized figure cannot carry a number per
-#: cell, so the annotations are dropped and the colours carry the reading.
-HEATMAP_MAX_ANNOTATED = 60
-
-
-def _format_correlation(value: float) -> str:
-    """Format Pearson correlation coefficient string for cell display.
-
-    Args:
-        value: Correlation coefficient float.
-
-    Returns:
-        Formatted correlation string label.
+        Short label, ``n/a`` for NaN.
     """
     if value != value:
         return "n/a"
@@ -175,274 +85,116 @@ def _format_correlation(value: float) -> str:
     return f"{value:.2f}".replace("0.", ".", 1)
 
 
-def generate_pearson_heatmap(series: List[Series], title: str) -> bytes:
-    """Render lower-triangle Pearson correlation heatmap.
+def heatmap(matrix: np.ndarray, names: Sequence[str], title: str) -> bytes:
+    """Draw the lower triangle of a correlation matrix.
+
+    The figure grows by a fixed 0.62 inches per cell instead of shrinking the
+    labels, so a 6-variable and a 40-variable heatmap are equally readable at
+    full size. Past 60 statistics even a cell-sized figure cannot carry a number
+    per cell, so the annotations drop and the colours carry the reading.
 
     Args:
-        series: List of (values, label) tuples.
-        title: Figure title string.
+        matrix: Square matrix of correlation coefficients.
+        names: Statistic names, one per row/column.
+        title: Figure title.
 
     Returns:
         PNG image bytes.
     """
-    arrays = [np.asarray(arr, dtype=float).ravel() for arr, _ in series]
-    names = [label for _, label in series]
-    n = len(series)
-    matrix = np.full((n, n), np.nan)
+    size = len(names)
+    shown = np.where(np.triu(np.ones((size, size), dtype=bool), k=1), np.nan, matrix)
 
-    # Columns that are the same length, complete and non-constant correlate in
-    # one vectorised call; with a few dozen statistics over millions of rows
-    # the pairwise loop below is minutes of work, and this is the common case.
-    lengths = [len(arr) for arr in arrays]
-    length = max(set(lengths), key=lengths.count) if lengths else 0
-    clean = [
-        i for i, arr in enumerate(arrays)
-        if len(arr) == length and len(arr) > 1
-        and np.isfinite(arr).all() and np.std(arr) > 0
-    ]
-    if len(clean) > 1:
-        matrix[np.ix_(clean, clean)] = np.corrcoef(np.vstack([arrays[i] for i in clean]))
-
-    remaining = set(range(n)) - set(clean)
-    for i in range(n):
-        for j in range(n):
-            if i not in remaining and j not in remaining:
-                continue
-            # Correlate over the rows where *both* statistics are present:
-            # a column with a handful of failed rows would otherwise blank out
-            # its entire row and column of the heatmap.
-            if len(arrays[i]) != len(arrays[j]) or len(arrays[i]) == 0:
-                continue
-            both = np.isfinite(arrays[i]) & np.isfinite(arrays[j])
-            a, b = arrays[i][both], arrays[j][both]
-            if a.size < 2 or np.std(a) == 0 or np.std(b) == 0:
-                continue
-            matrix[i, j] = float(np.corrcoef(a, b)[0, 1])
-
-    # The upper triangle repeats the lower one; blank it so the eye only has
-    # half a matrix to read. The diagonal stays as a visual anchor for finding
-    # a row's own label.
-    shown = np.where(np.triu(np.ones((n, n), dtype=bool), k=1), np.nan, matrix)
-
-    size = max(6.0, HEATMAP_CELL_INCHES * n + 3.0)
-    fig, ax = plt.subplots(figsize=(size, size))
+    inches = max(6.0, 0.62 * size + 3.0)
+    figure, axes = plt.subplots(figsize=(inches, inches))
     colours = plt.get_cmap("coolwarm").copy()
     colours.set_bad("white")
-    image = ax.imshow(shown, cmap=colours, vmin=-1, vmax=1)
+    image = axes.imshow(shown, cmap=colours, vmin=-1, vmax=1)
 
-    # Chrome scales with the figure: fixed point sizes vanish once the canvas
-    # is 25 inches across.
-    chrome = max(10.0, 0.45 * size)
-    bar = fig.colorbar(image, ax=ax, shrink=0.6)
+    chrome = max(10.0, 0.45 * inches)
+    bar = figure.colorbar(image, ax=axes, shrink=0.6)
     bar.set_label("Pearson r", fontsize=chrome)
     bar.ax.tick_params(labelsize=chrome)
 
-    ax.set_xticks(np.arange(n), labels=names, fontsize=10)
-    ax.set_yticks(np.arange(n), labels=names, fontsize=10)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    axes.set_yticks(np.arange(size), labels=names, fontsize=10)
+    axes.set_xticks(np.arange(size), labels=names, fontsize=10, rotation=45,
+                    ha="right", rotation_mode="anchor")
 
-    # Hairlines between cells: without them a block of similar correlations
-    # reads as one smear.
-    ax.set_xticks(np.arange(n + 1) - 0.5, minor=True)
-    ax.set_yticks(np.arange(n + 1) - 0.5, minor=True)
-    ax.grid(which="minor", color="white", linewidth=0.5)
-    ax.tick_params(which="minor", length=0)
-    for spine in ax.spines.values():
+    axes.set_xticks(np.arange(size + 1) - 0.5, minor=True)
+    axes.set_yticks(np.arange(size + 1) - 0.5, minor=True)
+    axes.grid(which="minor", color="white", linewidth=0.5)
+    axes.tick_params(which="minor", length=0)
+    for spine in axes.spines.values():
         spine.set_visible(False)
 
-    if n <= HEATMAP_MAX_ANNOTATED:
-        for i in range(n):
-            for j in range(i + 1):
-                value = matrix[i, j]
-                # White on the saturated ends, black in the pale middle.
-                colour = "white" if abs(value) > 0.55 else "black"
-                ax.text(j, i, _format_correlation(value), ha="center", va="center",
-                        color="darkgray" if value != value else colour, fontsize=9)
+    if size <= 60:
+        for row, column in zip(*np.tril_indices(size)):
+            value = matrix[row, column]
+            colour = "darkgray" if value != value else ("white" if abs(value) > 0.55 else "black")
+            axes.text(column, row, _correlation_label(value), ha="center", va="center",
+                      color=colour, fontsize=9)
 
-    ax.set_title(title, fontsize=chrome * 1.4, pad=12)
-    fig.tight_layout()
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight", dpi=150)
-    plt.close(fig)
-    return buf.getvalue()
+    axes.set_title(title, fontsize=chrome * 1.4, pad=12)
+    figure.tight_layout()
+    return _png(dpi=150)
 
-def compute_row_emojis(rows: List[dict], emoji_config: Optional[dict]) -> Dict[str, str]:
-    """Compute best/worst indicator icons for metric summary table rows.
+
+def sweep_plot(thresholds: np.ndarray, curves: Sequence[tuple], aggregate: np.ndarray,
+               markers: dict, title: str, figsize: tuple = (8, 5)) -> bytes:
+    """Plot accuracy against threshold, with each candidate threshold marked.
 
     Args:
-        rows: List of row data dictionaries.
-        emoji_config: Configuration dictionary for indicator icons.
-
-    Returns:
-        Dictionary mapping row names to indicator icon strings.
-    """
-    if not emoji_config:
-        return {r["name"]: "" for r in rows}
-        
-    widx = emoji_config["wrapper_idx"]
-    stat = emoji_config["stat"]
-    higher_is_better = emoji_config.get("higher_is_better", True)
-    skip_names = set(emoji_config.get("skip_names", ()))
-    
-    rank_values = []
-    for r in rows:
-        cells = r.get("cells", [])
-        if widx >= len(cells):
-            rank_values.append(float("nan"))
-            continue
-        val = cells[widx].values.get(stat)
-        if val is None:
-            rank_values.append(float("nan"))
-        else:
-            rank_values.append(val)
-            
-    valid = [(i, v) for i, v in enumerate(rank_values) if v is not None and v == v and rows[i]["name"] not in skip_names]
-    
-    best: set[int] = set()
-    worst: set[int] = set()
-    
-    if valid:
-        valid_sorted = sorted(valid, key=lambda x: x[1])
-        n = len(valid_sorted)
-        if emoji_config["mode"] == "single":
-            if higher_is_better:
-                best = {valid_sorted[-1][0]}
-                worst = {valid_sorted[0][0]}
-            else:
-                best = {valid_sorted[0][0]}
-                worst = {valid_sorted[-1][0]}
-        else:
-            n_top = max(1, int(n * emoji_config["pct"]))
-            if higher_is_better:
-                worst = {idx for idx, _ in valid_sorted[:n_top]}
-                best = {idx for idx, _ in valid_sorted[-n_top:]}
-            else:
-                best = {idx for idx, _ in valid_sorted[:n_top]}
-                worst = {idx for idx, _ in valid_sorted[-n_top:]}
-                
-    return {r["name"]: ("✔️ " if i in best else ("❗ " if i in worst else "")) for i, r in enumerate(rows)}
-
-def generate_table(rows: List[dict], columns: List[dict], emoji_config: Optional[dict] = None, row_header: str = "Name") -> Tuple[str, Dict[str, str]]:
-    """Format row and column cell values into a markdown summary table.
-
-    Args:
-        rows: List of row data dictionaries.
-        columns: List of column specification dictionaries.
-        emoji_config: Optional configuration dictionary for indicator icons.
-        row_header: Header label for first column.
-
-    Returns:
-        Tuple of (markdown_table_string, emoji_mapping_dict).
-    """
-    emojis = compute_row_emojis(rows, emoji_config)
-    row_names = [emojis[r["name"]] + r["name"] for r in rows]
-    
-    header = f"| {row_header} | " + " | ".join(c["header"] for c in columns) + " |\n"
-    sep = "|---|" + "|".join(["---" for _ in columns]) + "|\n"
-    
-    lines = []
-    for i, row in enumerate(rows):
-        cells = []
-        for col in columns:
-            widx = col["wrapper_idx"]
-            stat = col["stat"]
-            if widx >= len(row["cells"]):
-                cells.append("-")
-                continue
-            wrapper = row["cells"][widx]
-            val = wrapper.values.get(stat)
-            if val is None:
-                cells.append("-")
-                continue
-                
-            stat_2 = col.get("stat_2")
-            if stat_2 is not None:
-                val2 = wrapper.values.get(stat_2)
-                if val2 is not None:
-                    fmt = col.get("format", "{value:.4f} ± {value_2:.4f}")
-                    cells.append(fmt.format(value=val, value_2=val2))
-                else:
-                    cells.append(f"{val:.4f}")
-            else:
-                fmt = col.get("format", "{value:.4f}")
-                cells.append(fmt.format(value=val))
-        lines.append(f"| {row_names[i]} | " + " | ".join(cells) + " |")
-        
-    return header + sep + "\n".join(lines) + "\n", emojis
-
-def get_sweep_plot(
-    thresholds: np.ndarray,
-    per_dataset_accs: list[list[float]],
-    agg_accs: list[float],
-    labels: list[str],
-    threshold_dict: dict[str, float],
-    title: str,
-    figsize: tuple[int, int] = (8, 5),
-) -> bytes:
-    """Render threshold sweep accuracy curves.
-
-    Args:
-        thresholds: Array of threshold values.
-        per_dataset_accs: Accuracy curves per dataset.
-        agg_accs: Aggregate accuracy curve.
-        labels: Legend labels for dataset curves.
-        threshold_dict: Dictionary of named threshold markers.
-        title: Plot title string.
+        thresholds: Threshold values, the shared x axis.
+        curves: (accuracy, label) pairs, one per source column.
+        aggregate: Accuracy over all source columns together.
+        markers: {threshold type: value} to draw as vertical lines.
+        title: Figure title.
         figsize: Figure dimensions (width, height).
 
     Returns:
         PNG image bytes.
     """
+    colours = ("red", "green", "blue", "cyan", "magenta", "yellow", "orange", "purple", "brown", "pink")
     plt.figure(figsize=figsize)
-
-    for accs, label in zip(per_dataset_accs, labels):
-        if accs:
-            plt.plot(thresholds, accs, label=label)
-
-    if agg_accs:
-        plt.plot(thresholds, agg_accs, label="Aggregate Accuracy", color="black", linestyle="--")
-
-    colors = ["red", "green", "blue", "cyan", "magenta", "yellow", "orange", "purple", "brown", "pink"]
-    for i, (k, v) in enumerate(threshold_dict.items()):
-        plt.axvline(x=v, color=colors[i % len(colors)], linestyle=":", label=f"{k} Thr ({v:.4f})")
+    for accuracy, label in curves:
+        plt.plot(thresholds, accuracy, label=label)
+    plt.plot(thresholds, aggregate, label="Aggregate Accuracy", color="black", linestyle="--")
+    for index, (name, value) in enumerate(markers.items()):
+        plt.axvline(x=value, color=colours[index % len(colours)], linestyle=":",
+                    label=f"{name} Thr ({value:.4f})")
 
     plt.xlabel("Threshold")
     plt.ylabel("Accuracy")
     plt.title(title)
-    if labels or agg_accs or threshold_dict:
-        plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
     plt.grid(True)
+    return _png()
 
-    return _save_fig_to_png()
 
-
-def format_confusion_matrix(
-    tp: int,
-    fp: int,
-    tn: int,
-    fn: int,
-    title: str,
-) -> str:
-    """Format classification confusion matrix as a markdown table.
+def table(rows: Sequence[dict], columns: Sequence[Column], row_header: str = "Name",
+          mark_key: Optional[str] = None, skip_marks: Iterable[str] = ()) -> str:
+    """Render ``{"name", "values"}`` rows as a markdown table.
 
     Args:
-        tp: True positive count.
-        fp: False positive count.
-        tn: True negative count.
-        fn: False negative count.
-        title: Table heading string.
+        rows: Table rows, each a ``{"name": str, "values": dict}`` mapping.
+        columns: Columns to render, read by key out of each row's values.
+        row_header: Header label for the first column.
+        mark_key: Metric to mark the best (highest) and worst row by, if any.
+        skip_marks: Row names that are never marked.
 
     Returns:
-        Markdown table string.
+        Markdown table string, without a trailing newline.
     """
-    _, _, f1, fpr, tnr = _prf(tp, fp, tn, fn)
-    actual_pos = tp + fn
-    tpr = tp / actual_pos if actual_pos > 0 else 0
-    fnr = fn / actual_pos if actual_pos > 0 else 0
+    marks = {row["name"]: "" for row in rows}
+    skipped = set(skip_marks)
+    ranked = sorted((float(value), index) for index, row in enumerate(rows)
+                    if mark_key and row["name"] not in skipped
+                    and (value := row["values"].get(mark_key)) is not None and value == value)
+    if ranked:
+        marks[rows[ranked[0][1]]["name"]] = "❗ "
+        marks[rows[ranked[-1][1]]["name"]] = "✔️ "
 
-    md = f"### {title} (F1: {f1:.4f})\n"
-    md += "| | Predicted Positive | Predicted Negative |\n"
-    md += "|---|---|---|\n"
-    md += f"| **Actual Positive** | {tp} (TPR: {tpr:.2%}) | {fn} (FNR: {fnr:.2%}) |\n"
-    md += f"| **Actual Negative** | {fp} (FPR: {fpr:.2%}) | {tn} (TNR: {tnr:.2%}) |\n"
-    return md
+    body = [f"| {marks[row['name']]}{row['name']} | " + " | ".join(
+        "-" if (value := row["values"].get(column.key)) is None else column.format.format(value=value)
+        for column in columns) + " |" for row in rows]
+    return "\n".join([f"| {row_header} | " + " | ".join(c.header for c in columns) + " |",
+                      "|---|" + "|".join("---" for _ in columns) + "|", *body])

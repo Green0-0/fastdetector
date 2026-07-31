@@ -1,337 +1,212 @@
-import math
-
 import numpy as np
 import pytest
 
 from fastdetector.visualization.metrics import (
     FPR_TARGETS,
-    _predict,
-    _prf,
-    compute_auroc,
-    compute_classifier_metrics,
-    compute_threshold_sweep,
+    classifier_metrics,
+    correlations,
+    describe,
+    sweep,
 )
 
-HUMAN = np.array([0.0, 0.1, 0.2, 0.3])
-AI = np.array([0.7, 0.8, 0.9, 1.0])
+
+def scores_and_labels(human, ai):
+    """Flatten a human/AI pair of arrays into the (scores, is_ai) form used everywhere."""
+    scores = np.concatenate([np.asarray(human, dtype=float), np.asarray(ai, dtype=float)])
+    is_ai = np.concatenate([np.zeros(len(human), bool), np.ones(len(ai), bool)])
+    return scores, is_ai
 
 
 # --------------------------------------------------------------------------
-# _predict / _prf
+# classifier_metrics
 # --------------------------------------------------------------------------
 
 
-def test_predict_is_strictly_greater_than_the_threshold():
-    """Test _predict uses strictly-greater-than threshold logic when flip=False."""
-    result = _predict(np.array([0.4, 0.5, 0.6]), threshold=0.5, flip=False)
-    assert result.tolist() == [False, False, True]
+def test_a_higher_is_ai_classifier_calls_scores_above_the_threshold_ai():
+    scores, is_ai = scores_and_labels([0.4], [0.5, 0.6])
+    result = classifier_metrics(scores, is_ai, 0.5, flip=False)
+    assert (result["TP"], result["FN"], result["TN"]) == (1, 1, 1)
 
 
-def test_predict_flipped_is_less_than_or_equal():
-    """Test _predict uses less-than-or-equal threshold logic when flip=True."""
-    result = _predict(np.array([0.4, 0.5, 0.6]), threshold=0.5, flip=True)
-    assert result.tolist() == [True, True, False]
+def test_a_lower_is_ai_classifier_calls_the_threshold_itself_ai():
+    # The boundary belongs to the AI side when the direction is flipped, which
+    # is what makes a threshold of 0 usable for an integer bucket column.
+    scores, is_ai = scores_and_labels([0.6], [0.4, 0.5])
+    result = classifier_metrics(scores, is_ai, 0.5, flip=True)
+    assert (result["TP"], result["FN"], result["TN"]) == (2, 0, 1)
 
 
-def test_prf_on_a_perfect_classifier():
-    """Test _prf calculation on a perfect classification matrix."""
-    precision, recall, f1, fpr, tnr = _prf(tp=5, fp=0, tn=5, fn=0)
-    assert (precision, recall, f1, fpr, tnr) == (1.0, 1.0, 1.0, 0.0, 1.0)
+def test_a_perfect_separation_scores_everything_at_one():
+    scores, is_ai = scores_and_labels([0.0, 0.1], [0.9, 1.0])
+    result = classifier_metrics(scores, is_ai, 0.5, flip=False)
+    assert result["auroc"] == 1.0
+    assert result["acc"] == 1.0
+    assert (result["tpr"], result["fpr"]) == (1.0, 0.0)
+    assert result["n"] == 4
 
 
-def test_prf_is_zero_division_safe():
-    """Test _prf handles all zero counts without dividing by zero."""
-    assert _prf(tp=0, fp=0, tn=0, fn=0) == (0.0, 0.0, 0.0, 0.0, 0.0)
+def test_the_confusion_counts_add_up_to_n():
+    rng = np.random.default_rng(0)
+    scores, is_ai = scores_and_labels(rng.normal(0, 1, 50), rng.normal(1, 1, 70))
+    result = classifier_metrics(scores, is_ai, 0.5, flip=False)
+    assert result["TP"] + result["FP"] + result["TN"] + result["FN"] == result["n"] == 120
 
 
-def test_prf_with_no_true_positives():
-    """Test _prf metrics when true positive count is 0."""
-    precision, recall, f1, fpr, tnr = _prf(tp=0, fp=3, tn=2, fn=4)
-    assert precision == 0.0
-    assert recall == 0.0
-    assert f1 == 0.0
-    assert fpr == pytest.approx(3 / 5)
-    assert tnr == pytest.approx(2 / 5)
+def test_a_flipped_classifier_is_not_reported_with_an_inverted_auroc():
+    # AI scores lower here, so a lower_is_ai classifier separates perfectly.
+    scores, is_ai = scores_and_labels([5.0, 6.0], [0.0, 1.0])
+    assert classifier_metrics(scores, is_ai, 2.0, flip=True)["auroc"] == 1.0
+    assert classifier_metrics(scores, is_ai, 2.0, flip=False)["auroc"] == 0.0
 
 
-# --------------------------------------------------------------------------
-# compute_auroc
-# --------------------------------------------------------------------------
+def test_auroc_is_nan_when_only_one_class_is_present():
+    result = classifier_metrics(np.array([1.0, 2.0, 3.0]), np.ones(3, bool), 1.5, flip=False)
+    assert result["auroc"] != result["auroc"]
 
 
-def test_auroc_of_a_perfect_ranking_is_one():
-    """Test compute_auroc returns 1.0 for perfect prediction ordering."""
-    assert compute_auroc([0, 0, 1, 1], [0.1, 0.2, 0.8, 0.9]) == 1.0
+def test_metrics_of_an_empty_split_are_zero_rather_than_a_crash():
+    result = classifier_metrics(np.array([]), np.array([], bool), 0.5, flip=False)
+    assert result["n"] == 0
+    assert result["acc"] == 0.0
 
 
-def test_auroc_of_an_inverted_ranking_is_zero():
-    """Test compute_auroc returns 0.0 for perfectly inverted prediction ordering."""
-    assert compute_auroc([0, 0, 1, 1], [0.9, 0.8, 0.2, 0.1]) == 0.0
-
-
-def test_auroc_of_a_single_class_is_undefined():
-    """Test compute_auroc returns NaN when only one class is present in labels."""
-    # sklearn returns NaN (with a warning) rather than raising here, which is
-    # what compute_classifier_metrics ends up reporting for a one-class subset.
-    assert math.isnan(compute_auroc([1, 1], [0.1, 0.9]))
-
-
-# --------------------------------------------------------------------------
-# compute_threshold_sweep
-# --------------------------------------------------------------------------
-
-
-def test_sweep_finds_a_perfect_threshold_for_separable_data():
-    """Test compute_threshold_sweep finds optimal threshold for linearly separable data."""
-    thresholds, optimal_accuracy, _ = compute_threshold_sweep(
-        [HUMAN, AI], [False, True], flip_inequality=False
-    )
-    assert optimal_accuracy == 1.0
-    assert 0.3 <= thresholds["accuracy"] < 0.7
-
-
-def test_sweep_reports_every_threshold_type():
-    """Test compute_threshold_sweep output contains all target threshold keys."""
-    thresholds, _, _ = compute_threshold_sweep(
-        [HUMAN, AI], [False, True], flip_inequality=False
-    )
-    assert set(thresholds) == {"accuracy", "f1", *FPR_TARGETS}
-
-
-def test_sweep_returns_curves_aligned_with_the_thresholds():
-    """Test compute_threshold_sweep returns accuracy curves aligned with threshold grid."""
-    _, _, (grid, per_dataset, aggregate) = compute_threshold_sweep(
-        [HUMAN, AI], [False, True], flip_inequality=False, n_thresholds=25
-    )
-    assert len(grid) == 25
-    assert len(per_dataset) == 2
-    assert all(len(curve) == 25 for curve in per_dataset)
-    assert len(aggregate) == 25
-
-
-def test_sweep_spans_the_observed_value_range():
-    """Test compute_threshold_sweep grid spans min to max observed values."""
-    _, _, (grid, _, _) = compute_threshold_sweep(
-        [HUMAN, AI], [False, True], flip_inequality=False
-    )
-    assert grid[0] == pytest.approx(0.0)
-    assert grid[-1] == pytest.approx(1.0)
-
-
-def test_sweep_handles_a_flipped_inequality():
-    """Test compute_threshold_sweep with flipped inequality."""
-    # Same data, but now a *low* score means the positive class.
-    thresholds, optimal_accuracy, _ = compute_threshold_sweep(
-        [AI, HUMAN], [False, True], flip_inequality=True
-    )
-    assert optimal_accuracy == 1.0
-    assert 0.3 <= thresholds["accuracy"] < 0.7
-
-
-def test_sweep_with_no_arrays():
-    """Test compute_threshold_sweep on empty array lists."""
-    thresholds, optimal_accuracy, (grid, per_dataset, aggregate) = (
-        compute_threshold_sweep([], [], flip_inequality=False)
-    )
-    assert thresholds == {}
-    assert optimal_accuracy == 0.0
-    assert len(grid) == 0
-    assert per_dataset == []
-    assert len(aggregate) == 0
-
-
-def test_sweep_with_only_empty_arrays():
-    """Test compute_threshold_sweep on empty NumPy array inputs."""
-    thresholds, optimal_accuracy, _ = compute_threshold_sweep(
-        [np.array([]), np.array([])], [False, True], flip_inequality=False
-    )
-    assert thresholds == {}
-    assert optimal_accuracy == 0.0
-
-
-def test_sweep_skips_an_empty_class_but_keeps_its_slot():
-    """Test compute_threshold_sweep preserves list slots for empty classes."""
-    _, _, (_, per_dataset, _) = compute_threshold_sweep(
-        [HUMAN, np.array([]), AI], [False, True, True], flip_inequality=False
-    )
-    assert per_dataset[1] == []
-    assert len(per_dataset) == 3
-
-
-def test_sweep_pads_a_constant_score_range():
-    """Test compute_threshold_sweep pads constant value ranges."""
-    # linspace(v, v) would put every threshold on the same value and make the
-    # sweep meaningless.
-    thresholds, _, (grid, _, _) = compute_threshold_sweep(
-        [np.array([0.5, 0.5]), np.array([0.5])], [False, True], flip_inequality=False
-    )
-    assert grid[0] < grid[-1]
-    assert thresholds
-
-
-def test_sweep_accuracy_never_exceeds_one():
-    """Test compute_threshold_sweep aggregate accuracy stays bounded in [0, 1]."""
-    _, _, (_, _, aggregate) = compute_threshold_sweep(
-        [HUMAN, AI], [False, True], flip_inequality=False
-    )
-    assert max(aggregate) <= 1.0
-    assert min(aggregate) >= 0.0
-
-
-def test_fpr_thresholds_are_conservative_for_higher_is_positive():
-    """Test target FPR thresholds for higher_is_positive classifiers."""
-    # An overlapping distribution: a 0.1% FPR target must sit above the
-    # accuracy-optimal threshold, i.e. predict positive far less eagerly.
-    human = np.linspace(0.0, 1.0, 200)
-    ai = np.linspace(0.5, 1.5, 200)
-    thresholds, _, _ = compute_threshold_sweep(
-        [human, ai], [False, True], flip_inequality=False
-    )
-    assert thresholds["fpr_0_1pct"] >= thresholds["accuracy"]
-
-
-def test_fpr_thresholds_are_conservative_for_lower_is_positive():
-    """Test target FPR thresholds for lower_is_positive classifiers."""
-    human = np.linspace(0.5, 1.5, 200)
-    ai = np.linspace(0.0, 1.0, 200)
-    thresholds, _, _ = compute_threshold_sweep(
-        [human, ai], [False, True], flip_inequality=True
-    )
-    assert thresholds["fpr_0_1pct"] <= thresholds["accuracy"]
-
-
-def test_fpr_thresholds_fall_back_when_the_target_is_unreachable():
-    """Test FPR threshold fallback when target FPR cannot be satisfied."""
-    # Completely overlapping classes cannot reach a 0.01% FPR at any threshold
-    # that predicts anything; the sweep must still return a usable number.
-    overlapping = np.linspace(0.0, 1.0, 50)
-    thresholds, _, _ = compute_threshold_sweep(
-        [overlapping, overlapping.copy()], [False, True], flip_inequality=False
-    )
-    assert all(math.isfinite(thresholds[key]) for key in FPR_TARGETS)
+def test_rates_are_consistent_with_each_other():
+    rng = np.random.default_rng(1)
+    scores, is_ai = scores_and_labels(rng.normal(0, 1, 80), rng.normal(1, 1, 80))
+    result = classifier_metrics(scores, is_ai, 0.3, flip=False)
+    assert result["tpr"] == pytest.approx(result["recall"])
+    assert result["tpr"] + result["fnr"] == pytest.approx(1.0)
+    assert result["fpr"] + result["tnr"] == pytest.approx(1.0)
 
 
 # --------------------------------------------------------------------------
-# compute_classifier_metrics
+# sweep
 # --------------------------------------------------------------------------
 
 
-def test_metrics_on_a_perfect_split():
-    """Test compute_classifier_metrics on perfectly separable score arrays."""
-    metrics = compute_classifier_metrics(
-        [HUMAN, AI], [False, True], threshold=0.5, flip_inequality=False
-    )
-    assert metrics["acc"] == 1.0
-    assert metrics["f1"] == 1.0
-    assert metrics["auroc"] == 1.0
-    assert (metrics["TP"], metrics["FP"], metrics["TN"], metrics["FN"]) == (4, 0, 4, 0)
-    assert metrics["fpr"] == 0.0
-    assert metrics["fnr"] == 0.0
+def test_the_sweep_spans_the_score_range():
+    scores, is_ai = scores_and_labels([1.0, 2.0], [8.0, 9.0])
+    thresholds, accuracy, _ = sweep(scores, is_ai, flip=False)
+    assert (thresholds[0], thresholds[-1]) == (1.0, 9.0)
+    assert len(thresholds) == len(accuracy) == 100
 
 
-def test_metrics_on_a_completely_wrong_threshold():
-    """Test compute_classifier_metrics with a threshold classifying all as positive."""
-    metrics = compute_classifier_metrics(
-        [HUMAN, AI], [False, True], threshold=-1.0, flip_inequality=False
-    )
-    assert metrics["TP"] == 4
-    assert metrics["FP"] == 4
-    assert metrics["TN"] == 0
-    assert metrics["acc"] == 0.5
+def test_the_sweep_offers_every_configured_candidate_threshold():
+    scores, is_ai = scores_and_labels([1.0, 2.0], [8.0, 9.0])
+    _, _, candidates = sweep(scores, is_ai, flip=False)
+    assert set(candidates) == {"accuracy", "f1", *FPR_TARGETS}
 
 
-def test_metrics_report_every_documented_key():
-    """Test compute_classifier_metrics dictionary contains all documented metric keys."""
-    metrics = compute_classifier_metrics(
-        [HUMAN, AI], [False, True], threshold=0.5, flip_inequality=False
-    )
-    assert set(metrics) == {
-        "n",
-        "acc",
-        "f1",
-        "auroc",
-        "tpr",
-        "fnr",
-        "fpr",
-        "tnr",
-        "precision",
-        "recall",
-        "TP",
-        "FP",
-        "TN",
-        "FN",
-    }
+def test_the_accuracy_threshold_separates_two_clean_clusters():
+    rng = np.random.default_rng(2)
+    scores, is_ai = scores_and_labels(rng.normal(0, 0.1, 200), rng.normal(5, 0.1, 200))
+    _, accuracy, candidates = sweep(scores, is_ai, flip=False)
+    assert accuracy.max() == pytest.approx(1.0)
+    # The pick is the first threshold on the perfect plateau, not its middle.
+    assert classifier_metrics(scores, is_ai, candidates["accuracy"], flip=False)["acc"] == 1.0
 
 
-def test_auroc_is_not_inverted_for_a_lower_is_positive_classifier():
-    """Test that AUROC is not inverted when flip_inequality=True."""
-    # Binoculars-style: the positive class scores *lower*. Without negating the
-    # scores this reports ~1 - AUROC and the classifier looks broken.
-    metrics = compute_classifier_metrics(
-        [AI, HUMAN], [False, True], threshold=0.5, flip_inequality=True
-    )
-    assert metrics["auroc"] == 1.0
-    assert metrics["acc"] == 1.0
+def test_a_constant_column_still_produces_a_sweep():
+    # Without padding the range the thresholds would collapse onto one value.
+    scores, is_ai = scores_and_labels([2.5, 2.5], [2.5, 2.5])
+    thresholds, accuracy, _ = sweep(scores, is_ai, flip=False)
+    assert thresholds[0] < 2.5 < thresholds[-1]
+    assert len(accuracy) == 100
 
 
-def test_counts_add_up_to_the_number_of_scores():
-    """Test confusion matrix counts sum to total number of input items."""
-    metrics = compute_classifier_metrics(
-        [HUMAN, AI], [False, True], threshold=0.45, flip_inequality=False
-    )
-    total = metrics["TP"] + metrics["FP"] + metrics["TN"] + metrics["FN"]
-    assert total == len(HUMAN) + len(AI)
+def test_a_shared_threshold_axis_can_be_passed_back_in():
+    scores, is_ai = scores_and_labels([1.0, 2.0], [8.0, 9.0])
+    thresholds, _, _ = sweep(scores, is_ai, flip=False)
+    own_axis, curve, _ = sweep(np.array([8.0, 9.0]), np.ones(2, bool), False, thresholds)
+    assert own_axis is thresholds
+    assert len(curve) == len(thresholds)
 
 
-def test_metrics_with_no_data_are_zero_and_nan_auroc():
-    """Test compute_classifier_metrics outputs on empty input arrays."""
-    metrics = compute_classifier_metrics([], [], threshold=0.5, flip_inequality=False)
-    assert metrics["acc"] == 0.0
-    assert metrics["TP"] == 0
-    assert math.isnan(metrics["auroc"])
+def test_the_sweep_accuracy_curve_matches_metrics_at_the_same_threshold():
+    rng = np.random.default_rng(3)
+    scores, is_ai = scores_and_labels(rng.normal(0, 1, 60), rng.normal(2, 1, 60))
+    thresholds, accuracy, _ = sweep(scores, is_ai, flip=False)
+    for index in (0, 37, 99):
+        direct = classifier_metrics(scores, is_ai, float(thresholds[index]), flip=False)
+        assert accuracy[index] == pytest.approx(direct["acc"])
 
 
-def test_metrics_with_a_single_class_report_nan_auroc_rather_than_raising():
-    """Test compute_classifier_metrics on single-class input returns NaN AUROC."""
-    metrics = compute_classifier_metrics(
-        [HUMAN], [False], threshold=0.5, flip_inequality=False
-    )
-    assert math.isnan(metrics["auroc"])
-    assert metrics["TN"] == 4
+def test_a_flipped_sweep_accuracy_curve_also_matches_metrics():
+    rng = np.random.default_rng(4)
+    scores, is_ai = scores_and_labels(rng.normal(2, 1, 60), rng.normal(0, 1, 60))
+    thresholds, accuracy, _ = sweep(scores, is_ai, flip=True)
+    for index in (5, 50, 95):
+        direct = classifier_metrics(scores, is_ai, float(thresholds[index]), flip=True)
+        assert accuracy[index] == pytest.approx(direct["acc"])
 
 
-def test_metrics_skip_empty_arrays():
-    """Test compute_classifier_metrics ignores empty arrays in input list."""
-    metrics = compute_classifier_metrics(
-        [HUMAN, np.array([]), AI],
-        [False, True, True],
-        threshold=0.5,
-        flip_inequality=False,
-    )
-    assert metrics["TP"] == 4
-    assert metrics["acc"] == 1.0
+def test_an_fpr_target_is_met_when_any_threshold_can_meet_it():
+    rng = np.random.default_rng(5)
+    scores, is_ai = scores_and_labels(rng.normal(0, 1, 400), rng.normal(4, 1, 400))
+    _, _, candidates = sweep(scores, is_ai, flip=False)
+    assert classifier_metrics(scores, is_ai, candidates["fpr_1pct"], flip=False)["fpr"] <= 0.01
 
 
-def test_precision_and_recall_match_tpr():
-    """Test precision, recall, and TPR relationships in metrics output."""
-    metrics = compute_classifier_metrics(
-        [HUMAN, AI], [False, True], threshold=0.85, flip_inequality=False
-    )
-    assert metrics["recall"] == metrics["tpr"]
-    assert metrics["fnr"] == pytest.approx(1.0 - metrics["tpr"])
-    assert metrics["tnr"] == pytest.approx(1.0 - metrics["fpr"])
+# --------------------------------------------------------------------------
+# describe
+# --------------------------------------------------------------------------
 
 
-def test_sweep_optimum_is_reproduced_by_the_metric_computation():
-    """Test consistency between compute_threshold_sweep and compute_classifier_metrics."""
-    # The two entry points must agree, or the README reports one number while
-    # the threshold plot shows another.
-    human = np.linspace(0.0, 1.0, 60)
-    ai = np.linspace(0.4, 1.4, 60)
-    thresholds, optimal_accuracy, _ = compute_threshold_sweep(
-        [human, ai], [False, True], flip_inequality=False
-    )
-    metrics = compute_classifier_metrics(
-        [human, ai], [False, True], thresholds["accuracy"], flip_inequality=False
-    )
-    assert metrics["acc"] == pytest.approx(optimal_accuracy)
+def test_describe_reports_the_usual_summary():
+    result = describe(np.array([1.0, 2.0, 3.0]))
+    assert result["count"] == 3
+    assert result["mean"] == 2.0
+    assert result["median"] == 2.0
+    assert (result["min"], result["max"]) == (1.0, 3.0)
+    assert result["invalid"] == 0
+
+
+def test_describe_counts_non_finite_rows_and_excludes_them():
+    result = describe(np.array([1.0, np.nan, 3.0, np.inf]))
+    assert result["count"] == 4
+    assert result["invalid"] == 2
+    assert result["mean"] == 2.0
+
+
+def test_describe_of_an_all_invalid_column_is_nan_but_still_counts_the_rows():
+    result = describe(np.full(4, np.nan))
+    assert result["count"] == 4
+    assert result["invalid"] == 4
+    assert result["mean"] != result["mean"]
+
+
+# --------------------------------------------------------------------------
+# correlations
+# --------------------------------------------------------------------------
+
+
+def test_a_column_correlates_perfectly_with_itself_and_its_own_multiple():
+    values = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    matrix = correlations([values, values * 3, -values])
+    assert matrix[0, 0] == pytest.approx(1.0)
+    assert matrix[0, 1] == pytest.approx(1.0)
+    assert matrix[0, 2] == pytest.approx(-1.0)
+
+
+def test_a_constant_column_has_nothing_to_correlate():
+    matrix = correlations([np.array([1.0, 2.0, 3.0]), np.full(3, 7.0)])
+    assert matrix[0, 1] != matrix[0, 1]
+    assert matrix[1, 1] != matrix[1, 1]
+
+
+def test_a_pair_is_correlated_over_the_rows_it_shares():
+    # The failed row must not blank out the pair, and must not be counted.
+    left = np.array([1.0, 2.0, 3.0, 4.0, np.nan])
+    right = np.array([2.0, 4.0, 6.0, 8.0, 100.0])
+    assert correlations([left, right])[0, 1] == pytest.approx(1.0)
+
+
+def test_correlations_match_numpy_when_nothing_is_missing():
+    rng = np.random.default_rng(6)
+    data = rng.normal(size=(4, 200))
+    assert correlations(list(data)) == pytest.approx(np.corrcoef(data), abs=1e-9)
+
+
+def test_a_pair_with_too_few_shared_rows_is_nan():
+    matrix = correlations([np.array([1.0, np.nan, np.nan]), np.array([1.0, 2.0, 3.0])])
+    assert matrix[0, 1] != matrix[0, 1]

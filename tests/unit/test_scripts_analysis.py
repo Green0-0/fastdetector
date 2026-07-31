@@ -1,30 +1,32 @@
 import json
+import sys
 import re
 
 import numpy as np
 import pytest
 from datasets import Dataset
 
+import analysis
 from analysis import (
-    ColumnCache,
-    NumpyEncoder,
+    Scores,
     Subset,
-    _anchor,
-    _build_readme,
-    _build_summary_stats,
-    _column_equals_mask,
-    _extract_classifier_data,
-    _parse_genparams,
-    _safe_name,
-    compute_quantile_bins,
-    select_available,
+    SubsetGroups,
+    build_contents,
+    evaluate,
     extract_model_genconfig,
     extract_prompt_types,
+    fmt,
+    read_scores,
+    safe_name,
+    select_available,
+    subset_table,
+    threshold_description,
 )
-from fastdetector.frontend.toml_config import AnalysisConfig, ClassifierConfig
-from fastdetector.visualization.auto_visualizer import (
-    ClassifierWrapper,
-    StaticThresholdWrapper,
+from fastdetector.frontend.toml_config import (
+    AnalysisConfig,
+    ClassifierConfig,
+    ConditionConfig,
+    GlobalsConfig,
 )
 
 
@@ -36,65 +38,42 @@ def make_analysis_config(**overrides) -> AnalysisConfig:
         "prompt_metadata_column": "prompt",
         "model_metadata_column": "generator_model",
         "validation_size": 0.1,
-        "threshold_type_bin": "f1",
-        "threshold_type_score": "accuracy",
     }
     return AnalysisConfig(**{**base, **overrides})
 
 
-# --------------------------------------------------------------------------
-# _parse_genparams
-# --------------------------------------------------------------------------
+def make_classifier(name: str, suffix: str, **overrides) -> ClassifierConfig:
+    """Build a ClassifierConfig with the required threshold criterion filled in."""
+    return ClassifierConfig(name=name, suffix=suffix, **{"threshold_type": "accuracy", **overrides})
 
 
-def test_parse_genparams_passes_a_dict_through():
-    assert _parse_genparams({"temperature": 0.6}) == {"temperature": 0.6}
+def reader(ds: Dataset):
+    """The column reader main() builds, without the caching."""
+    return lambda name, dtype=None: np.asarray(ds[name], dtype=dtype)
 
 
-def test_parse_genparams_decodes_json():
-    assert _parse_genparams('{"temperature": 0.6}') == {"temperature": 0.6}
+def run_main(ds: Dataset, cfg: AnalysisConfig, name: str = "d/s") -> tuple[str, dict]:
+    """Run analysis.main() over *ds*, with everything networked stubbed out.
 
-
-@pytest.mark.parametrize("value", [None, ""])
-def test_parse_genparams_treats_missing_values_as_none(value):
-    assert _parse_genparams(value) is None
-
-
-def test_parse_genparams_keeps_an_empty_dict_as_a_dict():
-    # An empty dict is a real (parsed) params object, not a missing one.
-    assert _parse_genparams({}) == {}
-
-
-def test_parse_genparams_rejects_malformed_json():
-    with pytest.raises(json.JSONDecodeError):
-        _parse_genparams("not json")
-
-
-# --------------------------------------------------------------------------
-# _safe_name
-# --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("Prompt: my-type!", "PROMPT_MY_TYPE"),
-        ("already_safe", "ALREADY_SAFE"),
-        ("  spaced  out  ", "SPACED_OUT"),
-        ("a//b", "A_B"),
-        ("Model (Temp: 0.6)", "MODEL_TEMP_0_6"),
-    ],
-)
-def test_safe_name(raw, expected):
-    assert _safe_name(raw) == expected
-
-
-def test_safe_name_of_punctuation_only_is_empty():
-    assert _safe_name("!!!") == ""
-
-
-def test_safe_names_are_stable_for_chart_filenames():
-    assert _safe_name("Prompt: rewrite") == _safe_name("prompt-rewrite")
+    Returns:
+        Tuple of (readme markdown, {filename: bytes}) as it would be uploaded.
+    """
+    globals_config = GlobalsConfig(raw_dataset="raw", pre_filter_dataset="pre",
+                                   post_filter_dataset="post", gen_dataset="gen",
+                                   stat_dataset=name, eval_dataset="eval")
+    captured = {}
+    original = (analysis.load_config_pair, analysis.load_dataset_all_shards, analysis.upload_readme)
+    analysis.load_config_pair = lambda *a, **k: (globals_config, cfg)
+    analysis.load_dataset_all_shards = lambda *a, **k: ds
+    analysis.upload_readme = lambda repo, files=None, readme_content="", **k: captured.update(
+        files=files, readme=readme_content)
+    saved, sys.argv = sys.argv, ["analysis.py"]
+    try:
+        analysis.main()
+    finally:
+        sys.argv = saved
+        analysis.load_config_pair, analysis.load_dataset_all_shards, analysis.upload_readme = original
+    return captured["readme"], captured["files"]
 
 
 # --------------------------------------------------------------------------
@@ -103,28 +82,21 @@ def test_safe_names_are_stable_for_chart_filenames():
 
 
 def test_prompt_types_are_read_from_the_metadata():
-    dataset = Dataset.from_list(
-        [
-            {"prompt": {"metadata": {"PROMPT_TYPE": "rewrite"}}},
-            {"prompt": {"metadata": {"PROMPT_TYPE": "revise"}}},
-        ]
-    )
+    dataset = Dataset.from_list([{"prompt": {"metadata": {"PROMPT_TYPE": "rewrite"}}},
+                                 {"prompt": {"metadata": {"PROMPT_TYPE": "revise"}}}])
     types, present = extract_prompt_types(dataset, "prompt")
     assert types.tolist() == ["rewrite", "revise"]
     assert present is True
 
 
 def test_prompt_types_default_to_unknown_when_the_column_is_absent():
-    dataset = Dataset.from_dict({"text": ["a", "b"]})
-    types, present = extract_prompt_types(dataset, "prompt")
+    types, present = extract_prompt_types(Dataset.from_dict({"text": ["a", "b"]}), "prompt")
     assert types.tolist() == ["Unknown", "Unknown"]
     assert present is False
 
 
 def test_prompt_types_default_to_unknown_when_no_column_is_configured():
-    dataset = Dataset.from_dict({"text": ["a"]})
-    _, present = extract_prompt_types(dataset, "")
-    assert present is False
+    assert extract_prompt_types(Dataset.from_dict({"text": ["a"]}), "")[1] is False
 
 
 def test_prompt_types_fall_back_when_the_key_is_missing():
@@ -140,31 +112,27 @@ def test_prompt_types_fall_back_when_the_key_is_missing():
 
 
 def test_model_genconfig_combines_the_model_and_temperature():
-    dataset = Dataset.from_dict(
-        {
-            "generator_model": ["org/some-model", "org/other-model"],
-            "generation_params": ['{"temperature": 0.6}', '{"temperature": 1.0}'],
-        }
-    )
+    dataset = Dataset.from_dict({
+        "generator_model": ["org/some-model", "org/other-model"],
+        "generation_params": ['{"temperature": 0.6}', '{"temperature": 1.0}'],
+    })
     labels, present = extract_model_genconfig(dataset, "generator_model")
-    assert labels.tolist() == [
-        "some-model (Temp: 0.6)",
-        "other-model (Temp: 1.0)",
-    ]
+    assert labels.tolist() == ["some-model (Temp: 0.6)", "other-model (Temp: 1.0)"]
     assert present is True
 
 
+def test_model_genconfig_accepts_already_parsed_params():
+    dataset = Dataset.from_list([{"generator_model": "org/m", "generation_params": {"temperature": 0.6}}])
+    assert extract_model_genconfig(dataset, "generator_model")[0].tolist() == ["m (Temp: 0.6)"]
+
+
 def test_model_genconfig_handles_params_without_a_temperature():
-    dataset = Dataset.from_dict(
-        {"generator_model": ["org/m"], "generation_params": ["{}"]}
-    )
-    labels, _ = extract_model_genconfig(dataset, "generator_model")
-    assert labels.tolist() == ["m (Temp: Unknown)"]
+    dataset = Dataset.from_dict({"generator_model": ["org/m"], "generation_params": ["{}"]})
+    assert extract_model_genconfig(dataset, "generator_model")[0].tolist() == ["m (Temp: Unknown)"]
 
 
 def test_model_genconfig_is_absent_when_neither_column_exists():
-    dataset = Dataset.from_dict({"text": ["a"]})
-    labels, present = extract_model_genconfig(dataset, "generator_model")
+    labels, present = extract_model_genconfig(Dataset.from_dict({"text": ["a"]}), "generator_model")
     assert present is False
     assert labels.tolist() == ["Unknown"]
 
@@ -172,288 +140,8 @@ def test_model_genconfig_is_absent_when_neither_column_exists():
 def test_model_genconfig_rejects_a_half_populated_dataset():
     # One column without the other means the dataset was assembled wrongly;
     # guessing would mislabel every row.
-    dataset = Dataset.from_dict({"generator_model": ["org/m"]})
     with pytest.raises(ValueError, match="Missing columns"):
-        extract_model_genconfig(dataset, "generator_model")
-
-
-# --------------------------------------------------------------------------
-# Masks and subsets
-# --------------------------------------------------------------------------
-
-
-def test_column_equals_mask_selects_matching_rows():
-    dataset = Dataset.from_dict({"group": ["a", "b", "a"]})
-    mask = _column_equals_mask("group", "a")
-    assert mask(dataset).tolist() == [True, False, True]
-
-
-def test_column_equals_mask_can_match_nothing():
-    dataset = Dataset.from_dict({"group": ["a", "b"]})
-    assert _column_equals_mask("group", "zzz")(dataset).tolist() == [False, False]
-
-
-def test_subset_derives_a_safe_name():
-    subset = Subset("Prompt: rewrite", lambda ds: np.array([True]))
-    assert subset.name == "Prompt: rewrite"
-    assert subset.safe == "PROMPT_REWRITE"
-
-
-# --------------------------------------------------------------------------
-# _extract_classifier_data
-# --------------------------------------------------------------------------
-
-
-@pytest.fixture
-def scored_dataset() -> Dataset:
-    """A dataset with one score column per base column plus a class label."""
-    return Dataset.from_dict(
-        {
-            "original_score": [0.1, 0.2, 0.3, 0.4],
-            "final_response_score": [0.7, 0.8, 0.9, 1.0],
-            "label": ["Human", "AI", "Human", "AI"],
-            "group": ["x", "x", "y", "y"],
-        }
-    )
-
-
-def test_fixed_classes_split_columns_into_human_and_ai(scored_dataset):
-    config = make_analysis_config()
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    arrays, classes, names = _extract_classifier_data(scored_dataset, config, clf, None)
-
-    assert classes == [False, True]
-    assert names == ["original_score", "final_response_score"]
-    assert arrays[0].tolist() == [0.1, 0.2, 0.3, 0.4]
-    assert arrays[1].tolist() == [0.7, 0.8, 0.9, 1.0]
-
-
-def test_human_columns_always_come_first(scored_dataset):
-    # compute_classifier_metrics pairs arrays with labels positionally, so the
-    # ordering contract matters.
-    config = make_analysis_config(fixed_classes=[True, False])
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    _, classes, names = _extract_classifier_data(scored_dataset, config, clf, None)
-    assert classes == [False, True]
-    assert names == ["final_response_score", "original_score"]
-
-
-def test_auto_class_column_splits_rows_by_label(scored_dataset):
-    config = make_analysis_config(
-        base_columns=["original"],
-        fixed_classes=None,
-        auto_class_column="label",
-        ai_label="AI",
-    )
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    arrays, classes, names = _extract_classifier_data(scored_dataset, config, clf, None)
-
-    assert classes == [False, True]
-    assert names == ["original_score (Human)", "original_score (AI)"]
-    assert arrays[0].tolist() == [0.1, 0.3]
-    assert arrays[1].tolist() == [0.2, 0.4]
-
-
-def test_a_mask_is_applied_to_both_scores_and_labels(scored_dataset):
-    config = make_analysis_config(
-        base_columns=["original"],
-        fixed_classes=None,
-        auto_class_column="label",
-        ai_label="AI",
-    )
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    arrays, _, _ = _extract_classifier_data(
-        scored_dataset, config, clf, _column_equals_mask("group", "y")
-    )
-    assert arrays[0].tolist() == [0.3]
-    assert arrays[1].tolist() == [0.4]
-
-
-def test_a_mask_is_applied_with_fixed_classes(scored_dataset):
-    config = make_analysis_config()
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    arrays, _, _ = _extract_classifier_data(
-        scored_dataset, config, clf, _column_equals_mask("group", "x")
-    )
-    assert arrays[0].tolist() == [0.1, 0.2]
-
-
-def test_rows_without_a_usable_score_are_dropped():
-    # A scorer that failed on a few rows would otherwise NaN out the whole
-    # threshold sweep, and with it every metric for that classifier.
-    dataset = Dataset.from_dict(
-        {
-            "original_score": [0.1, None, 0.3, 0.4],
-            "final_response_score": [0.7, 0.8, float("nan"), 1.0],
-        }
-    )
-    config = make_analysis_config()
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    arrays, classes, _ = _extract_classifier_data(dataset, config, clf, None)
-
-    assert classes == [False, True]
-    assert arrays[0].tolist() == [0.1, 0.3, 0.4]
-    assert arrays[1].tolist() == [0.7, 0.8, 1.0]
-
-
-def test_classifier_data_requires_a_class_definition(scored_dataset):
-    config = make_analysis_config(fixed_classes=None)
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    with pytest.raises(ValueError, match="fixed_classes or auto_class_column"):
-        _extract_classifier_data(scored_dataset, config, clf, None)
-
-
-# --------------------------------------------------------------------------
-# _build_summary_stats
-# --------------------------------------------------------------------------
-
-
-def make_classifier_wrapper(name: str) -> ClassifierWrapper:
-    """Build a ClassifierWrapper over perfectly separable data."""
-    return ClassifierWrapper(
-        [np.array([0.1, 0.2]), np.array([0.8, 0.9])],
-        [False, True],
-        StaticThresholdWrapper(0.5),
-        name=name,
-    )
-
-
-@pytest.fixture
-def summary_inputs():
-    """Build the subset groups and clf_data that analysis assembles."""
-    overall = Subset("Overall", None)
-    rewrite = Subset("Prompt: rewrite", lambda ds: np.array([True]))
-    low_bin = Subset("Bin: cosdist 0.1 to 0.2", lambda ds: np.array([True]))
-    model = Subset("Model: some-model (Temp: 0.6)", lambda ds: np.array([True]))
-    clf_data = {
-        "EditLens Score": {
-            "tw": StaticThresholdWrapper(0.5),
-            "subsets": {
-                overall: make_classifier_wrapper("overall"),
-                rewrite: make_classifier_wrapper("rewrite"),
-                low_bin: make_classifier_wrapper("bin"),
-                model: make_classifier_wrapper("model"),
-            },
-        },
-        "EditLens Bucket": {
-            "tw": StaticThresholdWrapper(0.5),
-            # Only the first classifier gets the per-generator breakdown.
-            "subsets": {
-                overall: make_classifier_wrapper("overall"),
-                rewrite: make_classifier_wrapper("rewrite"),
-                low_bin: make_classifier_wrapper("bin"),
-            },
-        },
-    }
-    return clf_data, overall, [rewrite], [low_bin], [model]
-
-
-def test_summary_has_the_documented_shape(summary_inputs):
-    summary = _build_summary_stats(*summary_inputs)
-    assert set(summary) == {"overall", "prompts", "bins", "models", "thresholds"}
-    assert set(summary["overall"]) == {"EditLens Score", "EditLens Bucket"}
-    assert summary["thresholds"]["EditLens Score"] == {"threshold_value": 0.5}
-
-
-def test_summary_reports_the_overall_subset(summary_inputs):
-    summary = _build_summary_stats(*summary_inputs)
-    assert summary["overall"]["EditLens Score"]["acc"] == 1.0
-
-
-def test_summary_strips_the_prompt_prefix_from_subset_names(summary_inputs):
-    summary = _build_summary_stats(*summary_inputs)
-    assert set(summary["prompts"]) == {"rewrite"}
-    assert summary["prompts"]["rewrite"]["EditLens Score"]["auroc"] == 1.0
-
-
-def test_summary_strips_the_bin_and_model_prefixes(summary_inputs):
-    summary = _build_summary_stats(*summary_inputs)
-    assert set(summary["bins"]) == {"cosdist 0.1 to 0.2"}
-    assert set(summary["models"]) == {"some-model (Temp: 0.6)"}
-
-
-def test_summary_only_lists_classifiers_a_subset_was_scored_for(summary_inputs):
-    # The per-generator section is hardcoded to the first classifier, so the
-    # second one must simply be absent rather than reported as zeroes.
-    summary = _build_summary_stats(*summary_inputs)
-    assert set(summary["models"]["some-model (Temp: 0.6)"]) == {"EditLens Score"}
-    assert set(summary["bins"]["cosdist 0.1 to 0.2"]) == {
-        "EditLens Score",
-        "EditLens Bucket",
-    }
-
-
-def test_summary_drops_the_markdown_confusion_matrix(summary_inputs):
-    summary = _build_summary_stats(*summary_inputs)
-    assert "confusion_matrix" not in summary["overall"]["EditLens Score"]
-
-
-def test_summary_is_json_serialisable(summary_inputs):
-    summary = _build_summary_stats(*summary_inputs)
-    reloaded = json.loads(json.dumps(summary, cls=NumpyEncoder))
-    assert reloaded["overall"]["EditLens Score"]["acc"] == 1.0
-
-
-# --------------------------------------------------------------------------
-# ColumnCache
-# --------------------------------------------------------------------------
-
-
-class CountingDataset:
-    """Stand-in that records how often each column is materialised."""
-
-    def __init__(self, columns: dict):
-        self._columns = columns
-        self.reads: list[str] = []
-
-    @property
-    def column_names(self):
-        return list(self._columns)
-
-    def __len__(self):
-        return len(next(iter(self._columns.values())))
-
-    def __getitem__(self, column):
-        self.reads.append(column)
-        return self._columns[column]
-
-
-def test_column_cache_reads_each_column_once():
-    # datasets.Dataset rebuilds the column row by row on every access, and the
-    # report reads the same few columns hundreds of times.
-    source = CountingDataset({"score": [0.1, 0.2, 0.3]})
-    cache = ColumnCache(source)
-
-    first, second = cache["score"], cache["score"]
-    assert source.reads == ["score"]
-    assert first is second
-    assert first.tolist() == [0.1, 0.2, 0.3]
-
-
-def test_column_cache_passes_through_the_dataset_shape():
-    source = CountingDataset({"score": [0.1, 0.2], "group": ["a", "b"]})
-    cache = ColumnCache(source)
-    assert cache.column_names == ["score", "group"]
-    assert len(cache) == 2
-
-
-def test_column_cache_serves_the_extraction_helpers(scored_dataset):
-    # The wrapper has to be a drop-in for the Dataset in _extract_classifier_data.
-    config = make_analysis_config()
-    clf = ClassifierConfig(name="Score", suffix="_score")
-    direct, _, _ = _extract_classifier_data(scored_dataset, config, clf, None)
-    cached, _, _ = _extract_classifier_data(ColumnCache(scored_dataset), config, clf, None)
-    assert [a.tolist() for a in cached] == [a.tolist() for a in direct]
-
-
-def test_masks_are_computed_once_per_dataset():
-    source = CountingDataset({"group": ["x", "y", "x"]})
-    cache = ColumnCache(source)
-    mask = _column_equals_mask("group", "x")
-
-    assert mask(cache).tolist() == [True, False, True]
-    assert mask(cache).tolist() == [True, False, True]
-    assert source.reads == ["group"]
+        extract_model_genconfig(Dataset.from_dict({"generator_model": ["org/m"]}), "generator_model")
 
 
 # --------------------------------------------------------------------------
@@ -461,396 +149,419 @@ def test_masks_are_computed_once_per_dataset():
 # --------------------------------------------------------------------------
 
 
+def test_only_the_metrics_and_classifiers_the_dataset_has_are_evaluated():
+    dataset = Dataset.from_dict({"original": ["a"], "final_response": ["b"], "cosdist": [0.1],
+                                 "original_score": [0.1], "final_response_score": [0.9]})
+    cfg = make_analysis_config(
+        distance_metrics=["cosdist", "moverscore"],
+        classifiers=[make_classifier("Score", "_score"),
+                     make_classifier("Gone", "_gone")])
+    metrics, missing, classifiers, skipped = select_available(dataset, cfg)
+    assert (metrics, missing) == (["cosdist"], ["moverscore"])
+    assert [c.name for c in classifiers] == ["Score"]
+    assert skipped == {"Gone": ["original_gone", "final_response_gone"]}
+
+
+def test_a_classifier_is_skipped_when_any_of_its_columns_is_missing():
+    dataset = Dataset.from_dict({"original_score": [0.1]})
+    cfg = make_analysis_config(classifiers=[make_classifier("Half", "_score")])
+    assert select_available(dataset, cfg)[3] == {"Half": ["final_response_score"]}
+
+
+# --------------------------------------------------------------------------
+# Subsets
+# --------------------------------------------------------------------------
+
+
+def test_subset_qualifies_its_label_with_its_group():
+    subset = Subset("Prompt", "rewrite", np.array([True]))
+    assert subset.name == "Prompt: rewrite"
+    assert subset.label == "rewrite"
+    assert subset.safe == "PROMPT_REWRITE"
+
+
+def test_an_ungrouped_subset_is_just_its_label():
+    assert Subset("", "Overall").name == "Overall"
+
+
+def test_subset_groups_default_to_an_overall_only_breakdown():
+    groups = SubsetGroups()
+    assert groups.overall.name == "Overall"
+    assert (groups.prompts, groups.models) == ([], [])
+
+
+# --------------------------------------------------------------------------
+# read_scores
+# --------------------------------------------------------------------------
+
+
 @pytest.fixture
-def partly_scored_dataset() -> Dataset:
-    """A dataset where only some of the configured statistics were computed."""
-    return Dataset.from_dict(
-        {
-            "cosdist": [0.1, 0.2],
-            "original_score": [0.1, 0.2],
-            "final_response_score": [0.8, 0.9],
-        }
-    )
+def scored_dataset() -> Dataset:
+    """A dataset with one score column per base column."""
+    return Dataset.from_dict({
+        "original_score": [0.1, 0.2, 0.3, 0.4],
+        "final_response_score": [0.6, 0.7, float("nan"), 0.9],
+        "label": ["Human", "AI", "Human", "AI"],
+        "text_score": [0.1, 0.9, 0.2, 0.8],
+    })
 
 
-def test_available_metrics_and_classifiers_are_kept(partly_scored_dataset):
-    config = make_analysis_config(
-        distance_metrics=["cosdist"],
-        classifiers=[ClassifierConfig(name="Score", suffix="_score")],
-    )
-    metrics, missing, classifiers, skipped = select_available(partly_scored_dataset, config)
-    assert metrics == ["cosdist"]
-    assert missing == []
-    assert [c.name for c in classifiers] == ["Score"]
-    assert skipped == {}
+def test_scores_are_flattened_across_the_base_columns(scored_dataset):
+    scores = read_scores(reader(scored_dataset), make_analysis_config(), "_score")
+    # 4 human rows plus the 3 AI rows that produced a usable score.
+    assert scores.values.size == 7
+    assert scores.is_ai.tolist() == [False] * 4 + [True] * 3
 
 
-def test_uncomputed_statistics_are_skipped_rather_than_raising(partly_scored_dataset):
-    # A config naming every statistic the pipeline can compute must still work
-    # on a dataset whose llm_stats stage has not been run.
-    config = make_analysis_config(
-        distance_metrics=["cosdist", "moverscore"],
-        classifiers=[
-            ClassifierConfig(name="Score", suffix="_score"),
-            ClassifierConfig(name="Binoculars", suffix="_binoculars", direction="lower_is_ai"),
-        ],
-    )
-    metrics, missing, classifiers, skipped = select_available(partly_scored_dataset, config)
-    assert metrics == ["cosdist"]
-    assert missing == ["moverscore"]
-    assert [c.name for c in classifiers] == ["Score"]
-    assert skipped == {"Binoculars": ["original_binoculars", "final_response_binoculars"]}
+def test_a_score_a_classifier_failed_on_is_dropped(scored_dataset):
+    scores = read_scores(reader(scored_dataset), make_analysis_config(), "_score")
+    # Row 2's AI score was NaN, so only its human side survives.
+    assert scores.rows[scores.is_ai].tolist() == [0, 1, 3]
+    assert np.isfinite(scores.values).all()
 
 
-def test_a_classifier_scored_for_only_one_class_is_skipped():
-    # Half a classifier cannot be evaluated: there would be no human column to
-    # compare the AI scores against.
-    dataset = Dataset.from_dict({"original_score": [0.1], "final_response_other": [0.2]})
-    config = make_analysis_config(classifiers=[ClassifierConfig(name="Score", suffix="_score")])
-    _, _, classifiers, skipped = select_available(dataset, config)
-    assert classifiers == []
-    assert skipped == {"Score": ["final_response_score"]}
+def test_human_columns_come_first_so_the_legends_line_up(scored_dataset):
+    cfg = make_analysis_config(base_columns=["final_response", "original"], fixed_classes=[True, False])
+    scores = read_scores(reader(scored_dataset), cfg, "_score")
+    assert scores.sources == [(False, "original_score"), (True, "final_response_score")]
 
 
-def test_skipped_statistics_are_named_in_the_readme(partly_scored_dataset, report_run_info):
-    config = make_analysis_config(
-        distance_metrics=["cosdist", "moverscore"],
-        classifiers=[
-            ClassifierConfig(name="Score", suffix="_score"),
-            ClassifierConfig(name="Binoculars", suffix="_binoculars", direction="lower_is_ai"),
-        ],
-    )
-    readme, _, summary = _build_readme(
-        partly_scored_dataset, config, {**report_run_info, "bin_column": None}, [], [], []
-    )
-    assert "- Distance Metrics Skipped (not in this dataset): `moverscore`" in readme
-    assert "~~**Binoculars**~~ - SKIPPED" in readme
-    assert "original_binoculars" in readme
-    assert set(summary["overall"]) == {"Score"}
+def test_a_subset_keeps_only_the_rows_its_mask_selects(scored_dataset):
+    scores = read_scores(reader(scored_dataset), make_analysis_config(), "_score")
+    part = scores.subset(np.array([True, False, False, True]))
+    assert part.rows.tolist() == [0, 3, 0, 3]
+    assert part.is_ai.tolist() == [False, False, True, True]
+
+
+def test_a_subset_of_no_mask_is_the_whole_split(scored_dataset):
+    scores = read_scores(reader(scored_dataset), make_analysis_config(), "_score")
+    assert scores.subset(None) is scores
+
+
+def test_histogram_series_are_labelled_human_and_ai(scored_dataset):
+    scores = read_scores(reader(scored_dataset), make_analysis_config(), "_score")
+    assert [label for _, label in scores.series()] == [
+        "Human (original_score)", "AI (final_response_score)"]
+
+
+def test_an_auto_classed_column_contributes_both_sides(scored_dataset):
+    cfg = make_analysis_config(base_columns=["text"], fixed_classes=None,
+                               auto_class_column="label", ai_label="AI")
+    read = reader(scored_dataset)
+    scores = read_scores(read, cfg, "_score", auto_ai=read("label") == "AI")
+    assert scores.sources == [(False, "text_score (Human)"), (True, "text_score (AI)")]
+    # The class already appears in the column name, so it is not repeated.
+    assert [label for _, label in scores.series()] == ["text_score (Human)", "text_score (AI)"]
+    assert scores.values.size == 4
 
 
 # --------------------------------------------------------------------------
-# compute_quantile_bins
+# evaluate
 # --------------------------------------------------------------------------
 
 
-def test_bins_split_rows_into_equal_counts():
-    labels, unique = compute_quantile_bins(np.arange(100.0), 4, "cosdist")
-    assert len(unique) == 4
-    counts = [int(np.sum(labels == name)) for name in unique]
-    assert all(20 <= count <= 30 for count in counts)
-    assert sum(counts) == 100
+def separable_scores(size: int = 40) -> Scores:
+    """Scores where the AI side sits cleanly above the human side."""
+    values = np.concatenate([np.linspace(0.0, 0.4, size), np.linspace(0.6, 1.0, size)])
+    return Scores(values, np.concatenate([np.zeros(size, bool), np.ones(size, bool)]),
+                  np.concatenate([np.arange(size)] * 2),
+                  np.concatenate([np.zeros(size, int), np.ones(size, int)]),
+                  [(False, "human_score"), (True, "ai_score")])
 
 
-def test_bin_labels_are_ordered_low_to_high_and_name_the_column():
-    _, unique = compute_quantile_bins(np.arange(100.0), 4, "cosdist")
-    assert all(name.startswith("cosdist ") for name in unique)
-    edges = [float(name.split()[1]) for name in unique]
-    assert edges == sorted(edges)
+def test_a_swept_classifier_pins_a_threshold_and_renders_its_sweep():
+    scores = separable_scores()
+    run = evaluate(make_classifier("S", "_score"),
+                   scores, scores, [Subset("", "Overall")])
+    assert 0.4 < run.threshold < 0.6
+    assert run.sweep_chart.startswith(b"\x89PNG")
+    assert set(run.values) == {"threshold_value", "optimal_acc"}
 
 
-def test_bins_skip_non_finite_rows():
-    values = np.array([0.0, 1.0, 2.0, np.nan, 3.0])
-    labels, unique = compute_quantile_bins(values, 2, "cosdist")
-    assert labels[3] == ""
-    assert sum(1 for label in labels if label) == 4
-    assert len(unique) == 2
+def test_a_manual_threshold_skips_the_sweep_entirely():
+    scores = separable_scores()
+    run = evaluate(make_classifier("S", "_score", manual_threshold=0.5),
+                   scores, None, [Subset("", "Overall")])
+    assert run.threshold == 0.5
+    assert run.sweep_chart is None
+    assert run.values == {"threshold_value": 0.5}
 
 
-def test_bins_collapse_duplicate_edges_rather_than_emitting_empty_bins():
-    # A constant column has no quantile structure: four bins would be one bin
-    # holding everything plus three empty rows in every classifier's table.
-    labels, unique = compute_quantile_bins(np.full(20, 0.5), 4, "cosdist")
-    assert unique == []
-    assert set(labels) == {""}
+def overlapping_scores(size: int = 100) -> Scores:
+    """Scores whose classes overlap, so the threshold criteria disagree."""
+    values = np.concatenate([np.linspace(0.0, 0.7, size), np.linspace(0.3, 1.0, size)])
+    return Scores(values, np.concatenate([np.zeros(size, bool), np.ones(size, bool)]),
+                  np.concatenate([np.arange(size)] * 2),
+                  np.concatenate([np.zeros(size, int), np.ones(size, int)]),
+                  [(False, "human_score"), (True, "ai_score")])
 
 
-def test_bins_never_exceed_the_number_of_distinct_quantile_edges():
-    # Repeated quantiles collapse, so a lopsided column yields fewer bins than
-    # requested - but every row still lands in one of them.
-    labels, unique = compute_quantile_bins(np.array([0.0, 0.0, 0.0, 1.0]), 4, "cosdist")
-    assert len(unique) == 2
-    assert set(labels) == set(unique)
+def test_each_classifier_sweeps_for_its_own_criterion():
+    scores, cfg = overlapping_scores(), make_analysis_config()
+    strict = evaluate(make_classifier("F", "_s", threshold_type="fpr_0_01pct"),
+                      scores, scores, [Subset("", "Overall")])
+    balanced = evaluate(make_classifier("A", "_s", threshold_type="accuracy"),
+                        scores, scores, [Subset("", "Overall")])
+    # Best accuracy sits inside the overlap; a 0.01% FPR target has to clear the
+    # top of the human range, so it pins a strictly higher threshold.
+    assert balanced.threshold < 0.7 < strict.threshold
 
 
-def test_bins_are_skipped_when_there_is_nothing_to_bin():
-    labels, unique = compute_quantile_bins(np.array([np.nan, np.nan]), 4, "cosdist")
-    assert unique == []
-    assert list(labels) == ["", ""]
-
-
-def test_bins_are_skipped_when_fewer_than_two_are_requested():
-    _, unique = compute_quantile_bins(np.arange(10.0), 1, "cosdist")
-    assert unique == []
+def test_every_subset_is_scored():
+    scores = separable_scores(size=10)
+    subsets = [Subset("", "Overall"), Subset("Prompt", "a", np.arange(10) < 5)]
+    run = evaluate(make_classifier("S", "_s"),
+                   scores, scores, subsets)
+    assert run.subsets[subsets[0]]["n"] == 20
+    assert run.subsets[subsets[1]]["n"] == 10
 
 
 # --------------------------------------------------------------------------
-# _anchor
+# Markdown helpers
 # --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    ("title", "expected"),
-    [
-        ("Univariate Analysis", "univariate-analysis"),
-        ("Histogram, Distances", "histogram-distances"),
-        ("Classifier Report: EditLens Roberta-Large Score", "classifier-report-editlens-roberta-large-score"),
-    ],
+    ("raw", "expected"),
+    [("Prompt: my-type!", "PROMPT_MY_TYPE"), ("already_safe", "ALREADY_SAFE"),
+     ("  spaced  out  ", "SPACED_OUT"), ("a//b", "A_B"), ("Model (Temp: 0.6)", "MODEL_TEMP_0_6")],
 )
-def test_anchor_matches_the_markdown_heading_slug(title, expected):
-    assert _anchor(title) == expected
+def test_safe_name(raw, expected):
+    assert safe_name(raw) == expected
+
+
+def test_safe_name_of_punctuation_only_is_empty():
+    assert safe_name("!!!") == ""
+
+
+def test_safe_names_are_stable_for_chart_filenames():
+    assert safe_name("Prompt: rewrite") == safe_name("prompt-rewrite")
+
+
+@pytest.mark.parametrize(("value", "expected"),
+                         [(0.5, "0.5000"), (None, "n/a"), (float("nan"), "n/a")])
+def test_fmt(value, expected):
+    assert fmt(value, ".4f") == expected
+
+
+def test_threshold_description_names_the_swept_metric():
+    assert threshold_description(make_classifier("S", "_s")) == (
+        "swept for `accuracy` on the validation split")
+
+
+def test_threshold_description_reports_a_manual_pin():
+    clf = make_classifier("S", "_s", manual_threshold=0.5)
+    assert threshold_description(clf) == "pinned manually at 0.5"
+
+
+def test_the_overall_row_leads_a_subset_table_and_is_never_marked():
+    scores = separable_scores(size=10)
+    subsets = [Subset("Prompt", "easy", np.arange(10) < 5), Subset("Prompt", "hard", np.arange(10) >= 5)]
+    overall = Subset("", "Overall")
+    run = evaluate(make_classifier("S", "_s"),
+                   scores, scores, [overall, *subsets])
+    lines = subset_table(run, overall, subsets, "Prompt Subset").split("\n")
+    assert lines[0] == "| Prompt Subset | N | AUROC | TPR | FPR | Accuracy | F1 |"
+    assert lines[2].startswith("| Overall |")
+    assert len(lines) == 5
 
 
 # --------------------------------------------------------------------------
-# _build_readme
+# build_contents
 # --------------------------------------------------------------------------
 
 
-EXPECTED_SECTIONS = [
-    "## Univariate Analysis",
-    "## Correlation Heatmap",
-    "## Histogram, Distances",
-    "## Histogram, Classification",
-    "## Classifiers Comparison Table",
-    "## Classifier Thresholds",
-    "## Classifier Report: Score",
-    "## Manually Specified Full Report",
-]
+def test_the_contents_number_top_level_sections_and_indent_their_subsections():
+    assert build_contents("## First\ntext\n### Sub One\n## Second\n") == [
+        "1. [First](#first)",
+        "    - [Sub One](#sub-one)",
+        "2. [Second](#second)",
+    ]
 
 
-@pytest.fixture
-def report_dataset() -> Dataset:
-    """A separable, fully labelled dataset the whole README can be built from."""
+def test_contents_anchors_drop_punctuation_the_way_a_renderer_does():
+    assert build_contents("## Classifier Report: Top-p (Llama-3.2)") == [
+        "1. [Classifier Report: Top-p (Llama-3.2)](#classifier-report-top-p-llama-32)"]
+
+
+def test_repeated_headings_get_the_numeric_anchor_suffixes_renderers_assign():
+    entries = build_contents("## Same\n## Same\n## Same")
+    assert [entry.split("(#")[1] for entry in entries] == ["same)", "same-1)", "same-2)"]
+
+
+def test_deeper_headings_are_not_listed():
+    assert build_contents("## Kept\n#### Dropped\n# Also dropped") == ["1. [Kept](#kept)"]
+
+
+# --------------------------------------------------------------------------
+# End to end, through main()
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def report() -> tuple[str, dict]:
+    """Run main() over a small dataset covering every breakdown."""
     rng = np.random.default_rng(0)
-    size = 80
-    return Dataset.from_dict(
-        {
-            "original_score": rng.uniform(0.0, 0.4, size),
-            "final_response_score": rng.uniform(0.6, 1.0, size),
-            "cosdist": rng.uniform(0.0, 1.0, size),
-            "prompt_type": ["rewrite" if i % 2 else "revise" for i in range(size)],
-            "model_genconfig": ["m (Temp: 0.6)" if i % 4 else "m (Temp: 1.0)" for i in range(size)],
-            "stat_bin": ["cosdist high" if i % 2 else "cosdist low" for i in range(size)],
-        }
-    )
+    prompts = ["revise", "rewrite"]
+    ds = Dataset.from_list([{
+        "original": f"h{i}", "final_response": f"a{i}",
+        "prompt": {"metadata": {"PROMPT_TYPE": prompts[i % 2]}},
+        "generator_model": f"org/model-{i % 2}",
+        "generation_params": json.dumps({"temperature": 0.6}),
+        "cosdist": float(rng.uniform(0, 1)),
+        "original_score": float(rng.normal(0, 1)),
+        "final_response_score": float(rng.normal(3, 1)),
+    } for i in range(200)])
+
+    cfg = make_analysis_config(distance_metrics=["cosdist", "never_computed"],
+                               classifiers=[make_classifier("Score", "_score")])
+    return run_main(ds, cfg)
 
 
-@pytest.fixture
-def report_run_info() -> dict:
-    """The run metadata main() hands to _build_readme."""
-    return {
-        "dataset": "user/some-dataset",
-        "globals_config": "config/globals.toml",
-        "analysis_config": "config/analysis.toml",
-        "rows_loaded": 100,
-        "rows_analyzed": 80,
-        "bin_column": "cosdist",
-    }
+def test_the_report_has_every_fixed_section(report):
+    readme, _ = report
+    for heading in ["## Univariate Analysis", "## Correlation Heatmap", "## Histogram, Distances",
+                    "## Histogram, Classification", "## Classifiers Comparison Table",
+                    "## Classifier Thresholds", "## Classifier Report: Score",
+                    "## Manually Specified Full Report"]:
+        assert heading in readme
 
 
-@pytest.fixture
-def report(report_dataset, report_run_info):
-    """Build the full README, charts and summary from the fixtures above."""
-    config = make_analysis_config(
-        distance_metrics=["cosdist"],
-        classifiers=[ClassifierConfig(name="Score", suffix="_score")],
-    )
-    return _build_readme(
-        report_dataset,
-        config,
-        report_run_info,
-        ["revise", "rewrite"],
-        ["m (Temp: 0.6)", "m (Temp: 1.0)"],
-        ["cosdist low", "cosdist high"],
-    )
-
-
-def test_readme_opens_with_the_title_and_the_run_configuration(report):
-    readme, _, _ = report
-    assert readme.startswith("# Auto-Generated FastDetector Dataset")
-    assert "- Dataset: `user/some-dataset`" in readme
-    assert "- Analysis Config: `config/analysis.toml`" in readme
-    assert "- Rows Analyzed (after filtering): 80" in readme
-    assert "- Bins: 2 quantile bins of `cosdist`" in readme
-    assert "**Score** - columns `*_score`" in readme
-
-
-def test_readme_summarises_what_it_computed(report):
-    readme, _, _ = report
-    assert "This readme computes the detection report for `user/some-dataset`" in readme
-    # The summary is derived from the data, not templated: the classifiers are
-    # perfectly separable here, so it has to say so.
-    assert "AUROC 1.0000" in readme
-
-
-def test_readme_has_every_section_in_order(report):
-    readme, _, _ = report
-    positions = [readme.find(heading) for heading in EXPECTED_SECTIONS]
-    assert all(position != -1 for position in positions)
-    assert positions == sorted(positions)
-
-
-def heading_anchors(readme: str) -> list[str]:
-    """The anchors a markdown renderer assigns to this document's headings."""
-    seen, anchors = {}, []
-    for line in readme.split("\n"):
-        match = re.match(r"^(#{2,3})\s+(.+?)\s*$", line)
-        if match is None:
-            continue
-        anchor = _anchor(match.group(2))
-        occurrence = seen.get(anchor, 0)
-        seen[anchor] = occurrence + 1
-        anchors.append(f"{anchor}-{occurrence}" if occurrence else anchor)
-    return anchors
-
-
-def test_contents_heading_avoids_the_name_the_hub_strips(report):
-    # The Hugging Face card renderer drops a section headed exactly "Table of
-    # Contents" - heading and list - so the readme rendered on the Hub had no
-    # contents at all until this was renamed.
-    readme, _, _ = report
-    assert "\n## Contents\n" in readme
+def test_the_contents_heading_is_not_the_one_the_hub_strips(report):
+    # A section headed exactly "Table of Contents" is deleted by the Hub's card
+    # renderer, list and all.
+    readme, _ = report
+    assert "## Contents" in readme
     assert "Table of Contents" not in readme
 
 
-def test_table_of_contents_links_to_every_section(report):
-    readme, _, _ = report
-    toc = readme.split("## Contents")[1].split("\n## ")[0]
-    for heading in EXPECTED_SECTIONS:
-        title = heading.removeprefix("## ")
-        assert f"[{title}](#{_anchor(title)})" in toc
+def test_every_contents_entry_links_to_a_heading_that_exists(report):
+    readme, _ = report
+    body = readme.split("## Contents", 1)[1].split("\n\n", 1)[1]
+    for entry in build_contents(body):
+        assert entry in readme
 
 
-def test_table_of_contents_nests_every_subsection(report):
-    readme, _, _ = report
-    toc = readme.split("## Contents")[1].split("\n## ")[0]
-    for title in ("Score: By Prompt Subset", "Score: By Bin"):
-        assert f"    - [{title}](#{_anchor(title)})" in toc
+def test_the_run_configuration_states_what_was_skipped(report):
+    assert "- Distance Metrics Skipped (not in this dataset): `never_computed`" in report[0]
 
 
-def test_every_table_of_contents_link_resolves_to_a_heading(report):
-    # A table of contents whose links land nowhere is worse than none.
-    readme, _, _ = report
-    toc = readme.split("## Contents")[1].split("\n## ")[0]
-    linked = re.findall(r"\[[^\]]+\]\(#([^)]+)\)", toc)
-    anchors = heading_anchors(readme)
-
-    assert linked, "the table of contents has no links"
-    assert set(linked) <= set(anchors), sorted(set(linked) - set(anchors))
-    # Every heading below the table of contents is listed, in document order.
-    assert linked == [a for a in anchors if a != "contents"]
+def test_every_chart_the_readme_embeds_was_rendered_and_nothing_else(report):
+    readme, files = report
+    embedded = set(re.findall(r"\]\((\S+\.png)\)", readme))
+    assert embedded == {name for name in files if name.endswith(".png")}
+    assert all(files[name].startswith(b"\x89PNG") for name in embedded)
 
 
-def test_heading_anchors_are_unique(report):
-    readme, _, _ = report
-    anchors = heading_anchors(readme)
-    assert len(anchors) == len(set(anchors))
-
-
-def test_univariate_section_has_no_histogram(report):
-    readme, charts, _ = report
-    univariate = readme.split("## Univariate Analysis")[1].split("## Correlation")[0]
-    assert "![" not in univariate
-    assert "UNIVARIATE.png" not in charts
-
-
-def test_every_embedded_chart_is_uploaded(report):
-    readme, charts, _ = report
-    embedded = set(re.findall(r"!\[[^\]]*\]\(([^)]+)\)", readme))
-    assert embedded
-    assert embedded <= set(charts)
-
-
-def test_charts_are_pngs(report):
-    _, charts, _ = report
-    assert all(data.startswith(b"\x89PNG\r\n\x1a\n") for data in charts.values())
-
-
-def test_univariate_table_covers_distances_and_both_classifier_columns(report):
-    readme, _, _ = report
-    univariate = readme.split("## Univariate Analysis")[1].split("## Correlation")[0]
-    assert "| Statistic | N | Mean | Median | Std Dev | Min | Max | Invalid/Error |" in univariate
-    assert "| cosdist |" in univariate
-    assert "| Score (Human) |" in univariate
-    assert "| Score (AI) |" in univariate
-
-
-def test_comparison_table_reports_auroc_and_tpr_at_the_threshold(report):
-    readme, _, _ = report
-    comparison = readme.split("## Classifiers Comparison Table")[1].split("## Classifier Thresholds")[0]
-    assert "| Threshold | AUROC | TPR @ Threshold |" in comparison
-    assert "| ✔️ Score |" in comparison or "| Score |" in comparison
-
-
-def test_classifier_report_breaks_down_by_prompt_and_by_bin(report):
-    readme, _, _ = report
-    body = readme.split("## Classifier Report: Score")[1].split("## Manually Specified")[0]
-    assert "### Score: By Prompt Subset" in body
-    assert "### Score: By Bin" in body
-    for name in ("Overall", "rewrite", "revise", "cosdist low", "cosdist high"):
-        assert f"| {name} |" in body or f" {name} |" in body
-    assert "### Score: Score Histograms per Prompt Subset" in body
-    assert "### Score: Distance Histograms per Prompt Subset" in body
-
-
-def test_manual_section_reports_the_first_classifier_per_generator(report):
-    readme, _, _ = report
-    body = readme.split("## Manually Specified Full Report")[1]
-    assert "**Score**" in body
-    assert "| Generator Config |" in body
-    assert "m (Temp: 1.0)" in body
-
-
-def test_summary_json_covers_every_subset_group(report):
-    _, _, summary = report
+def test_the_summary_stats_cover_every_breakdown(report):
+    summary = json.loads(report[1]["summary_stats.json"].decode())
+    assert set(summary) == {"overall", "prompts", "models", "thresholds"}
+    assert set(summary["overall"]) == {"Score"}
     assert set(summary["prompts"]) == {"revise", "rewrite"}
-    assert set(summary["bins"]) == {"cosdist low", "cosdist high"}
-    assert set(summary["models"]) == {"m (Temp: 0.6)", "m (Temp: 1.0)"}
-    assert summary["overall"]["Score"]["auroc"] == 1.0
+    assert len(summary["models"]) == 2
 
 
-def test_readme_degrades_when_there_is_no_metadata(report_dataset, report_run_info):
-    # A dataset from outside the pipeline has no prompt/model metadata and no
-    # bin column; the report must still build rather than raising.
-    config = make_analysis_config(
-        distance_metrics=[],
-        classifiers=[ClassifierConfig(name="Score", suffix="_score")],
-    )
-    run_info = {**report_run_info, "bin_column": None}
-    readme, charts, summary = _build_readme(report_dataset, config, run_info, [], [], [])
-
-    assert "- Bins: None" in readme
-    assert "No distance metrics were configured or found." in readme
-    assert "No prompt metadata was found" in readme
-    assert "No generator model/genconfig metadata was found" in readme
-    assert summary["prompts"] == {}
-    assert set(re.findall(r"!\[[^\]]*\]\(([^)]+)\)", readme)) <= set(charts)
+def test_the_summary_stats_keep_the_keys_compare_summary_reads(report):
+    summary = json.loads(report[1]["summary_stats.json"].decode())
+    for key in ("acc", "f1", "auroc", "tpr", "fnr", "fpr", "precision", "recall"):
+        assert key in summary["overall"]["Score"]
+    assert set(summary["thresholds"]["Score"]) == {"threshold_value", "optimal_acc"}
 
 
-def test_readme_builds_without_any_classifier(report_dataset, report_run_info):
-    config = make_analysis_config(distance_metrics=["cosdist"], classifiers=[])
-    readme, _, summary = _build_readme(
-        report_dataset, config, report_run_info, ["revise", "rewrite"], [], ["cosdist low"]
-    )
-    assert "No classifiers were configured." in readme
-    assert summary["overall"] == {}
+def test_a_clean_separation_is_reported_as_one(report):
+    summary = json.loads(report[1]["summary_stats.json"].decode())
+    assert summary["overall"]["Score"]["auroc"] > 0.95
 
 
-# --------------------------------------------------------------------------
-# NumpyEncoder
-# --------------------------------------------------------------------------
+def test_filtering_is_reported_as_loaded_versus_analyzed():
+    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}", "keep": float(i % 4),
+                             "original_score": float(i), "final_response_score": float(i + 10)}
+                            for i in range(200)])
+    cfg = make_analysis_config(filter_type="AND",
+                               filter_conditions=[ConditionConfig(column="keep", operator=">=", value=2)],
+                               classifiers=[make_classifier("Score", "_score")])
+    readme, _ = run_main(ds, cfg)
+    assert "- Rows Loaded: 200" in readme
+    assert "- Rows Analyzed (after filtering): 100" in readme
+    assert "- Filter Conditions: `keep >= 2`" in readme
 
 
-def test_numpy_encoder_handles_numpy_scalars_and_arrays():
-    payload = {
-        "float": np.float32(1.5),
-        "int": np.int64(7),
-        "array": np.array([1.0, 2.0]),
-    }
-    decoded = json.loads(json.dumps(payload, cls=NumpyEncoder))
-    assert decoded == {"float": 1.5, "int": 7, "array": [1.0, 2.0]}
+def test_a_bare_dataset_says_what_it_could_not_break_down():
+    rng = np.random.default_rng(1)
+    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
+                             "original_score": float(rng.normal(0, 1)),
+                             "final_response_score": float(rng.normal(1, 1))} for i in range(120)])
+    readme, _ = run_main(ds, make_analysis_config(
+        classifiers=[make_classifier("Score", "_score")]))
+    for expected in ["No distance metrics were configured or found.",
+                     "No prompt metadata was found, so there are no prompt subsets.",
+                     "No generator model/genconfig metadata was found in this dataset"]:
+        assert expected in readme
 
 
-def test_numpy_encoder_still_rejects_unknown_types():
-    with pytest.raises(TypeError):
-        json.dumps({"bad": object()}, cls=NumpyEncoder)
+def test_manual_thresholds_everywhere_skip_the_validation_split():
+    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
+                             "original_score": float(i), "final_response_score": float(i + 10)}
+                            for i in range(120)])
+    readme, files = run_main(ds, make_analysis_config(
+        classifiers=[make_classifier("Score", "_score", manual_threshold=0.5)]))
+    assert "Every classifier has a manual threshold, so no validation sweep was run." in readme
+    assert not any(name.startswith("SWEEP_") for name in files)
+    assert "- Evaluation / Validation Rows: 120 / 0" in readme
+    assert "pinned manually at 0.5" in readme
+
+
+def test_only_the_classifiers_without_a_manual_threshold_are_swept():
+    # Pinning one classifier must leave the others sweeping, and still cut the
+    # validation split for them.
+    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
+                             "original_score": float(i), "final_response_score": float(i + 200),
+                             "original_bucket": float(i % 2), "final_response_bucket": float(2 + i % 2)}
+                            for i in range(100)])
+    cfg = make_analysis_config(classifiers=[
+        make_classifier("Score", "_score", manual_threshold=0.6),
+        make_classifier("Bucket", "_bucket", threshold_type="f1")])
+    readme, files = run_main(ds, cfg)
+    assert [n for n in files if n.startswith("SWEEP_")] == ["SWEEP_BUCKET.png"]
+    assert "- Evaluation / Validation Rows: 90 / 10" in readme
+    assert "**Score** - columns `*_score`, direction `higher_is_ai` (pinned manually at 0.6)" in readme
+    assert "**Bucket** - columns `*_bucket`, direction `higher_is_ai` (swept for `f1` on the validation split)" in readme
+
+
+def test_a_pinned_classifier_does_not_read_the_validation_split():
+    # evaluate() ignores the validation scores when the threshold is pinned, so
+    # flattening them would be the whole dataset a second time for nothing.
+    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
+                             "original_score": float(i), "final_response_score": float(i + 200)}
+                            for i in range(50)])
+    cfg = make_analysis_config(
+        classifiers=[make_classifier("Score", "_score", manual_threshold=0.6)])
+    reads, original = [], analysis.read_scores
+    analysis.read_scores = lambda read, config, suffix, auto_ai=None: (
+        reads.append(suffix), original(read, config, suffix, auto_ai))[1]
+    try:
+        run_main(ds, cfg)
+    finally:
+        analysis.read_scores = original
+    assert reads == ["_score"]
+
+
+def test_a_manual_threshold_of_zero_is_not_read_as_unset():
+    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
+                             "original_score": float(-i - 1), "final_response_score": float(i + 1)}
+                            for i in range(50)])
+    cfg = make_analysis_config(
+        classifiers=[make_classifier("Score", "_score", manual_threshold=0.0)])
+    readme, files = run_main(ds, cfg)
+    assert not any(name.startswith("SWEEP_") for name in files)
+    assert "pinned manually at 0" in readme
+    summary = json.loads(files["summary_stats.json"].decode())
+    assert summary["thresholds"]["Score"] == {"threshold_value": 0.0}
+    # Every AI score is positive and every human score negative, so 0 separates.
+    assert (summary["overall"]["Score"]["TP"], summary["overall"]["Score"]["FP"]) == (50, 0)
+
+
+def test_a_config_with_no_classes_at_all_is_rejected():
+    ds = Dataset.from_dict({"original": ["a"], "final_response": ["b"]})
+    with pytest.raises(ValueError, match="fixed_classes or auto_class_column"):
+        run_main(ds, make_analysis_config(fixed_classes=None))
