@@ -1,4 +1,5 @@
 import argparse
+from typing import Callable, NamedTuple
 
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
@@ -10,25 +11,67 @@ from fastdetector.statistics.exact_scorer import (
 )
 from fastdetector.statistics import statistics_llm
 
-# (config flag, output column stem) pairs for the per-model metrics.
+
+class Metric(NamedTuple):
+    """One per-model metric.
+
+    Attributes:
+        flag: LLMStatConfig boolean attribute that enables the metric.
+        stem: Output column stem, placed between text column and suffix.
+        aggregate: Reduces one text's scores for one model to a single value.
+    """
+
+    flag: str
+    stem: str
+    aggregate: Callable[[TextScores, int], float]
+
+
 PER_MODEL_METRICS = [
-    ("perplexity", "perplexity"),
-    ("entropy", "entropy"),
-    ("topp_outlier", "topp_outlier"),
-    ("topk_outlier", "topk_outlier"),
-    ("fastdetectgpt_score", "fastdetectgpt"),
+    Metric(
+        "perplexity",
+        "perplexity",
+        lambda s, i: statistics_llm.perplexity(s.token_lps[i]),
+    ),
+    Metric(
+        "entropy",
+        "entropy",
+        lambda s, i: statistics_llm.mean_entropy(s.entropies[i]),
+    ),
+    Metric(
+        "topp_outlier",
+        "topp_outlier",
+        lambda s, i: statistics_llm.outlier_percentage(s.topp_outlier[i]),
+    ),
+    Metric(
+        "topk_outlier",
+        "topk_outlier",
+        lambda s, i: statistics_llm.outlier_percentage(s.topk_outlier[i]),
+    ),
+    Metric(
+        "fastdetectgpt_score",
+        "fastdetectgpt",
+        lambda s, i: statistics_llm.fastdetectgpt_score(
+            s.token_lps[i], s.entropies[i], s.e_lp2[i]
+        ),
+    ),
 ]
 
-# Output column stem -> aggregation over one text's scores for one model.
-METRIC_AGGREGATORS = {
-    "perplexity": lambda s, i: statistics_llm.perplexity(s.token_lps[i]),
-    "entropy": lambda s, i: statistics_llm.mean_entropy(s.entropies[i]),
-    "topp_outlier": lambda s, i: statistics_llm.outlier_percentage(s.topp_outlier[i]),
-    "topk_outlier": lambda s, i: statistics_llm.outlier_percentage(s.topk_outlier[i]),
-    "fastdetectgpt": lambda s, i: statistics_llm.fastdetectgpt_score(
-        s.token_lps[i], s.entropies[i], s.e_lp2[i]
-    ),
-}
+# Binoculars is a cross-model score, so its column carries no model suffix.
+BINOCULARS_STEM = "binoculars"
+
+
+def metric_column(col: str, stem: str, suffix: str = "") -> str:
+    """Build the output column name for one metric on one text column.
+
+    Args:
+        col: Name of the text column being scored.
+        stem: Metric column stem.
+        suffix: Per-model column suffix; empty for cross-model metrics.
+
+    Returns:
+        Output column name.
+    """
+    return f"{col}_{stem}{suffix}"
 
 
 def build_compute_plan(column_names: list[str], config: LLMStatConfig) -> dict[str, set[str]]:
@@ -44,24 +87,46 @@ def build_compute_plan(column_names: list[str], config: LLMStatConfig) -> dict[s
     """
     plan: dict[str, set[str]] = {}
     for col in config.columns_to_score:
-        needed = set()
-        for suffix in config.col_suffixes:
-            for flag, stem in PER_MODEL_METRICS:
-                out_col = f"{col}_{stem}{suffix}"
-                if getattr(config, flag) and out_col not in column_names:
-                    needed.add(out_col)
-        if config.binoculars_score and f"{col}_binoculars" not in column_names:
-            needed.add(f"{col}_binoculars")
+        needed = {
+            metric_column(col, metric.stem, suffix)
+            for suffix in config.col_suffixes
+            for metric in PER_MODEL_METRICS
+            if getattr(config, metric.flag)
+        }
+        if config.binoculars_score:
+            needed.add(metric_column(col, BINOCULARS_STEM))
+        needed -= set(column_names)
         if needed:
             plan[col] = needed
     return plan
+
+
+def select_pass_columns(needed: set[str], col: str, suffixes: list[str]) -> set[str]:
+    """Select the columns in ``needed`` that one scoring pass can produce.
+
+    Args:
+        needed: Missing output column names for the text column.
+        col: Name of the text column being scored.
+        suffixes: Column suffixes for the checkpoints loaded in this pass.
+
+    Returns:
+        Subset of ``needed`` this pass produces. The binoculars column only
+        reaches ``needed`` when binoculars is enabled, and that configuration
+        always loads both checkpoints in a single pass.
+    """
+    produced = {
+        metric_column(col, metric.stem, suffix)
+        for suffix in suffixes
+        for metric in PER_MODEL_METRICS
+    }
+    produced.add(metric_column(col, BINOCULARS_STEM))
+    return produced & needed
 
 
 def compute_metric_columns(
     scored: list[TextScores],
     col: str,
     needed: set[str],
-    config: LLMStatConfig,
     suffixes: list[str],
 ) -> dict[str, list[float]]:
     """Aggregate per-text scores into the missing metric columns.
@@ -71,7 +136,6 @@ def compute_metric_columns(
             per scored model, aligned with ``suffixes``.
         col: Name of the text column being scored.
         needed: Output column names to compute.
-        config: LLMStatConfig (used for the binoculars flag).
         suffixes: Column suffixes aligned with the scored models.
 
     Returns:
@@ -79,16 +143,15 @@ def compute_metric_columns(
     """
     result: dict[str, list[float]] = {}
     for model_idx, suffix in enumerate(suffixes):
-        for _, stem in PER_MODEL_METRICS:
-            out_col = f"{col}_{stem}{suffix}"
-            if out_col not in needed:
-                continue
-            aggregate = METRIC_AGGREGATORS[stem]
-            result[out_col] = [aggregate(scores, model_idx) for scores in scored]
+        for metric in PER_MODEL_METRICS:
+            out_col = metric_column(col, metric.stem, suffix)
+            if out_col in needed:
+                result[out_col] = [metric.aggregate(scores, model_idx) for scores in scored]
 
-    if config.binoculars_score and f"{col}_binoculars" in needed:
+    binoculars_col = metric_column(col, BINOCULARS_STEM)
+    if binoculars_col in needed:
         # Model 0 is the observer, model 1 the performer (checkpoint order).
-        result[f"{col}_binoculars"] = [
+        result[binoculars_col] = [
             statistics_llm.binoculars_score(scores.token_lps[1], scores.cross_entropies)
             for scores in scored
         ]
@@ -143,34 +206,32 @@ def main() -> None:
         compute_cross_entropy=config.binoculars_score,
     )
 
-    new_columns: dict[str, list[float]] = {}
+    # Binoculars needs both checkpoints co-resident to compute the cross-model
+    # term; otherwise checkpoints are loaded and freed one at a time.
     if config.binoculars_score:
-        print(f"Loading checkpoints (co-resident): {config.llm_checkpoints}")
-        with exact_scorer_context(config.llm_checkpoints, settings) as scorer:
-            for col, needed in plan.items():
+        passes = [(config.llm_checkpoints, config.col_suffixes)]
+    else:
+        passes = [
+            ([checkpoint], [suffix])
+            for checkpoint, suffix in zip(config.llm_checkpoints, config.col_suffixes)
+        ]
+
+    new_columns: dict[str, list[float]] = {}
+    for checkpoints, suffixes in passes:
+        pass_plan = {}
+        for col, needed in plan.items():
+            pass_cols = select_pass_columns(needed, col, suffixes)
+            if pass_cols:
+                pass_plan[col] = pass_cols
+        if not pass_plan:
+            print(f"Metrics for {checkpoints} already computed for all columns. Skipping...")
+            continue
+        print(f"Loading checkpoint(s) {checkpoints} (suffixes: {suffixes})...")
+        with exact_scorer_context(checkpoints, settings) as scorer:
+            for col, pass_cols in pass_plan.items():
                 print(f"Scoring column '{col}'...")
                 scored = scorer.score_texts(ds[col], progress_label=col)
-                new_columns.update(
-                    compute_metric_columns(scored, col, needed, config, config.col_suffixes)
-                )
-    else:
-        for checkpoint, suffix in zip(config.llm_checkpoints, config.col_suffixes):
-            cols: dict[str, set[str]] = {}
-            for col, needed in plan.items():
-                model_cols = {f"{col}_{stem}{suffix}" for _, stem in PER_MODEL_METRICS} & needed
-                if model_cols:
-                    cols[col] = model_cols
-            if not cols:
-                print(f"Metrics for {checkpoint} already computed for all columns. Skipping...")
-                continue
-            print(f"Loading checkpoint {checkpoint} (suffix: {suffix})...")
-            with exact_scorer_context([checkpoint], settings) as scorer:
-                for col, needed in cols.items():
-                    print(f"Scoring column '{col}'...")
-                    scored = scorer.score_texts(ds[col], progress_label=col)
-                    new_columns.update(
-                        compute_metric_columns(scored, col, needed, config, [suffix])
-                    )
+                new_columns.update(compute_metric_columns(scored, col, pass_cols, suffixes))
 
     for name, values in new_columns.items():
         ds = ds.add_column(name, values)

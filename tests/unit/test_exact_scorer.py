@@ -9,7 +9,6 @@ from fastdetector.statistics.exact_scorer import (
     ScorerSettings,
     TextScores,
     _concat_to_numpy,
-    _empty_scores,
     _resolve_dtype,
     exact_scorer_context,
 )
@@ -178,15 +177,28 @@ def test_resolve_dtype_rejects_unknown_names():
 
 
 def test_empty_scores_shapes():
-    scores = _empty_scores(num_models=2, with_cross_entropy=True)
+    scores = TextScores.empty(num_models=2, with_cross_entropy=True)
     assert len(scores.token_lps) == 2
     assert all(arr.shape == (0,) for arr in scores.token_lps)
     assert scores.cross_entropies is not None
     assert scores.cross_entropies.shape == (0,)
 
 
+def test_empty_scores_covers_every_per_model_field():
+    scores = TextScores.empty(num_models=2, with_cross_entropy=False)
+    for name in exact_scorer_module.PER_MODEL_FIELDS:
+        arrays = getattr(scores, name)
+        assert len(arrays) == 2
+        assert all(arr.shape == (0,) for arr in arrays)
+
+
+def test_empty_scores_arrays_are_independent():
+    scores = TextScores.empty(num_models=2, with_cross_entropy=False)
+    assert scores.token_lps[0] is not scores.token_lps[1]
+
+
 def test_empty_scores_without_cross_entropy():
-    assert _empty_scores(1, False).cross_entropies is None
+    assert TextScores.empty(1, False).cross_entropies is None
 
 
 def test_concat_to_numpy_casts():
@@ -307,6 +319,13 @@ def test_scores_match_a_naive_reference(tiny_lm):
     assert got.e_lp2[0] == pytest.approx(want["e_lp2"], abs=1e-4)
     assert got.topp_outlier[0].tolist() == want["topp_outlier"].tolist()
     assert got.topk_outlier[0].tolist() == want["topk_outlier"].tolist()
+
+
+def test_scored_arrays_use_the_declared_field_dtypes(tiny_lm):
+    scorer = ExactScorer([[tiny_lm]], None, make_settings(), ["cpu"])
+    scores = scorer.score_token_lists([np.arange(2, 12, dtype=np.int64)])[0]
+    for name, dtype in exact_scorer_module.PER_MODEL_FIELDS.items():
+        assert getattr(scores, name)[0].dtype == np.dtype(dtype)
 
 
 def test_entropy_is_non_negative_and_bounded_by_log_vocab(tiny_lm):

@@ -15,6 +15,17 @@ LOG_TOLERANCE = 1e-5
 
 PROGRESS_PRINT_INTERVAL = 500
 
+# Per-model TextScores fields and the NumPy dtype each is stored as. Every
+# stage of scoring accumulates, concatenates and slices all of them the same
+# way, so this table is the only place they are enumerated.
+PER_MODEL_FIELDS: dict[str, type] = {
+    "token_lps": np.float32,
+    "entropies": np.float32,
+    "e_lp2": np.float32,
+    "topp_outlier": bool,
+    "topk_outlier": bool,
+}
+
 
 @dataclass
 class ScorerSettings:
@@ -94,27 +105,24 @@ class TextScores:
     topk_outlier: list[np.ndarray] = field(default_factory=list)
     cross_entropies: Optional[np.ndarray] = None
 
+    @classmethod
+    def empty(cls, num_models: int, with_cross_entropy: bool) -> "TextScores":
+        """Construct scores for a text with no scoreable positions.
 
-def _empty_scores(num_models: int, with_cross_entropy: bool) -> TextScores:
-    """Construct an empty TextScores instance.
+        Args:
+            num_models: Number of scored models.
+            with_cross_entropy: Whether cross-entropy array is enabled.
 
-    Args:
-        num_models: Number of scored models.
-        with_cross_entropy: Whether cross-entropy array is enabled.
-
-    Returns:
-        Empty TextScores instance.
-    """
-    empty_f = np.zeros(0, dtype=np.float32)
-    empty_b = np.zeros(0, dtype=bool)
-    return TextScores(
-        token_lps=[empty_f.copy() for _ in range(num_models)],
-        entropies=[empty_f.copy() for _ in range(num_models)],
-        e_lp2=[empty_f.copy() for _ in range(num_models)],
-        topp_outlier=[empty_b.copy() for _ in range(num_models)],
-        topk_outlier=[empty_b.copy() for _ in range(num_models)],
-        cross_entropies=empty_f.copy() if with_cross_entropy else None,
-    )
+        Returns:
+            TextScores whose every array is length zero.
+        """
+        return cls(
+            **{
+                name: [np.zeros(0, dtype=dtype) for _ in range(num_models)]
+                for name, dtype in PER_MODEL_FIELDS.items()
+            },
+            cross_entropies=np.zeros(0, dtype=np.float32) if with_cross_entropy else None,
+        )
 
 
 def _concat_to_numpy(chunks: list[torch.Tensor], dtype) -> np.ndarray:
@@ -292,43 +300,35 @@ class ExactScorer:
         scoreable = []
         for i, ids in enumerate(token_arrays):
             if ids.shape[0] < 2:
-                results[i] = _empty_scores(num_models, with_ce)
+                results[i] = TextScores.empty(num_models, with_ce)
             else:
                 scoreable.append(i)
         scoreable.sort(key=lambda i: token_arrays[i].shape[0], reverse=True)
 
         completed = 0
+        next_report = PROGRESS_PRINT_INTERVAL
         total = len(scoreable)
         label = f" [{progress_label}]" if progress_label else ""
 
         def _report(batch_size: int) -> None:
-            """Report progress for completed texts."""
-            nonlocal completed
+            """Report progress after each reporting interval is crossed."""
+            nonlocal completed, next_report
             completed += batch_size
-            if total and (
-                completed % PROGRESS_PRINT_INTERVAL < batch_size or completed == total
-            ):
+            if completed >= next_report or completed == total:
+                next_report = completed + PROGRESS_PRINT_INTERVAL
                 print(f"  Progress{label}: {completed}/{total} texts scored", flush=True)
 
         batches = list(self._plan_batches(scoreable, token_arrays))
-        if len(self.replicas) == 1:
-            for batch_indices in batches:
-                batch_scores = self._score_batch(
-                    [token_arrays[i] for i in batch_indices], replica_idx=0
-                )
-                for i, scores in zip(batch_indices, batch_scores):
-                    results[i] = scores
-                _report(len(batch_indices))
-            return results  # type: ignore[return-value]
 
-        # Multi-GPU: workers check a replica out of the queue per batch, so
-        # load stays balanced even when batch runtimes vary.
+        # Workers check a replica out of the queue per batch, so load stays
+        # balanced even when batch runtimes vary. With one replica this
+        # degenerates to a single-worker executor.
         idle_replicas: queue.SimpleQueue[int] = queue.SimpleQueue()
         for replica_idx in range(len(self.replicas)):
             idle_replicas.put(replica_idx)
 
         def _run_batch(batch_indices: list[int]) -> tuple[list[int], list[TextScores]]:
-            """Score batch on an idle replica."""
+            """Score one batch on whichever replica is idle."""
             replica_idx = idle_replicas.get()
             try:
                 batch_scores = self._score_batch(
@@ -424,8 +424,7 @@ class ExactScorer:
             del hidden
 
         per_model_chunks: list[dict[str, list[torch.Tensor]]] = [
-            {"token_lps": [], "entropies": [], "e_lp2": [], "topp": [], "topk": []}
-            for _ in models
+            {name: [] for name in PER_MODEL_FIELDS} for _ in models
         ]
         ce_chunks: list[torch.Tensor] = []
 
@@ -454,7 +453,7 @@ class ExactScorer:
                 # top-p.
                 sorted_lp, _ = torch.sort(logp, descending=True, dim=-1)
                 kth_lp = sorted_lp[:, settings.topk_threshold - 1]
-                out["topk"].append(token_lp < kth_lp - LOG_TOLERANCE)
+                out["topk_outlier"].append(token_lp < kth_lp - LOG_TOLERANCE)
 
                 cum = sorted_lp.exp().cumsum(dim=-1)
                 thresholds = torch.full(
@@ -465,7 +464,7 @@ class ExactScorer:
                 # falling back to the smallest logprob.
                 idx = torch.searchsorted(cum, thresholds).clamp(max=logp.shape[-1] - 1)
                 threshold_lp = sorted_lp.gather(1, idx).squeeze(1)
-                out["topp"].append(token_lp < threshold_lp - LOG_TOLERANCE)
+                out["topp_outlier"].append(token_lp < threshold_lp - LOG_TOLERANCE)
                 del sorted_lp, cum
 
                 if settings.compute_cross_entropy and model_idx == 0:
@@ -481,11 +480,11 @@ class ExactScorer:
 
         del flat_hiddens
 
-        token_lps = [_concat_to_numpy(c["token_lps"], np.float32) for c in per_model_chunks]
-        entropies = [_concat_to_numpy(c["entropies"], np.float32) for c in per_model_chunks]
-        e_lp2 = [_concat_to_numpy(c["e_lp2"], np.float32) for c in per_model_chunks]
-        topp = [_concat_to_numpy(c["topp"], bool) for c in per_model_chunks]
-        topk = [_concat_to_numpy(c["topk"], bool) for c in per_model_chunks]
+        # field name -> one concatenated batch-wide array per model.
+        arrays = {
+            name: [_concat_to_numpy(chunks[name], dtype) for chunks in per_model_chunks]
+            for name, dtype in PER_MODEL_FIELDS.items()
+        }
         ce = _concat_to_numpy(ce_chunks, np.float32) if settings.compute_cross_entropy else None
 
         results = []
@@ -495,11 +494,10 @@ class ExactScorer:
             sl = slice(offset, offset + m)
             results.append(
                 TextScores(
-                    token_lps=[arr[sl] for arr in token_lps],
-                    entropies=[arr[sl] for arr in entropies],
-                    e_lp2=[arr[sl] for arr in e_lp2],
-                    topp_outlier=[arr[sl] for arr in topp],
-                    topk_outlier=[arr[sl] for arr in topk],
+                    **{
+                        name: [arr[sl] for arr in per_model]
+                        for name, per_model in arrays.items()
+                    },
                     cross_entropies=ce[sl] if ce is not None else None,
                 )
             )
