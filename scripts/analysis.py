@@ -475,8 +475,7 @@ def main() -> None:
         for clf in classifiers for i, base in enumerate(cfg.base_columns)]
 
     # ----------------------------------------------------------------- charts
-    # Every chart is rendered once, here, and embedded by filename below. The
-    # per-subset distance histograms are shared by every classifier report.
+    # Every chart is rendered once, here, and embedded by filename below.
     charts: dict[str, bytes] = {}
     if statistics:
         charts["CORRELATIONS.png"] = plotting.heatmap(
@@ -493,9 +492,12 @@ def main() -> None:
         for sub in [*groups.prompts, *(groups.models if index == 0 else [])]:
             charts[f"CLF_HIST_{safe_name(clf.name)}_{sub.safe}.png"] = plotting.histogram(
                 scores.subset(sub.mask).series(), f"{clf.name}: {sub.name}")
+    # Distances split by prompt subset are classifier-independent and stand on
+    # their own under the distances section; the per-generator split is only
+    # read by the lead classifier's hardcoded report, so it needs a classifier.
     for family, prefix, group in ((groups.prompts, "DIST_BY_PROMPT", "Prompt Subset"),
-                                  (groups.models, "DIST_BY_MODEL", "Generator Config")):
-        for name, values in (distances if classifiers and family else []):
+                                  (groups.models if classifiers else [], "DIST_BY_MODEL", "Generator Config")):
+        for name, values in (distances if family else []):
             charts[f"{prefix}_{safe_name(name)}.png"] = plotting.histogram(
                 [(values[sub.mask], sub.name) for sub in family], f"{name} by {group}")
 
@@ -589,6 +591,18 @@ def main() -> None:
         distance_hists = f"""Distribution of each pairwise distance between a human original and its AI rewrite, over the whole evaluation split.
 
 {embeds}"""
+        if groups.prompts:
+            # These are a property of the corpus, not of any classifier, so they
+            # are reported once here rather than repeated in every classifier
+            # report below.
+            by_prompt = "\n".join(f"![{name} by Prompt Subset](DIST_BY_PROMPT_{safe_name(name)}.png)"
+                                  for name, _ in distances)
+            distance_hists += f"""
+
+### Distance Histograms per Prompt Subset
+The same distances, split by the {len(groups.prompts)} prompt subset(s).
+
+{by_prompt}"""
 
     classifier_hists = comparison = "No classifiers were configured."
     if classifiers:
@@ -620,15 +634,6 @@ def main() -> None:
         score_hists = ("\n".join(f"![{clf.name}: {sub.name}](CLF_HIST_{safe}_{sub.safe}.png)"
                                  for sub in groups.prompts)
                        or "No prompt metadata was found, so there are no prompt subsets.")
-        distance_block = ""
-        if distances and groups.prompts:
-            embeds = "\n".join(f"![{name} by Prompt Subset](DIST_BY_PROMPT_{safe_name(name)}.png)"
-                               for name, _ in distances)
-            distance_block = f"""
-
-### {clf.name}: Distance Histograms per Prompt Subset
-{embeds}"""
-
         reports += f"""## Classifier Report: {clf.name}
 Threshold {threshold_description(clf)} = {fmt(run.threshold)}; scores read from `*{clf.suffix}` ({clf.direction}).
 
@@ -636,7 +641,7 @@ Threshold {threshold_description(clf)} = {fmt(run.threshold)}; scores read from 
 {subset_table(run, groups.overall, groups.prompts, "Prompt Subset")}
 
 ### {clf.name}: Score Histograms per Prompt Subset
-{score_hists}{distance_block}
+{score_hists}
 
 """
 

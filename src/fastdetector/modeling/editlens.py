@@ -1,8 +1,5 @@
 import glob
 import os
-import re
-
-import emoji
 import numpy as np
 import torch
 from peft import PeftModel
@@ -18,6 +15,8 @@ from transformers import (
     AutoTokenizer,
     DataCollatorWithPadding,
 )
+
+from fastdetector.modeling.preprocessing import clean_text
 
 
 class NormedLinear(torch.nn.Module):
@@ -48,24 +47,7 @@ class NormedLinear(torch.nn.Module):
         return self.linear(self.norm(x))
 
 
-def clean_text(text: str) -> str:
-    """Normalize text for EditLens inference.
 
-    Args:
-        text: Input text string.
-
-    Returns:
-        Normalized text string.
-    """
-    if text is None:
-        return ""
-    if not isinstance(text, str):
-        text = str(text)
-    text = emoji.demojize(text)
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    text = re.sub(r"\s+", " ", text).strip()
-    text = text.lower()
-    return text
 
 
 def is_qlora_checkpoint(checkpoint: str) -> bool:

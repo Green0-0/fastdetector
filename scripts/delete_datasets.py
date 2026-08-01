@@ -6,16 +6,20 @@ from fastdetector.frontend.toml_config import GlobalsConfig
 from fastdetector.frontend.toml_loader import load_toml
 
 
+#: Every GlobalsConfig dataset field except the raw one, which is the corpus
+#: the pipeline never regenerates and so must never delete.
+NON_RAW_DATASET_FIELDS = [
+    "pre_filter_dataset",
+    "post_filter_dataset",
+    "gen_dataset",
+    "stat_dataset",
+    "eval_dataset",
+]
+
+
 def resolve_non_raw_datasets(globals_config: GlobalsConfig) -> list[str]:
     """Return all non-raw dataset repo IDs configured in globals_config."""
     targets = []
-    NON_RAW_DATASET_FIELDS = [
-        "pre_filter_dataset",
-        "post_filter_dataset",
-        "gen_dataset",
-        "stat_dataset",
-        "eval_dataset",
-    ]
     for field in NON_RAW_DATASET_FIELDS:
         name = globals_config.resolve_dataset(getattr(globals_config, field))
         if name and name not in targets:
