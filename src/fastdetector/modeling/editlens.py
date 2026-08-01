@@ -16,7 +16,7 @@ from transformers import (
     DataCollatorWithPadding,
 )
 
-from fastdetector.modeling.preprocessing import clean_text
+from fastdetector.modeling.training_utils import clean_text
 
 
 class NormedLinear(torch.nn.Module):
@@ -45,9 +45,6 @@ class NormedLinear(torch.nn.Module):
             Output logits of shape (batch_size, num_labels).
         """
         return self.linear(self.norm(x))
-
-
-
 
 
 def is_qlora_checkpoint(checkpoint: str) -> bool:
@@ -126,7 +123,6 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = "left"
 
     is_qlora = is_qlora_checkpoint(checkpoint_path)
 
@@ -141,7 +137,7 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
             num_labels=n_buckets,
             quantization_config=quantization_config,
         )
-        base_model.config.pad_token_id = tokenizer.pad_token_id
+        base_model.config.get_text_config().pad_token_id = tokenizer.pad_token_id
 
         if hasattr(base_model, "score") and isinstance(base_model.score, torch.nn.Linear):
             hidden_size = base_model.config.hidden_size

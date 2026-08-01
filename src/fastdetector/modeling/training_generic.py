@@ -1,23 +1,10 @@
-"""QLoRA sequence-classification training for EditLens bucket prediction.
-
-Subcommands: ``train`` (single run), ``sweep`` (optuna search), ``smoke``
-(tiny synthetic run that exercises the whole path).
-"""
-
-import argparse
-import json
-import random
-import re
-from pathlib import Path
-
-from accelerate import PartialState
-from accelerate.utils import broadcast_object_list
-from datasets import Dataset, load_dataset
 import numpy as np
-import optuna
-from peft import LoraConfig, get_peft_model
 import torch
 import torch.nn as nn
+from accelerate import PartialState
+from accelerate.utils import broadcast_object_list
+from datasets import load_dataset
+from peft import LoraConfig, get_peft_model
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
@@ -29,12 +16,11 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-import yaml
 
-from fastdetector.modeling.preprocessing import clean_text
+from fastdetector.modeling.training_utils import get_data
 
 
-def log(message) -> None:
+def _log(message) -> None:
     """Print a message from the main process only.
 
     Args:
@@ -44,12 +30,8 @@ def log(message) -> None:
         print(message, flush=True)
 
 
-def bcast(obj):
+def _bcast(obj):
     """Broadcast an object from the main process to every rank.
-
-    WHY: if ranks disagree on a control-flow decision (prune, next params) one
-    exits while the others wait in all_reduce, and the job hangs until the wall
-    clock kills it -- which looks like a timeout, not a pruned trial.
 
     Args:
         obj: Picklable object; only the main process's value is kept.
@@ -60,63 +42,33 @@ def bcast(obj):
     return broadcast_object_list([obj])[0]
 
 
-# --------------------------------------------------------------------------- #
-# EditLens preprocessing (transcribed from pangramlabs/EditLens preprocess.py)
-# --------------------------------------------------------------------------- #
+def _build_head(hidden: int, n_labels: int, norm: bool = True,
+               bottleneck: int = 0, dropout: float = 0.1, **kw) -> nn.Module:
+    """Build the classification head from two orthogonal shape choices.
 
-def count_words(text: str) -> int:
-    """Count word characters runs in a string.
-
-    Args:
-        text: Input text string.
-
-    Returns:
-        Number of words.
-    """
-    return len(re.findall(r"\b\w+\b", text))
-
-
-def to_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
-    """Discretize a cosine score into an ordinal bucket.
-
-    Scores at or below ``lo`` collapse to bucket 0 and scores at or above ``hi``
-    to the top bucket; the band between them is split evenly across the rest.
+    The defaults give a normed linear head: a LayerNorm over the pooled hidden
+    state, then an unbiased projection to the labels.
 
     Args:
-        score: Cosine score to bucket.
-        n_buckets: Total number of buckets.
-        lo: Lower edge of the graded band.
-        hi: Upper edge of the graded band.
+        hidden: Input width, the base model's hidden size.
+        n_labels: Number of output logits.
+        norm: Whether to prefix a LayerNorm.
+        bottleneck: Width of an intermediate GELU projection; 0 for none.
+        dropout: Dropout after the bottleneck. Unused when bottleneck is 0.
+        **kw: dtype and device, forwarded to every parameterized layer.
 
     Returns:
-        Bucket index in ``[0, n_buckets)``.
+        The head as an ``nn.Sequential``.
     """
-    if score <= lo:
-        return 0
-    if score >= hi:
-        return n_buckets - 1
-    return 1 + int((score - lo) / (hi - lo) * (n_buckets - 2))
+    layers = [nn.LayerNorm(hidden, **kw)] if norm else []
+    if bottleneck:
+        layers += [nn.Linear(hidden, bottleneck, **kw), nn.GELU(), nn.Dropout(dropout)]
+        hidden = bottleneck
+    layers.append(nn.Linear(hidden, n_labels, bias=False, **kw))
+    return nn.Sequential(*layers)
 
 
-# Classification heads, all called as (hidden, n_labels, bottleneck, dropout,
-# **module_kwargs); the shallow ones ignore the bottleneck and dropout.
-HEADS = {
-    "linear": lambda hidden, n_labels, *_, **kw: nn.Linear(hidden, n_labels, bias=False, **kw),
-    "normed": lambda hidden, n_labels, *_, **kw: nn.Sequential(
-        nn.LayerNorm(hidden, **kw),
-        nn.Linear(hidden, n_labels, bias=False, **kw)),
-    "mlp": lambda hidden, n_labels, bottleneck, dropout, **kw: nn.Sequential(
-        nn.LayerNorm(hidden, **kw),
-        nn.Linear(hidden, bottleneck, **kw),
-        nn.GELU(),
-        nn.Dropout(dropout),
-        nn.Linear(bottleneck, n_labels, bias=False, **kw)),
-}
-
-
-# --------------------------------------------------------------------------- #
-
-def quirks(model_name: str) -> tuple[str | None, str]:
+def _quirks(model_name: str) -> tuple[str | None, str]:
     """Register any missing task head, and return this model's build overrides.
 
     The only place model-specific code belongs. If a model needs a change
@@ -136,8 +88,7 @@ def quirks(model_name: str) -> tuple[str | None, str]:
     from transformers.models.gemma4.configuration_gemma4 import Gemma4Config
     from transformers.models.gemma4.modeling_gemma4 import Gemma4PreTrainedModel
 
-    class Gemma4ForSequenceClassification(GenericForSequenceClassification,
-                                          Gemma4PreTrainedModel):
+    class Gemma4ForSequenceClassification(GenericForSequenceClassification, Gemma4PreTrainedModel):
         config: Gemma4Config
 
     try:
@@ -148,158 +99,152 @@ def quirks(model_name: str) -> tuple[str | None, str]:
     return r".*(vision_tower|audio_tower|visual|embed_vision|embed_audio).*", "sdpa"
 
 
-def build(args: argparse.Namespace) -> tuple:
+def build(
+    model: str,
+    n_buckets: int = 4,
+    head_norm: bool = True,
+    head_bottleneck: int = 0,
+    head_dropout: float = 0.1,
+    lora_r: int = 8,
+    lora_alpha: int = 16,
+    lora_dropout: float = 0.05,
+) -> tuple:
     """Load the 4bit base model, swap in a fresh head, and wrap it in LoRA.
 
     Args:
-        args: Parsed CLI/config namespace.
+        model: Base model path or Hugging Face repository ID.
+        n_buckets: Number of output discrete bucket labels.
+        head_norm: Whether the classification head starts with a LayerNorm.
+        head_bottleneck: Bottleneck width for the head; 0 for none.
+        head_dropout: Dropout after the head's bottleneck.
+        lora_r: Rank of LoRA adapters.
+        lora_alpha: Scaling parameter of LoRA adapters. 
+            **Adapters are rank stabilized with rsLoRA.**
+        lora_dropout: Dropout probability for LoRA layers.
 
     Returns:
-        Tuple of (peft_model, tokenizer, info), where info records the build
-        choices worth reporting back to a sweep.
+        Tuple of (peft_model, tokenizer).
     """
-    exclude, attn = quirks(args.model)
-    if args.attn != "auto":
-        attn = args.attn
-    world_size = PartialState().num_processes
+    exclude, resolved_attn = _quirks(model)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(model)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    tokenizer.padding_side = "left"
+    config = AutoConfig.from_pretrained(model)
+    config.num_labels = n_buckets
+    hidden_size = config.get_text_config().hidden_size
+    
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit=True, 
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.bfloat16, 
+        bnb_4bit_use_double_quant=True
+    )
 
-    config = AutoConfig.from_pretrained(args.model)
-    config.num_labels = args.n_buckets
-    text_config = config.get_text_config()
-    if text_config is not config:
-        text_config.num_labels = args.n_buckets
-        if not hasattr(config, "hidden_size"):
-            config.hidden_size = text_config.hidden_size
-    hidden_size, dtype = text_config.hidden_size, torch.bfloat16
-
-    model = AutoModelForSequenceClassification.from_pretrained(
-        args.model, config=config, dtype=dtype,
-        quantization_config=BitsAndBytesConfig(
-            load_in_4bit=True, bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=dtype, bnb_4bit_use_double_quant=True),
+    peft_model = AutoModelForSequenceClassification.from_pretrained(
+        model,
+        config=config,
+        dtype=torch.bfloat16,
+        quantization_config=quantization_config,
         device_map={"": PartialState().local_process_index},
-        attn_implementation=attn)
-    model.config.pad_token_id = tokenizer.pad_token_id
+        attn_implementation=resolved_attn
+    )
+    
+    peft_model.config.get_text_config().pad_token_id = tokenizer.pad_token_id
 
-    model.score = HEADS[args.head](hidden_size, args.n_buckets, args.head_bottleneck,
-                                   args.head_dropout, dtype=dtype, device=model.device)
-
-    # peft's prepare_model_for_kbit_training inlined, minus its unconditional
-    # upcast of every non-4bit param to fp32 -- which the default fp32_upcast=0
-    # then had to walk the model a second time to undo.
-    for param in model.parameters():
+    peft_model.score = _build_head(hidden_size, n_buckets, head_norm, head_bottleneck, head_dropout, dtype=torch.float32, device=peft_model.device)
+    for param in peft_model.parameters():
         param.requires_grad = False
-    if args.fp32_upcast:
-        for param in model.parameters():
-            if param.dtype == dtype and type(param).__name__ != "Params4bit":
-                param.data = param.data.to(torch.float32)
-    if args.grad_ckpt:
-        # WHY non-reentrant: the reentrant path needs a grad-requiring input to
-        # each checkpointed segment, which a fully frozen 4bit base cannot give.
-        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+    lora_config = LoraConfig(
+        r=lora_r, 
+        lora_alpha=lora_alpha, 
+        lora_dropout=lora_dropout, 
+        bias="none",
+        use_rslora=True,
+        target_modules=target_modules,
+        exclude_modules=exclude,
+        task_type="SEQ_CLS"
+    )
 
-    model = get_peft_model(model, LoraConfig(
-        r=args.lora_r, lora_alpha=args.lora_alpha, lora_dropout=args.lora_dropout, bias="none",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj"],
-        exclude_modules=exclude, task_type="SEQ_CLS"))
-    model.config.use_cache = False
+    peft_model = get_peft_model(peft_model, lora_config)
 
-    checkpointing = any(getattr(m, "gradient_checkpointing", False) for m in model.modules())
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    log(f"[build] attn={attn} head={args.head} ckpt={checkpointing} "
-        f"pad={tokenizer.padding_side} trainable={trainable:,} "
-        f"batch={args.batch}x{args.grad_accum}x{world_size}"
-        f"={args.batch * args.grad_accum * world_size}")
-    return model, tokenizer, dict(attn=attn, ckpt=checkpointing,
-                                  trainable=trainable, head=args.head)
+    trainable = sum(p.numel() for p in peft_model.parameters() if p.requires_grad)
+    _log(f"[build] attn={resolved_attn} norm={head_norm} bn={head_bottleneck} pad={tokenizer.padding_side} trainable={trainable:,}")
+    return peft_model, tokenizer
 
 
-# --------------------------------------------------------------------------- #
-
-_SYNTHETIC_VOCAB = (
-    "the of and to in a is that for it as was with be by on not this are from at which "
-    "model research writing student essay analysis however therefore data language").split()
-
-
-def get_data(args: argparse.Namespace, tokenizer) -> tuple[Dataset, Dataset]:
-    """Load, filter, and tokenize the training corpus.
-
-    Args:
-        args: Parsed CLI/config namespace.
-        tokenizer: Tokenizer matching the base model.
-
-    Returns:
-        Tuple of (train_dataset, eval_dataset), each carrying only input_ids,
-        attention_mask, and label.
-    """
-    if args.data == "synthetic":
-        rng = random.Random(args.seed)
-        rows = {"text": [], "cosine_score": []}
-        for _ in range(args.n_rows if args.n_rows > 0 else 2000):
-            rows["text"].append(" ".join(rng.choice(_SYNTHETIC_VOCAB)
-                                         for _ in range(rng.randint(90, 900))))
-            roll = rng.random()
-            rows["cosine_score"].append(
-                rng.uniform(0, .03) if roll < .35 else
-                rng.uniform(.15, 1) if roll < .65 else rng.uniform(.03, .15))
-        ds = Dataset.from_dict(rows)
-    else:
-        ds = load_dataset(args.dataset, split="train")
-
-    def keep(row):  # one pass, and count_words never sees a None
-        return (row["text"] is not None and row["cosine_score"] is not None
-                and count_words(row["text"]) >= 75)
-
-    def prep(batch):
-        encoded = tokenizer([clean_text(text) for text in batch["text"]],
-                            truncation=True, max_length=args.max_length)
-        encoded["label"] = [to_bucket(score, args.n_buckets, args.lo, args.hi)
-                            for score in batch["cosine_score"]]
-        return encoded
-
-    # WHY main_process_first: every rank derives the same dataset, so without it
-    # all of them tokenize the full corpus at once and race on one cache file.
-    # The others then hit the cache datasets fingerprinted for rank 0.
-    with PartialState().main_process_first():
-        ds = ds.filter(keep).shuffle(seed=args.seed)
-        if args.n_rows > 0:
-            ds = ds.select(range(min(args.n_rows, len(ds))))
-        ds = ds.map(prep, batched=True, remove_columns=ds.column_names)
-
-    split = ds.train_test_split(test_size=0.05, seed=args.seed)
-    return split["train"], split["test"]
-
-
-# --------------------------------------------------------------------------- #
-
-def train(args: argparse.Namespace, trial=None) -> dict:
+def train(
+    model: str = "meta-llama/Llama-3.2-3B",
+    dataset: str = "pangram/editlens_iclr",
+    n_rows: int = -1,
+    n_buckets: int = 4,
+    lo: float = 0.03,
+    hi: float = 0.15,
+    max_length: int = 1024,
+    head_norm: bool = True,
+    head_bottleneck: int = 0,
+    head_dropout: float = 0.1,
+    lora_r: int = 8,
+    lora_alpha: int = 16,
+    lora_dropout: float = 0.05,
+    lr: float = 3e-5,
+    batch: int = 3,
+    grad_accum: int = 1,
+    epochs: float = 1,
+    eval_steps: int = 200,
+    seed: int = 42,
+    trial=None,
+) -> tuple[float, bool]:
     """Run one training job and evaluate it.
 
     Args:
-        args: Parsed CLI/config namespace.
+        model: Base model path or Hugging Face repository ID.
+        dataset: Dataset repository ID, loaded from its train split.
+        n_rows: Rows to keep from the dataset; -1 for all.
+        n_buckets: Number of output discrete bucket labels.
+        lo: Lower edge of the graded scoring band.
+        hi: Upper edge of the graded scoring band.
+        max_length: Tokenizer truncation length.
+        head_norm: Whether the classification head starts with a LayerNorm.
+        head_bottleneck: Bottleneck width for the head; 0 for none.
+        head_dropout: Dropout after the head's bottleneck.
+        lora_r: Rank of LoRA adapters.
+        lora_alpha: Scaling parameter of LoRA adapters.
+        lora_dropout: Dropout probability for LoRA layers.
+        lr: Learning rate.
+        batch: Per-device batch size.
+        grad_accum: Gradient accumulation steps.
+        epochs: Training epochs.
+        eval_steps: Steps between evaluations.
+        seed: Seed for weights, data order, and shuffling.
         trial: Optuna trial to report intermediate scores to, enabling pruning.
-            None for a standalone run. Only the main process holds one.
 
     Returns:
-        The eval metrics, plus train_loss, pruned, peak_gb, and the build info.
-        Identical on every rank.
+        Tuple of (eval macro F1, whether the run was pruned), identical on
+        every rank. The full metrics are printed.
     """
-    set_seed(args.seed)
-    # Inits the process group and binds this rank's cuda device. Trainer does the
-    # same on its first TrainingArguments, but we need both before from_pretrained
-    # (and before the sweep's first bcast). It is a singleton, so Trainer reuses it.
+    set_seed(seed)
     PartialState()
 
-    model, tokenizer, info = build(args)
-    train_ds, val_ds = get_data(args, tokenizer)
-    log(f"[data] train={len(train_ds)} val={len(val_ds)}")
+    peft_model, tokenizer = build(
+        model=model, n_buckets=n_buckets, head_norm=head_norm,
+        head_bottleneck=head_bottleneck, head_dropout=head_dropout,
+        lora_r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
+    )
+
+    world_size = PartialState().num_processes
+    _log(f"[train] batch={batch}x{grad_accum}x{world_size}={batch * grad_accum * world_size}")
+
+    raw_ds = load_dataset(dataset, split="train")
+
+    train_ds, val_ds = get_data(
+        dataset=raw_ds, tokenizer=tokenizer, n_buckets=n_buckets,
+        lo=lo, hi=hi, max_length=max_length, seed=seed, n_rows=n_rows,
+    )
+    _log(f"[data] train={len(train_ds)} val={len(val_ds)}")
 
     def compute_metrics(eval_pred) -> dict:
         """Score bucket predictions.
@@ -312,14 +257,12 @@ def train(args: argparse.Namespace, trial=None) -> dict:
         """
         preds, labels = np.argmax(eval_pred[0], -1), eval_pred[1]
         per_class_f1 = []
-        for bucket in range(args.n_buckets):
+        for bucket in range(n_buckets):
             true_pos = ((preds == bucket) & (labels == bucket)).sum()
             precision = true_pos / max((preds == bucket).sum(), 1)
             recall = true_pos / max((labels == bucket).sum(), 1)
             per_class_f1.append(2 * precision * recall / (precision + recall)
                                 if precision + recall else 0.0)
-        # mae because the buckets are ordinal: predicting 0 when the truth is 3
-        # is worse than predicting 2, and accuracy is blind to that.
         return {"accuracy": float((preds == labels).mean()),
                 "macro_f1": float(np.mean(per_class_f1)),
                 "mae": float(np.abs(preds - labels).mean())}
@@ -349,158 +292,37 @@ def train(args: argparse.Namespace, trial=None) -> dict:
             if PartialState().is_main_process and trial is not None:
                 trial.report(score, trainer_state.global_step)
                 stop = bool(trial.should_prune())
-            if bcast(stop):
+            if _bcast(stop):
                 run_state["pruned"] = True
                 control.should_training_stop = True
             return control
 
     trainer = Trainer(
-        model=model,
+        model=peft_model,
         args=TrainingArguments(
-            output_dir=args.out, max_steps=args.max_steps, num_train_epochs=args.epochs,
-            learning_rate=args.lr, per_device_train_batch_size=args.batch,
-            per_device_eval_batch_size=args.batch * 2,
-            gradient_accumulation_steps=args.grad_accum,
-            lr_scheduler_type="constant", weight_decay=0.0, bf16=True,
-            eval_strategy="steps", eval_steps=args.eval_steps, save_strategy="no",
-            logging_steps=max(args.eval_steps // 4, 1), report_to=[],
-            seed=args.seed, data_seed=args.seed, remove_unused_columns=False,
+            num_train_epochs=epochs,
+            learning_rate=lr, per_device_train_batch_size=batch,
+            per_device_eval_batch_size=batch,
+            gradient_accumulation_steps=grad_accum,
+            lr_scheduler_type="constant", bf16=True,
+            eval_strategy="steps", eval_steps=eval_steps, save_strategy="no",
+            logging_steps=max(eval_steps // 4, 1),
+            seed=seed, data_seed=seed, remove_unused_columns=False,
             dataloader_num_workers=2,
-            # WHY: checkpointing is already enabled on the model in build().
-            gradient_checkpointing=False,
-            # WHY False: it is the default anyway once checkpointing is on, and
-            # any trainable param outside the forward graph then hard-errors.
-            ddp_find_unused_parameters=False),
+            gradient_checkpointing=True,
+            ddp_find_unused_parameters=False,
+        ),
         train_dataset=train_ds, eval_dataset=val_ds,
         data_collator=DataCollatorWithPadding(tokenizer),
         compute_metrics=compute_metrics,
-        callbacks=[Prune()] if trial is not None else [])
+        callbacks=[Prune()],
+    )
 
     train_output = trainer.train()
-    result = dict(trainer.evaluate(),
-                  train_loss=float(train_output.training_loss),
-                  pruned=run_state["pruned"],
-                  peak_gb=round(torch.cuda.max_memory_reserved() / 1024**3, 2), **info)
-    if PartialState().is_main_process:
-        Path(args.out).mkdir(parents=True, exist_ok=True)
-        (Path(args.out) / "result.json").write_text(json.dumps(result, indent=2))
-        print(json.dumps(result, indent=2))
-    return bcast(result)
+    metrics = trainer.evaluate()
+    _log(f"[eval] macro_f1={metrics['eval_macro_f1']:.4f} accuracy={metrics['eval_accuracy']:.4f} "
+         f"mae={metrics['eval_mae']:.4f} loss={metrics['eval_loss']:.4f} "
+         f"train_loss={train_output.training_loss:.4f} pruned={run_state['pruned']} "
+         f"peak_gb={torch.cuda.max_memory_reserved() / 1024**3:.2f}")
+    return _bcast((float(metrics["eval_macro_f1"]), run_state["pruned"]))
 
-
-# --------------------------------------------------------------------------- #
-
-def sweep(args: argparse.Namespace) -> None:
-    """Search LoRA and head hyperparameters with optuna.
-
-    The main process owns the study; every rank runs each trial's training job
-    against parameters broadcast from it.
-
-    Args:
-        args: Parsed CLI/config namespace.
-    """
-    study = None
-    if PartialState().is_main_process:
-        study = optuna.create_study(
-            study_name=args.study or args.model.split("/")[-1], storage=args.storage,
-            direction="maximize", load_if_exists=True,
-            pruner=optuna.pruners.MedianPruner(n_warmup_steps=2),
-            sampler=optuna.samplers.TPESampler(seed=args.seed))
-
-    for _ in range(args.trials):
-        trial = payload = None
-        if PartialState().is_main_process:
-            trial = study.ask()
-            lora_r = trial.suggest_categorical("lora_r", [8, 16, 32, 64])
-            payload = (trial.number, dict(
-                lr=trial.suggest_float("lr", 1e-5, 5e-4, log=True), lora_r=lora_r,
-                # WHY a ratio, not an absolute: LoRA scales its update by
-                # alpha/r, so sweeping both independently re-samples the
-                # same effective scale and wastes trials.
-                lora_alpha=lora_r * trial.suggest_categorical("alpha_over_r", [1, 2, 4]),
-                lora_dropout=trial.suggest_float("lora_dropout", 0.0, 0.15),
-                head=trial.suggest_categorical("head", list(HEADS))))
-        number, params = bcast(payload)
-
-        trial_args = argparse.Namespace(**vars(args))
-        for key, value in params.items():
-            setattr(trial_args, key, value)
-        trial_args.max_steps = args.trial_steps
-        trial_args.out = f"{args.out}/trial_{number}"
-        log(f"\n[trial {number}] {json.dumps(params)}")
-
-        try:
-            result = train(trial_args, trial=trial)
-        except Exception as e:
-            log(f"[trial {number}] FAILED {type(e).__name__}: {e}")
-            if PartialState().is_main_process:
-                study.tell(trial, state=optuna.trial.TrialState.FAIL)
-            continue
-
-        if PartialState().is_main_process:
-            if result["pruned"]:
-                study.tell(trial, state=optuna.trial.TrialState.PRUNED)
-            else:
-                trial.set_user_attr("info", {k: result[k] for k in
-                                             ("attn", "ckpt", "trainable", "peak_gb")})
-                study.tell(trial, result["eval_macro_f1"])
-            log(f"[trial {number}] macro_f1={result.get('eval_macro_f1'):.4f}"
-                f"{' (pruned)' if result['pruned'] else ''}")
-
-    if PartialState().is_main_process:
-        log("\nbest:")
-        for best in study.best_trials[:5]:
-            log(f"  #{best.number}  {best.value:.4f}  {best.params}")
-
-
-# --------------------------------------------------------------------------- #
-
-def main() -> None:
-    """Parse arguments and dispatch to the requested subcommand."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("cmd", choices=["train", "sweep", "smoke"])
-    parser.add_argument("--config", help="YAML whose keys override these defaults")
-    parser.add_argument("--model", default="meta-llama/Llama-3.2-3B")
-    parser.add_argument("--head", default="normed", choices=list(HEADS))
-    parser.add_argument("--head-bottleneck", type=int, default=512)
-    parser.add_argument("--head-dropout", type=float, default=0.1)
-    parser.add_argument("--attn", default="auto",
-                        help="override the attn_implementation quirks() pins for the model")
-    parser.add_argument("--data", default="hf", choices=["hf", "synthetic"])
-    parser.add_argument("--dataset", default="pangram/editlens_iclr")
-    parser.add_argument("--n-rows", type=int, default=-1)
-    parser.add_argument("--n-buckets", type=int, default=4)
-    parser.add_argument("--lo", type=float, default=0.03)
-    parser.add_argument("--hi", type=float, default=0.15)
-    parser.add_argument("--max-length", type=int, default=1024)
-    parser.add_argument("--lr", type=float, default=3e-5)
-    parser.add_argument("--batch", type=int, default=3)
-    parser.add_argument("--grad-accum", type=int, default=1)
-    parser.add_argument("--epochs", type=float, default=1)
-    parser.add_argument("--max-steps", type=int, default=-1)
-    parser.add_argument("--eval-steps", type=int, default=200)
-    parser.add_argument("--lora-r", type=int, default=8)
-    parser.add_argument("--lora-alpha", type=int, default=16)
-    parser.add_argument("--lora-dropout", type=float, default=0.05)
-    parser.add_argument("--grad-ckpt", type=int, default=1)
-    parser.add_argument("--fp32-upcast", type=int, default=0)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--out", default="runs/default")
-    parser.add_argument("--trials", type=int, default=40)
-    parser.add_argument("--trial-steps", type=int, default=800)
-    parser.add_argument("--study")
-    parser.add_argument("--storage", default="sqlite:///sweeps.db")
-    args = parser.parse_args()
-
-    if args.config:
-        for key, value in (yaml.safe_load(open(args.config)) or {}).items():
-            setattr(args, key.replace("-", "_"), value)
-
-    if args.cmd == "smoke":
-        args.data, args.n_rows, args.max_steps, args.eval_steps = "synthetic", 200, 10, 5
-        args.out = f"{args.out}/smoke"
-    sweep(args) if args.cmd == "sweep" else train(args)
-
-
-if __name__ == "__main__":
-    main()
