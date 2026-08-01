@@ -101,9 +101,10 @@ threshold_type = "fpr_0_5pct"
 name = "FastDetectGPT (Llama-3.2-3B)"
 suffix = "_fastdetectgpt_llama_base"
 threshold_type = "fpr_0_5pct"
+direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Binoculars"
 suffix = "_binoculars"
 threshold_type = "fpr_0_5pct"
-direction = "lower_is_ai"
+direction = "higher_is_ai"

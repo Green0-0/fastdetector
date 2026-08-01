@@ -358,16 +358,16 @@ def test_analysis_classifier_columns_are_scored_columns(repo_root):
 
 
 def test_llm_classifier_directions_follow_the_detectors(repo_root):
-    # Perplexity, entropy and outlier rates are all lower for machine text,
-    # and binoculars scores it lower too; only FastDetectGPT's curvature is
-    # higher. A flipped direction silently inverts that classifier's AUROC.
+    # Perplexity, entropy, outlier rates, and FastDetectGPT-base are lower for machine text;
+    # FastDetectGPT-instruct and Binoculars score machine text higher. A flipped direction
+    # silently inverts that classifier's AUROC.
     analysis = AnalysisConfig(**load_toml(str(repo_root / "config" / "analysis.toml")))
-    lower_is_ai_stems = ("_perplexity", "_entropy", "_topp_outlier", "_topk_outlier", "_binoculars")
+    lower_is_ai_stems = ("_perplexity", "_entropy", "_topp_outlier", "_topk_outlier", "_fastdetectgpt_llama_base")
 
     for clf in analysis.classifiers:
         if clf.suffix.startswith(lower_is_ai_stems):
             assert clf.direction == "lower_is_ai", clf.name
-        elif clf.suffix.startswith("_fastdetectgpt"):
+        elif clf.suffix in ("_binoculars", "_fastdetectgpt_llama_instruct"):
             assert clf.direction == "higher_is_ai", clf.name
 
 

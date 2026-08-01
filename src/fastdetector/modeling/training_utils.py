@@ -1,7 +1,12 @@
+import os
 import re
-from accelerate import PartialState
-from datasets import Dataset
+
 import emoji
+import numpy as np
+import optuna
+from accelerate import PartialState
+from datasets import load_dataset
+from optuna.storages import JournalStorage, JournalFileStorage, JournalFileOpenLock
 
 
 def clean_text(text: str) -> str:
@@ -24,23 +29,13 @@ def clean_text(text: str) -> str:
     return text
 
 
-def count_words(text: str) -> int:
-    """Count word characters runs in a string.
-
-    Args:
-        text: Input text string.
-
-    Returns:
-        Number of words.
-    """
-    return len(re.findall(r"\b\w+\b", text))
-
-
-def to_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
+def editlens_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
     """Discretize a cosine score into an ordinal bucket.
 
     Scores at or below ``lo`` collapse to bucket 0 and scores at or above ``hi``
     to the top bucket; the band between them is split evenly across the rest.
+    Two buckets is the EditLens special case: there is no graded band to split,
+    so the one boundary sits midway between ``lo`` and ``hi``.
 
     Args:
         score: Cosine score to bucket.
@@ -51,6 +46,8 @@ def to_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
     Returns:
         Bucket index in ``[0, n_buckets)``.
     """
+    if n_buckets == 2:
+        return 0 if score <= (lo + hi) / 2 else 1
     if score <= lo:
         return 0
     if score >= hi:
@@ -58,108 +55,195 @@ def to_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
     return 1 + int((score - lo) / (hi - lo) * (n_buckets - 2))
 
 
-def _find_col(ds: Dataset, preferred: str, candidates: list[str]) -> str:
-    """Resolve the actual dataset column name from preferred or candidate names.
+def naive_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
+    """Split the whole score range into buckets of equal width.
+
+    Human text and lightly edited AI share the first bucket only because they
+    share a score range, not by construction.
 
     Args:
-        ds: The HuggingFace Dataset.
-        preferred: The primary expected column name.
-        candidates: List of fallback candidate column names.
+        score: Cosine score to bucket.
+        n_buckets: Total number of buckets.
+        lo: Unused; the band edges play no part here.
+        hi: Unused; the band edges play no part here.
 
     Returns:
-        The matched column name present in the dataset.
+        Bucket index in ``[0, n_buckets)``.
+    """
+    return min(int(score * n_buckets), n_buckets - 1)
+
+
+def human_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
+    """Reserve bucket 0 for human text, splitting the range over the rest.
+
+    Args:
+        score: Cosine score to bucket.
+        n_buckets: Total number of buckets.
+        lo: Unused; the band edges play no part here.
+        hi: Unused; the band edges play no part here.
+
+    Returns:
+        Bucket index in ``[0, n_buckets)``, 0 only for a score of 0.
+    """
+    if score <= 0:
+        return 0
+    return 1 + min(int(score * (n_buckets - 1)), n_buckets - 2)
+
+
+def human_editlens_bucket(score: float, n_buckets: int, lo: float, hi: float) -> int:
+    """Reserve bucket 0 for human text, banding the rest the EditLens way.
+
+    The graded band is laid over the buckets above 0, so an AI row can no
+    longer fall into the human bucket however lightly it was edited.
+
+    Args:
+        score: Cosine score to bucket.
+        n_buckets: Total number of buckets.
+        lo: Lower edge of the graded band.
+        hi: Upper edge of the graded band.
+
+    Returns:
+        Bucket index in ``[0, n_buckets)``, 0 only for a score of 0.
+    """
+    if score <= 0:
+        return 0
+    if n_buckets == 2:
+        return 1
+    return 1 + editlens_bucket(score, n_buckets - 1, lo, hi)
+
+
+def human_size_adjusted_bucket(score: float, edges: np.ndarray) -> int:
+    """Reserve bucket 0 for human text, giving the rest equal populations.
+
+    Args:
+        score: Cosine score to bucket.
+        edges: Interior quantile edges of the AI scores, ascending, as built
+            by :func:`make_bucketer`.
+
+    Returns:
+        Bucket index in ``[0, len(edges) + 2)``, 0 only for a score of 0.
+    """
+    if score <= 0:
+        return 0
+    return 1 + int(np.searchsorted(edges, score, side="right"))
+
+
+BUCKETERS = {
+    "editlens": editlens_bucket,
+    "naive": naive_bucket,
+    "human": human_bucket,
+    "human_editlens": human_editlens_bucket,
+}
+
+
+def make_bucketer(strategy: str, n_buckets: int, lo: float, hi: float, scores: np.ndarray):
+    """Build the score to bucket function a strategy names.
+
+    Args:
+        strategy: One of :data:`BUCKETERS` or ``"human_size"``.
+        n_buckets: Total number of buckets.
+        lo: Lower edge of the graded band.
+        hi: Upper edge of the graded band.
+        scores: Training scores, read only by ``human_size`` to place its
+            quantile edges. Cutting them on training data alone keeps the
+            eval split out of the labelling.
+
+    Returns:
+        Callable taking one score and returning its bucket index.
 
     Raises:
-        ValueError: If neither preferred nor candidate column names exist.
+        KeyError: If the strategy is not one this module implements.
     """
-    if preferred in ds.column_names:
-        return preferred
-    for cand in candidates:
-        if cand in ds.column_names:
-            return cand
-    raise ValueError(
-        f"Could not find column '{preferred}' (candidates: {candidates}) in dataset: {ds.column_names}"
-    )
+    if strategy == "human_size":
+        ai = scores[scores > 0]
+        edges = (np.quantile(ai, np.linspace(0, 1, n_buckets)[1:-1])
+                 if n_buckets > 2 and ai.size else np.empty(0))
+        return lambda score: human_size_adjusted_bucket(score, edges)
+    bucketer = BUCKETERS[strategy]
+    return lambda score: bucketer(score, n_buckets, lo, hi)
 
 
-def get_data(
-    dataset: Dataset,
-    tokenizer,
-    n_buckets: int = 4,
-    lo: float = 0.03,
-    hi: float = 0.15,
-    max_length: int = 1024,
-    seed: int = 42,
-    n_rows: int = -1,
-    test_size: float = 0.05,
-    human_col: str = "human",
-    ai_col: str = "ai",
-    edit_score_col: str = "edit_score",
-    min_words: int = 75,
-) -> tuple[Dataset, Dataset]:
-    """Filter, discretize, and tokenize a dataset of human and AI text pairs.
-
-    The dataset should have one column for human text, one for AI text, and one
-    for edit scores. Human texts are assigned edit score = 0, while AI texts use
-    their corresponding edit scores.
+def load_splits(dataset: str, tokenizer, bucket_strategy: str, n_buckets: int,
+                lo: float, hi: float, max_length: int, min_words: int, seed: int) -> tuple:
+    """Load, filter and tokenize the dataset's own train and val splits.
 
     Args:
-        dataset: Input dataset containing human/AI texts and edit scores.
+        dataset: Dataset repository ID, carrying ``text`` and ``cosine_score``.
         tokenizer: Tokenizer matching the base model.
+        bucket_strategy: Which labelling strategy to cut the scores with, as
+            named in :func:`make_bucketer`.
         n_buckets: Number of discrete output bucket labels.
-        lo: Lower edge of score discretization band.
-        hi: Upper edge of score discretization band.
-        max_length: Maximum sequence length for tokenization.
-        seed: Random seed for shuffling and splitting.
-        n_rows: Maximum total samples to retain (-1 for all).
-        test_size: Fraction of dataset reserved for evaluation split.
-        human_col: Column name containing human text.
-        ai_col: Column name containing AI text.
-        edit_score_col: Column name containing edit scores.
-        min_words: Minimum word count required for a text sample.
+        lo: Lower edge of the graded scoring band.
+        hi: Upper edge of the graded scoring band.
+        max_length: Tokenizer truncation length.
+        min_words: Shortest text to keep.
+        seed: Seed the splits are shuffled with.
 
     Returns:
-        Tuple of (train_dataset, eval_dataset), each carrying input_ids,
-        attention_mask, and label.
+        Tuple of (train_dataset, val_dataset, val_scores), the datasets
+        carrying input_ids, attention_mask and label, and val_scores holding
+        the raw edit score the bucket label was rounded from. The val split
+        drops the AI rows that bin as human, so every row it keeps is
+        unambiguously one class or the other. The train split keeps them.
     """
-    h_col = _find_col(dataset, human_col, ["human", "human_text", "prompt"])
-    a_col = _find_col(dataset, ai_col, ["ai", "ai_text", "response", "completion"])
-    e_col = _find_col(dataset, edit_score_col, ["edit_score", "cosine_score", "score"])
+    def keep(row) -> bool:
+        """Drop rows with no score, and rows too short to judge."""
+        return row["cosine_score"] is not None and len(re.findall(r"\b\w+\b", (row["text"] or ""))) >= min_words
 
-    human_texts = dataset[h_col]
-    ai_texts = dataset[a_col]
-    scores = dataset[e_col]
-
-    combined_texts = list(human_texts) + list(ai_texts)
-    combined_scores = [0.0] * len(human_texts) + [
-        float(s) if s is not None else 0.0 for s in scores
-    ]
-
-    ds = Dataset.from_dict({"text": combined_texts, "cosine_score": combined_scores})
-
-    def keep(row):
-        return (
-            row["text"] is not None
-            and row["cosine_score"] is not None
-            and count_words(row["text"]) >= min_words
-        )
-
-    def prep(batch):
-        encoded = tokenizer(
-            [clean_text(text) for text in batch["text"]],
-            truncation=True,
-            max_length=max_length,
-        )
-        encoded["label"] = [
-            to_bucket(score, n_buckets, lo, hi) for score in batch["cosine_score"]
-        ]
+    def prep(batch) -> dict:
+        """Clean and tokenize a batch, labelling it with its score's bucket."""
+        encoded = tokenizer([clean_text(text) for text in batch["text"]],
+                            truncation=True, max_length=max_length)
+        encoded["label"] = [bucket(score) for score in batch["cosine_score"]]
         return encoded
 
     with PartialState().main_process_first():
-        ds = ds.filter(keep).shuffle(seed=seed)
-        if n_rows > 0:
-            ds = ds.select(range(min(n_rows, len(ds))))
-        ds = ds.map(prep, batched=True, remove_columns=ds.column_names)
+        splits = [load_dataset(dataset, split=split).shuffle(seed=seed).filter(keep)
+                  for split in ("train", "val")]
+        bucket = make_bucketer(bucket_strategy, n_buckets, lo, hi,
+                               np.array(splits[0]["cosine_score"], dtype=float))
 
-    split = ds.train_test_split(test_size=test_size, seed=seed)
-    return split["train"], split["test"]
+        splits[1] = splits[1].filter(
+            lambda row: row["cosine_score"] in (0, None)
+            or bucket(row["cosine_score"]) > 0)
+        scores = np.array(splits[1]["cosine_score"], dtype=float)
+        return (*(ds.map(prep, batched=True, remove_columns=ds.column_names)
+                  for ds in splits), scores)
+
+
+def get_or_create_study(study_name, journal_path, min_resource, reduction_factor, direction="maximize"):
+    """Open the study behind a journal file, creating it if it is not there.
+
+    Args:
+        study_name: Optuna study name, the key the journal is resumed under.
+        journal_path: Path to the journal file; its directory is created.
+        min_resource: Steps a trial runs before Hyperband may prune it.
+        reduction_factor: Fraction of trials Hyperband keeps at each rung.
+        direction: Direction to optimize the objective in.
+
+    Returns:
+        The optuna study.
+    """
+    directory = os.path.dirname(journal_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    lock = JournalFileOpenLock(f"{journal_path}.lock")
+    storage = JournalStorage(JournalFileStorage(journal_path, lock_obj=lock))
+    sampler = optuna.samplers.TPESampler(
+        n_startup_trials=10,
+        multivariate=True,
+        constant_liar=True,
+    )
+    pruner = optuna.pruners.HyperbandPruner(
+        min_resource=min_resource,
+        max_resource="auto",
+        reduction_factor=reduction_factor,
+    )
+    return optuna.create_study(
+        study_name=study_name,
+        storage=storage,
+        load_if_exists=True,
+        direction=direction,
+        sampler=sampler,
+        pruner=pruner,
+    )

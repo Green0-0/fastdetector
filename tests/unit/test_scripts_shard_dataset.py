@@ -77,3 +77,23 @@ def test_the_target_dataset_is_the_push_destination(monkeypatch):
     )
     run(monkeypatch, rows(4), 2)
     assert destinations == ["user/corpus-raw-sharded"] * 2
+
+
+def test_num_samples_caps_total_rows_sharded(monkeypatch, pushed):
+    monkeypatch.setattr(shard_dataset, "load_dataset", lambda *a, **k: rows(100))
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "shard_dataset.py",
+            "--source-dataset", "user/corpus",
+            "--target-dataset", "user/corpus-raw-sharded",
+            "--num-shards", "2",
+            "--num-samples", "10",
+        ],
+    )
+    shard_dataset.main()
+    total_rows = sum(len(s) for s in pushed.values())
+    assert total_rows == 10
+
+
+

@@ -21,6 +21,7 @@ export PYTHONUNBUFFERED=1
 export HF_HOME="${HF_HOME:-/usr/project/xtmp/fastdetector_hf_cache}"
 
 NUM_SHARDS="${NUM_SHARDS:-8}"
+NUM_SAMPLES="${NUM_SAMPLES:-}"
 
 # This stage is driven by arguments rather than a TOML. The source corpus has
 # no home in globals.toml, so it has to be passed in; the target is the raw
@@ -41,9 +42,15 @@ print(globals_config.resolve_dataset(globals_config.raw_dataset))
 ')}"
 
 echo "Sharding ${SOURCE_DATASET} into ${NUM_SHARDS} shards -> ${TARGET_DATASET}..."
-python scripts/shard_dataset.py \
-    --source-dataset "${SOURCE_DATASET}" \
-    --target-dataset "${TARGET_DATASET}" \
+cmd=(
+  python scripts/shard_dataset.py
+    --source-dataset "${SOURCE_DATASET}"
+    --target-dataset "${TARGET_DATASET}"
     --num-shards "${NUM_SHARDS}"
+)
+if [[ -n "${NUM_SAMPLES}" ]]; then
+  cmd+=(--num-samples "${NUM_SAMPLES}")
+fi
+"${cmd[@]}"
 
 echo "Sharding complete."

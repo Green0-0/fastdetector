@@ -176,7 +176,6 @@ def generate_token_embeddings_pairs(
 
     _release_model(model)
 
-
 def batch_soft_ngram_scores(
     source_texts: list[str],
     edited_texts: list[str],
@@ -248,18 +247,23 @@ def batch_soft_ngram_scores(
             src_embeddings = all_embeddings[src_indices]
             edit_embeddings = all_embeddings[edit_indices]
 
-            similarity_matrix = torch.mm(src_embeddings, edit_embeddings.t())
+            block_rows = max(1, 128000000 // max(1, len(edit_indices)))
+            matches = torch.zeros(
+                len(edit_indices), dtype=torch.bool, device=edit_embeddings.device
+            )
+            for start in range(0, len(src_indices), block_rows):
+                block = torch.mm(
+                    src_embeddings[start:start + block_rows],
+                    edit_embeddings.t(),
+                )
+                matches |= (block >= threshold).any(dim=0)
+                del block
 
-            matches = (similarity_matrix >= threshold).any(dim=0)
             precision = matches.sum().item() / len(edit_phrases)
 
             results.append(1.0 - precision)
 
         del all_embeddings
-        try:
-            del similarity_matrix
-        except NameError:
-            pass
 
     _release_model(model)
     return results
