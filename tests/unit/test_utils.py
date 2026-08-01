@@ -173,8 +173,9 @@ def fake_api(monkeypatch, tmp_path):
     """Stub HfApi and hf_hub_download.
 
     Returns:
-        A recorder with ``uploads`` (path_in_repo -> raw bytes),
-        ``remote`` (repo_id -> README text) and a ``fail_upload`` switch.
+        A recorder with ``uploads`` (path_in_repo -> raw bytes), ``commits``
+        (how many commits were made), ``remote`` (repo_id -> README text) and
+        a ``fail_upload`` switch.
     """
 
     class Api:
@@ -182,6 +183,7 @@ def fake_api(monkeypatch, tmp_path):
 
         uploads: dict[str, bytes] = {}
         remote: dict[str, str] = {}
+        commits = 0
         fail_upload = False
 
         @property
@@ -194,12 +196,14 @@ def fake_api(monkeypatch, tmp_path):
     api.remote = {}
 
     class FakeHfApi:
-        """Mock HfApi client recording file uploads."""
+        """Mock HfApi client recording the operations of each commit."""
 
-        def upload_file(self, path_or_fileobj, path_in_repo, repo_id, repo_type):
+        def create_commit(self, repo_id, repo_type, operations, commit_message=None):
             if api.fail_upload:
                 raise OSError("upload failed")
-            api.uploads[path_in_repo] = path_or_fileobj
+            api.commits += 1
+            for operation in operations:
+                api.uploads[operation.path_in_repo] = operation.path_or_fileobj
 
     def fake_download(repo_id, filename, repo_type):
         if repo_id not in api.remote:
@@ -268,6 +272,16 @@ def test_upload_readme_uploads_extra_files(fake_api):
         files={"chart.png": b"\x89PNG", "summary.json": b"{}"},
     )
     assert set(fake_api.uploads) == {"README.md", "chart.png", "summary.json"}
+
+
+def test_upload_readme_uses_one_commit_regardless_of_file_count(fake_api):
+    # A commit per file used to trip the Hub's per-repo hourly commit limit
+    # (128), aborting an analysis run partway and leaving the README pointing
+    # at charts that never uploaded.
+    files = {f"chart_{i}.png": b"\x89PNG" for i in range(200)}
+    upload_readme("user/ds", readme_content="# T\n", files=files)
+    assert fake_api.commits == 1
+    assert len(fake_api.uploads) == len(files) + 1
 
 
 def test_upload_readme_raises_when_the_upload_fails(fake_api):
