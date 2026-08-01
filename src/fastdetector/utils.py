@@ -2,7 +2,7 @@ import random
 import time
 from typing import Dict, Optional
 
-from huggingface_hub import HfApi, hf_hub_download
+from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download
 from huggingface_hub.errors import HfHubHTTPError
 from datasets import Dataset, load_dataset, get_dataset_config_names, concatenate_datasets
 
@@ -166,6 +166,9 @@ def upload_readme(
 ) -> None:
     """Upload a README and associated files to the Hugging Face Hub.
 
+    The README and every file in *files* are written as a single commit, so a
+    run that produces hundreds of charts costs one commit rather than hundreds.
+
     Args:
         dataset_name: The name of the dataset to upload to.
         files: Additional files to upload (filename -> bytes), such as charts.
@@ -234,24 +237,34 @@ def upload_readme(
         files = {}
 
     api = HfApi()
-    try:
-        print(f"Uploading README.md to '{dataset_name}'...")
-        api.upload_file(
-            path_or_fileobj=combined_readme.encode("utf-8"),
-            path_in_repo="README.md",
-            repo_id=dataset_name,
-            repo_type="dataset"
-        )
 
-        if files:
-            for filename, data in files.items():
-                print(f"Uploading file '{filename}' to '{dataset_name}'...")
-                api.upload_file(
-                    path_or_fileobj=data,
-                    path_in_repo=filename,
-                    repo_id=dataset_name,
-                    repo_type="dataset"
-                )
+    # The README and every chart go up as one commit. Uploading a file at a
+    # time costs a commit each, and an analysis run writes well over a hundred
+    # of them - enough to trip the Hub's per-repo hourly commit limit and abort
+    # partway, which leaves the README referencing charts that never uploaded.
+    # A single commit is also atomic: the card and its images appear together.
+    operations = [
+        CommitOperationAdd(
+            path_in_repo="README.md",
+            path_or_fileobj=combined_readme.encode("utf-8"),
+        ),
+        *(
+            CommitOperationAdd(path_in_repo=filename, path_or_fileobj=data)
+            for filename, data in files.items()
+        ),
+    ]
+
+    try:
+        print(
+            f"Uploading README.md and {len(files)} file(s) to '{dataset_name}' "
+            f"in a single commit..."
+        )
+        api.create_commit(
+            repo_id=dataset_name,
+            repo_type="dataset",
+            operations=operations,
+            commit_message=f"Update README and {len(files)} associated file(s)",
+        )
         print("README and files uploaded successfully.")
     except Exception as e:
         raise RuntimeError(
