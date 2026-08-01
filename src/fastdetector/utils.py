@@ -166,9 +166,6 @@ def upload_readme(
 ) -> None:
     """Upload a README and associated files to the Hugging Face Hub.
 
-    The README and every file in *files* are written as a single commit, so a
-    run that produces hundreds of charts costs one commit rather than hundreds.
-
     Args:
         dataset_name: The name of the dataset to upload to.
         files: Additional files to upload (filename -> bytes), such as charts.
@@ -238,11 +235,6 @@ def upload_readme(
 
     api = HfApi()
 
-    # The README and every chart go up as one commit. Uploading a file at a
-    # time costs a commit each, and an analysis run writes well over a hundred
-    # of them - enough to trip the Hub's per-repo hourly commit limit and abort
-    # partway, which leaves the README referencing charts that never uploaded.
-    # A single commit is also atomic: the card and its images appear together.
     operations = [
         CommitOperationAdd(
             path_in_repo="README.md",
