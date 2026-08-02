@@ -182,9 +182,19 @@ def load_splits(dataset: str, tokenizer, bucket_strategy: str, n_buckets: int,
     Returns:
         Tuple of (train_dataset, val_dataset, val_scores), the datasets
         carrying input_ids, attention_mask and label, and val_scores holding
-        the raw edit score the bucket label was rounded from. The val split
-        drops the AI rows that bin as human, so every row it keeps is
-        unambiguously one class or the other. The train split keeps them.
+        the raw edit score the bucket label was rounded from.
+
+        Both splits are kept whole. The val split used to drop the AI rows
+        that the trial's own labelling binned as human, which is defensible
+        when judging one labelling and ruinous when comparing several: the
+        excluded rows are the lightly edited ones, so each labelling was
+        marked against a different, self-selected test set. Measured on this
+        corpus, a two bucket naive cut deleted 891 of the 894 edited texts
+        while leaving every fully generated one, turning its score into
+        "machine written text against human", which it answered at .998 and
+        so led the study. Scoring every trial on the whole split lets a
+        labelling that cannot separate a light edit score as badly as it
+        deserves, which is the finding the ablation exists to surface.
     """
     def keep(row) -> bool:
         """Drop rows with no score, and rows too short to judge."""
@@ -203,22 +213,26 @@ def load_splits(dataset: str, tokenizer, bucket_strategy: str, n_buckets: int,
         bucket = make_bucketer(bucket_strategy, n_buckets, lo, hi,
                                np.array(splits[0]["cosine_score"], dtype=float))
 
-        splits[1] = splits[1].filter(
-            lambda row: row["cosine_score"] in (0, None)
-            or bucket(row["cosine_score"]) > 0)
         scores = np.array(splits[1]["cosine_score"], dtype=float)
         return (*(ds.map(prep, batched=True, remove_columns=ds.column_names)
                   for ds in splits), scores)
 
 
-def get_or_create_study(study_name, journal_path, min_resource, reduction_factor, direction="maximize"):
+def get_or_create_study(study_name, journal_path, min_resource, reduction_factor,
+                        max_resource="auto", direction="maximize"):
     """Open the study behind a journal file, creating it if it is not there.
 
     Args:
         study_name: Optuna study name, the key the journal is resumed under.
         journal_path: Path to the journal file; its directory is created.
-        min_resource: Steps a trial runs before Hyperband may prune it.
+        min_resource: Resource a trial runs through before Hyperband may prune
+            it, in whatever unit the trials report.
         reduction_factor: Fraction of trials Hyperband keeps at each rung.
+        max_resource: Resource a trial runs to. Pass the real budget rather
+            than leaving it "auto": optuna infers "auto" from whichever trial
+            happens to complete first, and the bracket count follows from
+            max_resource / min_resource, so an unlucky first trial can quietly
+            collapse the ladder to a single rung.
         direction: Direction to optimize the objective in.
 
     Returns:
@@ -236,7 +250,7 @@ def get_or_create_study(study_name, journal_path, min_resource, reduction_factor
     )
     pruner = optuna.pruners.HyperbandPruner(
         min_resource=min_resource,
-        max_resource="auto",
+        max_resource=max_resource,
         reduction_factor=reduction_factor,
     )
     return optuna.create_study(

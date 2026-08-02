@@ -10,6 +10,7 @@ import io
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 class Column(NamedTuple):
     """One column of a markdown metric table.
 

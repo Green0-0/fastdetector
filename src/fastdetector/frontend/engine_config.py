@@ -12,10 +12,6 @@ class EngineConfig(str, Enum):
     def is_local_server(self) -> bool:
         """True if this engine requires launching a local vLLM/Aphrodite server.
 
-        Engines with is_local_server=True are launched via llm_server_context
-        (which spawns a subprocess and waits for it to be healthy). Engines
-        with is_local_server=False (e.g. OAI) use a pre-existing API endpoint.
-
         Returns:
             True if local server launch is required, False otherwise.
         """

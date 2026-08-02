@@ -6,8 +6,6 @@ from fastdetector.frontend.toml_config import GlobalsConfig
 from fastdetector.frontend.toml_loader import load_toml
 
 
-#: Every GlobalsConfig dataset field except the raw one, which is the corpus
-#: the pipeline never regenerates and so must never delete.
 NON_RAW_DATASET_FIELDS = [
     "pre_filter_dataset",
     "post_filter_dataset",

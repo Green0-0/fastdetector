@@ -217,9 +217,10 @@ def train(
     use_rslora: bool = False,
     lr: float = 3e-5,
     batch: int = 3,
+    eval_batch: int = 16,
     grad_accum: int = 1,
     epochs: float = 1,
-    eval_steps: int = 200,
+    eval_rows: int = 3000,
     seed: int = 42,
     trial=None,
 ) -> tuple[float, bool]:
@@ -249,9 +250,17 @@ def train(
             official scaling, ``lora_alpha / lora_r``.
         lr: Learning rate.
         batch: Per-device batch size.
+        eval_batch: Per-device batch size for evaluation, which is forward
+            only and so need not follow the searched train batch.
         grad_accum: Gradient accumulation steps.
         epochs: Training epochs.
-        eval_steps: Steps between evaluations.
+        eval_rows: Rows between evaluations. Held in rows rather than steps so
+            that a sweep over the effective batch evaluates every run at the
+            same points in the data: an interval counted in optimizer steps is
+            worth sixteen times as much text at an effective batch of 48 as at
+            3, which lands the runs on different rungs of the pruning ladder
+            and has the large batches judged on far more training than the
+            small ones.
         seed: Seed for weights, data order, and shuffling.
         trial: Optuna trial to report intermediate scores to, enabling pruning.
 
@@ -307,30 +316,12 @@ def train(
                                                n_buckets, lo, hi, max_length,
                                                min_words, seed)
     log(f"[data] train={len(train_ds)} val={len(val_ds)}")
-
-    run_state = {"pruned": False}
+    run_state = {"pruned": False, "trained": False}
+    rows_per_step = batch * grad_accum * world_size
+    eval_steps = max(1, round(eval_rows / rows_per_step))
 
     def compute_metrics(eval_pred) -> dict:
         """Score the model as the binary detector it is deployed as.
-
-        Everything measured here is measured against ``val_scores``, the raw
-        edit score, rather than the bucket label rounded from it. A row is AI
-        when its score is above 0, and the val split holds no row whose class
-        is arguable: the AI rows that bin as human were dropped when it was
-        loaded, so they neither count as AI nor pad out the human class.
-        Training still learns the noisy binning; only the measurement is
-        strict.
-
-        Two classifiers are scored over the same rows. The bucket one calls a
-        row AI when its argmax bucket is above 0. The score one is the
-        continuous statistic ``editlens`` serves at inference: the probability
-        weighted mean bucket, normalized to ``[0, 1]``.
-
-        The returned metrics reach wandb as ``eval/*`` on their own, since the
-        Trainer rewrites every key it logs. The ``eval_bucket`` and
-        ``eval_score`` sections, which the Trainer cannot name, are logged
-        here, and they set the ``iteration_count`` the Trainer's own eval log
-        then lands on.
 
         Args:
             eval_pred: Tuple of (logits, labels) from the Trainer.
@@ -401,11 +392,11 @@ def train(
                 The (possibly modified) TrainerControl.
             """
             score = (metrics or {}).get("eval_score_auroc")
-            if score is None:
+            if score is None or run_state["trained"]:
                 return control
             stop = False
             if PartialState().is_main_process and trial is not None:
-                trial.report(score, trainer_state.global_step)
+                trial.report(score, trainer_state.global_step * rows_per_step)
                 stop = bool(trial.should_prune())
             if bcast(stop):
                 run_state["pruned"] = True
@@ -417,7 +408,7 @@ def train(
         args=TrainingArguments(
             num_train_epochs=epochs,
             learning_rate=lr, per_device_train_batch_size=batch,
-            per_device_eval_batch_size=batch,
+            per_device_eval_batch_size=eval_batch,
             gradient_accumulation_steps=grad_accum,
             lr_scheduler_type="constant", bf16=True,
             eval_strategy="steps", eval_steps=eval_steps, save_strategy="no",
@@ -435,6 +426,7 @@ def train(
     )
 
     train_output = trainer.train()
+    run_state["trained"] = True
     metrics = trainer.evaluate()
     log(f"[eval] score_auroc={metrics['eval_score_auroc']:.4f} "
         f"pearson_score={metrics['eval_pearson_score']:.4f} "
