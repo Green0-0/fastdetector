@@ -10,9 +10,6 @@
 #SBATCH --gres=gpu:a5000:1
 #SBATCH --array=0-7
 
-# EditLens buckets/scores, added in place to <prefix>-stat[shard_i].
-# The three stats stages rewrite the same shard, so never run two at once.
-
 set -euo pipefail
 
 source .venv/bin/activate
