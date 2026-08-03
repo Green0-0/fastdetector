@@ -96,4 +96,38 @@ def test_num_samples_caps_total_rows_sharded(monkeypatch, pushed):
     assert total_rows == 10
 
 
+def test_default_target_dataset_and_num_shards_from_globals_config(monkeypatch, tmp_path, pushed):
+    config_file = tmp_path / "globals.toml"
+    config_file.write_text(
+        'dataset_prefix = "org/"\n'
+        'raw_dataset = "raw-sharded"\n'
+        'pre_filter_dataset = "p"\n'
+        'post_filter_dataset = "pf"\n'
+        'gen_dataset = "g"\n'
+        'stat_dataset = "s"\n'
+        'eval_dataset = "e"\n'
+    )
+
+    monkeypatch.setattr(shard_dataset, "load_dataset", lambda *a, **k: rows(16))
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "shard_dataset.py",
+            "--globals-config", str(config_file),
+            "--source-dataset", "user/corpus",
+        ],
+    )
+    destinations = []
+
+    def fake_push(dataset, dataset_name, config_name="default", **kwargs):
+        destinations.append(dataset_name)
+        pushed[config_name] = dataset
+
+    monkeypatch.setattr(shard_dataset, "push_shard", fake_push)
+    shard_dataset.main()
+    assert len(pushed) == 8
+    assert destinations == ["org/raw-sharded"] * 8
+
+
+
 

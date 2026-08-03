@@ -8,9 +8,6 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 
-# Loads every shard of <prefix>-stat and pushes the README, charts and
-# summary_stats.json. CPU only, and must run after all the stats stages.
-
 set -euo pipefail
 
 source .venv/bin/activate

@@ -27,12 +27,6 @@ export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 # ---- Compile caches on node-local disk ----
-# Triton defaults to $HOME/.triton. $HOME is NFS here, and concurrent engines
-# compiling the same kernels into one shared directory race each other; NFS
-# answers with ESTALE ("Stale file handle"), which surfaces as a Triton
-# compilation failure and kills the worker. $HOME is also quota-limited, so
-# filling it with compile artifacts is undesirable regardless.
-# SLURM_JOB_ID is distinct per array task, so each task gets its own root.
 FD_CACHE_ROOT="/tmp/fd_${SLURM_JOB_ID:-$$}"
 export TRITON_CACHE_DIR="${FD_CACHE_ROOT}/triton"
 export TORCHINDUCTOR_CACHE_DIR="${FD_CACHE_ROOT}/inductor"
@@ -46,12 +40,10 @@ if [[ ! -x .vllm/bin/vllm ]]; then
   exit 1
 fi
 
-BATCH_ID="${SLURM_ARRAY_TASK_ID:-0}"
-
-echo "Filtering shard ${BATCH_ID}..."
+echo "Filtering shard ${SLURM_ARRAY_TASK_ID:-0}..."
 python scripts/filter.py \
     --globals-config config/globals.toml \
     --filter-config config/filter.toml \
-    --batch-id "${BATCH_ID}"
+    --batch-id "${SLURM_ARRAY_TASK_ID:-0}"
 
-echo "Filtering complete for shard ${BATCH_ID}."
+echo "Filtering complete for shard ${SLURM_ARRAY_TASK_ID:-0}."

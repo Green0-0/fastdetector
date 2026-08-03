@@ -10,11 +10,6 @@
 #SBATCH --gres=gpu:a5000:2
 #SBATCH --array=0-7
 
-# Exact LLM metrics, added in place to <prefix>-stat[shard_i]. With
-# devices = "auto" the checkpoints are replicated across every GPU here and all
-# replicas work this one shard, so more GPUs widen a shard rather than split it.
-# The three stats stages rewrite the same shard, so never run two at once.
-
 set -euo pipefail
 
 source .venv/bin/activate
@@ -30,24 +25,16 @@ export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 # ---- Compile caches on node-local disk ----
-# Triton defaults to $HOME/.triton. $HOME is NFS here, and concurrent engines
-# compiling the same kernels into one shared directory race each other; NFS
-# answers with ESTALE ("Stale file handle"), which surfaces as a Triton
-# compilation failure and kills the worker. $HOME is also quota-limited, so
-# filling it with compile artifacts is undesirable regardless.
-# SLURM_JOB_ID is distinct per array task, so each task gets its own root.
 FD_CACHE_ROOT="/tmp/fd_${SLURM_JOB_ID:-$$}"
 export TRITON_CACHE_DIR="${FD_CACHE_ROOT}/triton"
 export TORCHINDUCTOR_CACHE_DIR="${FD_CACHE_ROOT}/inductor"
 mkdir -p "${TRITON_CACHE_DIR}" "${TORCHINDUCTOR_CACHE_DIR}"
 trap 'rm -rf "${FD_CACHE_ROOT}"' EXIT
 
-BATCH_ID="${SLURM_ARRAY_TASK_ID:-0}"
-
-echo "Computing LLM stats for shard ${BATCH_ID}..."
+echo "Computing LLM stats for shard ${SLURM_ARRAY_TASK_ID:-0}..."
 python scripts/stats/llm_stats.py \
     --globals-config config/globals.toml \
     --llm-config config/llm_stats.toml \
-    --batch-id "${BATCH_ID}"
+    --batch-id "${SLURM_ARRAY_TASK_ID:-0}"
 
-echo "LLM stats complete for shard ${BATCH_ID}."
+echo "LLM stats complete for shard ${SLURM_ARRAY_TASK_ID:-0}."

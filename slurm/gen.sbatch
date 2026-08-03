@@ -10,10 +10,6 @@
 #SBATCH --gres=gpu:a5000:4
 #SBATCH --array=0-7
 
-# <prefix>-filtered -> <prefix>-rewritten (+ a clone into <prefix>-stat).
-# Task i uses config/gen/shard_i.toml, so the array covers shard_0..shard_7
-# only; config/gen/shard_oai.toml is run by hand.
-
 set -euo pipefail
 
 source .venv/bin/activate
@@ -29,12 +25,6 @@ export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
 
 # ---- Compile caches on node-local disk ----
-# Triton defaults to $HOME/.triton. $HOME is NFS here, and concurrent engines
-# compiling the same kernels into one shared directory race each other; NFS
-# answers with ESTALE ("Stale file handle"), which surfaces as a Triton
-# compilation failure and kills the worker. $HOME is also quota-limited, so
-# filling it with compile artifacts is undesirable regardless.
-# SLURM_JOB_ID is distinct per array task, so each task gets its own root.
 FD_CACHE_ROOT="/tmp/fd_${SLURM_JOB_ID:-$$}"
 export TRITON_CACHE_DIR="${FD_CACHE_ROOT}/triton"
 export TORCHINDUCTOR_CACHE_DIR="${FD_CACHE_ROOT}/inductor"
@@ -48,17 +38,15 @@ if [[ ! -x .vllm/bin/vllm ]]; then
   exit 1
 fi
 
-BATCH_ID="${SLURM_ARRAY_TASK_ID:-0}"
-GEN_CONFIG="config/gen/shard_${BATCH_ID}.toml"
-if [[ ! -f "${GEN_CONFIG}" ]]; then
-  echo "No gen config at ${GEN_CONFIG}." >&2
+if [[ ! -f "config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml" ]]; then
+  echo "No gen config at config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml." >&2
   exit 1
 fi
 
-echo "Generating shard ${BATCH_ID}..."
+echo "Generating shard ${SLURM_ARRAY_TASK_ID:-0}..."
 python scripts/gen.py \
     --globals-config config/globals.toml \
-    --gen-config "${GEN_CONFIG}" \
-    --batch-id "${BATCH_ID}"
+    --gen-config "config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml" \
+    --batch-id "${SLURM_ARRAY_TASK_ID:-0}"
 
-echo "Generation complete for shard ${BATCH_ID}."
+echo "Generation complete for shard ${SLURM_ARRAY_TASK_ID:-0}."

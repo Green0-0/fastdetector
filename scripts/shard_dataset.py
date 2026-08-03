@@ -2,6 +2,8 @@ import argparse
 
 from datasets import load_dataset
 
+from fastdetector.frontend.toml_config import GlobalsConfig
+from fastdetector.frontend.toml_loader import load_toml
 from fastdetector.utils import push_shard, shard_config_name
 
 
@@ -10,11 +12,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Split a dataset into round-robin shards."
     )
+    parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
     parser.add_argument("--source-dataset", type=str, required=True, help="Source dataset identifier.")
-    parser.add_argument("--target-dataset", type=str, required=True, help="Target dataset identifier.")
-    parser.add_argument("--num-shards", type=int, required=True, help="Number of shards to split into.")
+    parser.add_argument(
+        "--target-dataset",
+        type=str,
+        default=None,
+        help="Target dataset identifier. Defaults to resolving raw_dataset in globals_config.",
+    )
+    parser.add_argument("--num-shards", type=int, default=8, help="Number of shards to split into.")
     parser.add_argument("--num-samples", type=int, default=None, help="Optional cap on the total number of samples.")
     args = parser.parse_args()
+
+    target_dataset = args.target_dataset
+    if target_dataset is None:
+        globals_config = GlobalsConfig(**load_toml(args.globals_config))
+        target_dataset = globals_config.resolve_dataset(globals_config.raw_dataset)
 
     print(f"Loading {args.source_dataset}...")
     ds = load_dataset(args.source_dataset, split="train")
@@ -34,11 +47,12 @@ def main() -> None:
     for index in range(args.num_shards):
         shard = ds.shard(num_shards=args.num_shards, index=index, contiguous=False)
         config_name = shard_config_name(index)
-        print(f"  Shard {index}: {len(shard)} rows -> '{args.target_dataset}' ({config_name})")
-        push_shard(shard, args.target_dataset, config_name=config_name)
+        print(f"  Shard {index}: {len(shard)} rows -> '{target_dataset}' ({config_name})")
+        push_shard(shard, target_dataset, config_name=config_name)
 
     print("Done!")
 
 
 if __name__ == "__main__":
     main()
+
