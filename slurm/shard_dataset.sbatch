@@ -20,7 +20,3 @@ python scripts/shard_dataset.py \
     --source-dataset "G-reen/cc-2021-raw"
 
 echo "Sharding complete."
-
-
-
-

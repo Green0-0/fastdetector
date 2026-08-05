@@ -3,6 +3,7 @@ from collections import Counter
 import Levenshtein
 from unidecode import unidecode
 
+
 def global_ngram_analysis(texts: list[str], n: int) -> dict[str, int]:
     """Compute global n-gram frequencies across a list of texts.
 
@@ -19,6 +20,7 @@ def global_ngram_analysis(texts: list[str], n: int) -> dict[str, int]:
         if len(tokens) >= n:
             counts.update([" ".join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)])
     return dict(counts)
+
 
 def ngram_analysis(texts: list[str], n: int) -> list[dict[str, int]]:
     """Compute per-text n-gram frequency distributions.
@@ -40,6 +42,7 @@ def ngram_analysis(texts: list[str], n: int) -> list[dict[str, int]]:
             counts = Counter(ngrams)
             results.append(dict(counts))
     return results
+
 
 def extract_ngrams(texts: list[str], min_length: int = 6, max_length: int = 12) -> list[list[str]]:
     """Extract word n-grams within a specified word length range for each text.
@@ -70,6 +73,7 @@ def extract_ngrams(texts: list[str], min_length: int = 6, max_length: int = 12) 
         results.append(phrases)
     return results
 
+
 def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) -> list[float]:
     """Compute pairwise Jaccard distance between aligned lists of texts.
 
@@ -96,6 +100,7 @@ def pairwise_jaccards(texts_list_a: list[str], texts_list_b: list[str], n: int) 
             results.append(1.0 - (len(t1.intersection(t2)) / len(t1.union(t2))))
     return results
 
+
 def pairwise_levenshteins(texts_list_a: list[str], texts_list_b: list[str]) -> list[float]:
     """Compute pairwise Levenshtein distance between aligned lists of texts.
 
@@ -107,6 +112,7 @@ def pairwise_levenshteins(texts_list_a: list[str], texts_list_b: list[str]) -> l
         List of Levenshtein edit distances.
     """
     return [float(Levenshtein.distance(t1, t2)) for t1, t2 in zip(texts_list_a, texts_list_b)]
+
 
 def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
     """Compute line count deviation proportions and raw line differences.
@@ -134,6 +140,7 @@ def deviated_lines(texts_a: list[str], texts_b: list[str]) -> tuple[list[float],
         proportions.append(dl / max_lines if max_lines > 0 else 0.0)
     return proportions, raw_counts
 
+
 def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
     """Compute word count deviation proportions and raw word differences.
 
@@ -159,6 +166,7 @@ def deviated_words(texts_a: list[str], texts_b: list[str]) -> tuple[list[float],
         max_words = max(a_words, b_words)
         proportions.append(dw / max_words if max_words > 0 else 0.0)
     return proportions, raw_counts
+
 
 def deviated_characters(texts_a: list[str], texts_b: list[str]) -> tuple[list[float], list[int]]:
     """Compute character count deviation proportions and raw character differences.
@@ -186,6 +194,7 @@ def deviated_characters(texts_a: list[str], texts_b: list[str]) -> tuple[list[fl
         proportions.append(dc / max_chars if max_chars > 0 else 0.0)
     return proportions, raw_counts
 
+
 def quantile(values: list[float]) -> list[float]:
     """Compute empirical percentile ranks for a list of values.
 
@@ -209,6 +218,7 @@ def quantile(values: list[float]) -> list[float]:
     avg_ranks = (left_ranks + 1 + right_ranks) / 2.0
     return (avg_ranks / n).tolist()
 
+
 def min_max_norm(values: list[float]) -> list[float]:
     """Perform min-max normalization on a list of values.
 
@@ -230,6 +240,7 @@ def min_max_norm(values: list[float]) -> list[float]:
         return [0.0] * n
     return ((arr - min_val) / (max_val - min_val)).tolist()
 
+
 def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
     """Check if candidate texts are strict substrings of source texts.
 
@@ -249,6 +260,7 @@ def is_strict_subset(texts_a: list[str], texts_b: list[str]) -> list[bool]:
         else:
             results.append(True)
     return results
+
 
 def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool], list[str]]:
     """Check loose substring inclusion ignoring whitespace, case, and accents.
@@ -294,6 +306,7 @@ def is_loose_subset(texts_a: list[str], texts_b: list[str]) -> tuple[list[bool],
             
     return is_subsets, collected_subsets
 
+
 def sliding_window_word_chunk(texts: list[str], window_size: int, step_size: int) -> list[list[str]]:
     """Chunk texts using a sliding word window.
 
@@ -322,6 +335,7 @@ def sliding_window_word_chunk(texts: list[str], window_size: int, step_size: int
                 chunks.append(" ".join(chunk_words))
         results.append(chunks)
     return results
+
 
 def pairwise_chunked_jaccards(a: list[list[str]], b: list[list[str]], n: int, operation: str = 'max') -> list[list[float]]:
     """Compute aggregated pairwise Jaccard distances across chunked text lists.
@@ -374,6 +388,7 @@ def pairwise_chunked_jaccards(a: list[list[str]], b: list[list[str]], n: int, op
         results.append(b_res)
     return results
 
+
 def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operation: str = 'max') -> list[list[float]]:
     """Compute aggregated pairwise Levenshtein distances across chunked text lists.
 
@@ -409,6 +424,7 @@ def pairwise_chunked_levenshteins(a: list[list[str]], b: list[list[str]], operat
         results.append(b_res)
     return results
 
+
 def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
     """Compute percentile ranks across nested lists of chunk values.
 
@@ -441,6 +457,7 @@ def chunkwise_quantile(values_list: list[list[float]]) -> list[list[float]]:
         results.append((avg_ranks / n).tolist())
         
     return results
+
 
 def chunkwise_min_max_norm(values_list: list[list[float]]) -> list[list[float]]:
     """Perform min-max normalization across nested lists of chunk values.
