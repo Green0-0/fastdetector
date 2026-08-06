@@ -1,53 +1,41 @@
-from gen import clean_columns, prompt_instructions, rejected_rows
+from gen import clean_responses, rejected_rows
 
 BODY = " ".join(f"word{i}" for i in range(120))
 
 
 # --------------------------------------------------------------------------
-# clean_columns
+# clean_responses
 # --------------------------------------------------------------------------
 
 
-def test_both_columns_end_up_in_the_same_whitespace_convention():
-    originals, responses = clean_columns(["a  b\nc"], ["a  b\n\n\nc  \n"])
-    assert originals == responses == ["a b\nc"]
+def test_the_response_is_put_into_the_source_whitespace_convention():
+    assert clean_responses(["a  b\n\n\nc  \n"], ["a b\nc"]) == ["a b\nc"]
 
 
 def test_a_wrapper_and_its_stray_whitespace_are_both_removed():
-    _, responses = clean_columns(["plain source"], [f"Title\n\n---\n\n{BODY}"])
-    assert responses == [BODY]
+    assert clean_responses([f"Title\n\n---\n\n{BODY}"], ["plain source"]) == [BODY]
 
 
 def test_an_added_title_is_removed():
-    _, responses = clean_columns(["The body."], ["**Recreated Text:**\n\nThe body."])
-    assert responses == ["The body."]
+    assert clean_responses(["**Recreated Text:**\n\nThe body."], ["The body."]) == ["The body."]
 
 
-def test_markdown_and_emoji_are_stripped_from_both_columns():
-    originals, responses = clean_columns(["**bold** human 🌱"], ["Lead line.\n## Heading\n**bold** ai 🤝"])
-    assert originals == ["bold human"]
-    assert responses == ["Lead line.\nHeading\nbold ai"]
+def test_mojibake_is_repaired_in_the_response():
+    assert clean_responses(["estÃ¡s"], ["source"]) == ["estás"]
 
 
-def test_a_title_is_removed_before_markdown_stripping_erases_the_evidence():
-    # strip_markdown would delete the ** that marks the title as a title.
-    _, responses = clean_columns(["Real content here."], ["**Rough Draft:**\n\nReal content here."])
-    assert responses == ["Real content here."]
+def test_markdown_and_emoji_are_left_alone():
+    # Stripping them from the AI side only would make them a human signal.
+    text = "**bold** and an emoji 🤝"
+    assert clean_responses([text], ["plain source"]) == [text]
 
 
-def test_mojibake_is_repaired_in_both_columns():
-    originals, responses = clean_columns(["cÃ³mo"], ["estÃ¡s"])
-    assert (originals, responses) == (["cómo"], ["estás"])
+def test_a_clean_response_survives_untouched():
+    assert clean_responses([BODY], ["source text"]) == [BODY]
 
 
-def test_a_clean_pair_survives_untouched():
-    originals, responses = clean_columns(["source text"], [BODY])
-    assert (originals, responses) == (["source text"], [BODY])
-
-
-def test_the_columns_stay_aligned():
-    originals, responses = clean_columns(["a", "b", "c"], ["x", "y", "z"])
-    assert len(originals) == len(responses) == 3
+def test_the_output_stays_aligned_with_the_input():
+    assert len(clean_responses(["x", "y", "z"], ["a", "b", "c"])) == 3
 
 
 # --------------------------------------------------------------------------
@@ -97,3 +85,10 @@ def test_an_empty_dataset_still_reports_every_reason():
     assert set(counts) == {"empty or too short", "refusal", "filler output",
                            "unfilled placeholder", "task meta-commentary", "echoed instruction"}
     assert sum(counts.values()) == 0
+
+
+def test_the_source_column_is_never_handed_back_for_writing():
+    # clean_responses returns only the AI column, so gen.py has nothing to
+    # write back over `original`.
+    result = clean_responses([f"Title\n---\n{BODY}"], ["**bold** source 🌱  \n\n"])
+    assert isinstance(result, list) and len(result) == 1

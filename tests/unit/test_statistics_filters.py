@@ -261,6 +261,17 @@ def test_a_placeholder_the_original_also_has_is_not_flagged():
     assert has_placeholder(["[Your Name]"], ["signed [Your Name]"]) == [False]
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Reach us at [email protected] any time.",   # scraped address obfuscation
+        "Turnout rose sharply that year. [Source: Reuters]",
+    ],
+)
+def test_bracketed_web_text_is_not_a_placeholder(text):
+    assert has_placeholder([text], ["source"]) == [False]
+
+
 def test_task_meta_commentary_is_flagged():
     assert has_meta_commentary(["Note: the original text was formal."], ["source"]) == [True]
 
@@ -268,6 +279,18 @@ def test_task_meta_commentary_is_flagged():
 def test_meta_wording_the_original_uses_is_not_flagged():
     text = "the original text of the treaty"
     assert has_meta_commentary([text], [text]) == [False]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Please paste the following text into the terminal.",  # commoner in human prose
+        "Candidates must bring the following document to the interview.",
+        "As requested, the shipment left on Tuesday.",         # barely discriminates
+    ],
+)
+def test_ordinary_prose_is_not_meta_commentary(text):
+    assert has_meta_commentary([text], ["source"]) == [False]
 
 
 def test_a_response_extrapolating_the_instructions_example_is_flagged():

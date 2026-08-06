@@ -14,61 +14,29 @@ from fastdetector.statistics.filters import (
     is_empty,
     normalize_whitespace,
     strip_added_title,
-    strip_emoji,
-    strip_markdown,
     strip_wrapper_boilerplate,
 )
 from fastdetector.utils import push_shard, shard_config_name, upload_readme
 
-#: Template placeholders the prompt column keeps unsubstituted.
-PLACEHOLDER_TOKENS = re.compile(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}")
 
-
-def prompt_instructions(prompts: list[dict]) -> list[str]:
-    """Recover the instruction text behind each row, without the document.
-
-    The prompt column stores the template rather than the substituted prompt, so
-    dropping the placeholders leaves the instruction on its own.
+def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
+    """Clean the AI column. The human column is read but never modified.
 
     Args:
-        prompts: List of prompt metadata dicts carrying ``chat_turns``.
+        responses: List of model responses to clean.
+        originals: List of source texts aligned with ``responses``, used only to
+            decide what counts as boilerplate.
 
     Returns:
-        List of instruction texts, one per row.
+        List of cleaned responses.
     """
-    return [PLACEHOLDER_TOKENS.sub("", "\n".join((prompt or {}).get("chat_turns") or [])) for prompt in prompts]
-
-
-def clean_columns(originals: list[str], responses: list[str]) -> tuple[list[str], list[str]]:
-    """Repair and normalize the human and AI text columns.
-
-    Wrapper and title stripping run first, against the untouched source text,
-    because both decide what to remove by comparing the two columns. Markdown,
-    emoji and whitespace are then normalized on *both* columns: each is a
-    generator fingerprint rather than a property of AI text, and the source
-    column arrives pre-normalized by the extractor, so cleaning only one side
-    would let formatting alone identify the AI side.
-
-    Args:
-        originals: List of source texts.
-        responses: List of model responses aligned with ``originals``.
-
-    Returns:
-        Tuple of (cleaned originals, cleaned responses).
-    """
-    originals = fix_encoding(originals)
     responses = strip_wrapper_boilerplate(fix_encoding(responses), originals)
-    responses = strip_added_title(responses, originals)
-    return (normalize_whitespace(strip_emoji(strip_markdown(originals))),
-            normalize_whitespace(strip_emoji(strip_markdown(responses))))
+    return normalize_whitespace(strip_added_title(responses, originals))
 
 
 def rejected_rows(originals: list[str], responses: list[str],
                   instructions: list[str]) -> tuple[list[bool], dict[str, int]]:
     """Flag rows whose generation failed outright.
-
-    Similarity between the two columns is deliberately not considered here; the
-    analysis stage drops over-similar pairs via its own filter conditions.
 
     Args:
         originals: List of source texts.
@@ -125,12 +93,14 @@ def main() -> None:
     )
 
     print("Running post-processing...")
-    originals, responses = clean_columns(result_ds["original"], result_ds["final_response"])
-    rejected, counts = rejected_rows(originals, responses, prompt_instructions(result_ds["prompt"]))
+    instructions = [re.sub(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}", "", "\n".join(prompt["chat_turns"]))
+                    for prompt in result_ds["prompt"]]
+    originals = result_ds["original"]
+    responses = clean_responses(result_ds["final_response"], originals)
+    rejected, counts = rejected_rows(originals, responses, instructions)
 
     total = len(result_ds)
-    result_ds = result_ds.remove_columns(["original", "final_response"])
-    result_ds = result_ds.add_column("original", originals).add_column("final_response", responses)
+    result_ds = result_ds.remove_columns("final_response").add_column("final_response", responses)
     result_ds = result_ds.select([i for i, drop in enumerate(rejected) if not drop])
 
     dropped = "\n".join(f"- Dropped ({reason}): {count}" for reason, count in counts.items())
@@ -141,8 +111,7 @@ def main() -> None:
 - Rows kept: {len(result_ds)}
 {dropped}
 
-Reasons overlap, so they sum to more than the number of rows dropped. Pairs whose
-two sides are too similar are filtered downstream by the analysis stage, not here.
+Note: Reasons overlap, so they sum to more than the number of rows dropped.
 """
 
     config_name = shard_config_name(args.batch_id)
