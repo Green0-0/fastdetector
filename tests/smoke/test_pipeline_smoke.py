@@ -89,7 +89,7 @@ def test_the_prompt_file_renders_against_the_real_model(repo_root, gen_config):
 
 def test_run_pipeline_produces_a_dataset(monkeypatch, repo_root, globals_config, gen_config):
     """The full generation path: engine launch, prompting, and post-processing."""
-    from gen import post_process_response
+    from fastdetector.statistics.filters import strip_wrapper_boilerplate
 
     if not gen_config.pipeline.engine.is_local_server:
         pytest.skip(f"{gen_config.pipeline.engine.value} is not a local engine")
@@ -119,8 +119,8 @@ def test_run_pipeline_produces_a_dataset(monkeypatch, repo_root, globals_config,
     assert all(text.strip() for text in dataset["final_response"])
     assert "Failed API Requests: 0" in readme
 
-    processed = dataset.map(post_process_response)
-    assert all(text.strip() for text in processed["final_response"])
+    processed = strip_wrapper_boilerplate(dataset["final_response"], dataset["original"])
+    assert all(text.strip() for text in processed)
 
 
 def test_the_filter_config_engine_also_serves(repo_root, globals_config):

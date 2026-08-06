@@ -1,8 +1,8 @@
 [
     "Summarize this text, attempting to preserve as much of the original language of the text as possible.",
-    "Take this text, but replace 3/4 of it with a singular blank underscore (do not use multiple underscores in a row for multiple characters, only one underscore for empty text). This way, it will be appropriate for a FIM task. You may decide which parts of the text to replace with a blank underscore.",
+    "Take this text and replace one word in every four with a single underscore (use one underscore for each removed word, never several in a row). This way, it will be appropriate for a FIM task. You may decide which words to replace. Reproduce the rest of the document in full, in its original order and paragraph structure.",
     "Take this text, but extract only the most meaningful sentences out of it to create a new text that is a series of disjoint sentences representing the original text.",
     "Convert this text into a series of logical propositions or syllogisms that represent the core argument or narrative progression, stripped of all rhetorical flair.",
-    "Strip this text down to its bare syntax. Replace all nouns and verbs with their part-of-speech tags (e.g., [NOUN], [VERB]), keeping only adjectives, conjunctions, prepositions, articles, and punctuation intact.",
+    "Replace every verb in this text with the tag [VERB], keeping all nouns, adjectives, articles and punctuation exactly as they appear. Reproduce the document in full, in its original order and paragraph structure. Do not output a legend or a list of the tags you used.",
     "Provide only the first and last word of every sentence in this text, replacing the middle of each sentence with an ellipsis '...'. Maintain the original paragraph structure."
 ]

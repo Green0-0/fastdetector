@@ -1,11 +1,10 @@
 import argparse
-from langdetect import detect_langs
-from langdetect.lang_detect_exception import LangDetectException
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.utils import apply_filter_conditions, push_shard, shard_config_name, upload_readme
 
+from fastdetector.statistics.filters import is_non_english
 from fastdetector.statistics.statistics_basic import (
     deviated_lines,
     deviated_words,
@@ -88,29 +87,9 @@ def main() -> None:
     ds_filtered = apply_filter_conditions(ds, conditions, filter_config.filter_type)
 
     if filter_config.langdetect_threshold is not None:
-        def is_highly_english(example: dict) -> bool:
-            """Check if the text in collected_subset meets the English probability threshold.
-
-            Args:
-                example: Row dictionary containing 'collected_subset'.
-
-            Returns:
-                True if English probability >= threshold, False otherwise.
-            """
-            text = example.get("collected_subset", "")
-            if not text or not text.strip():
-                return False
-            try:
-                langs = detect_langs(text)
-                for lang in langs:
-                    if lang.lang == 'en' and lang.prob >= filter_config.langdetect_threshold:
-                        return True
-                return False
-            except LangDetectException:
-                return False
-                
         print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
-        ds_filtered = ds_filtered.filter(is_highly_english, num_proc=4)
+        flagged = is_non_english(ds_filtered["collected_subset"], filter_config.langdetect_threshold)
+        ds_filtered = ds_filtered.select([i for i, remove in enumerate(flagged) if not remove])
 
     filtered_dataset = globals_config.resolve_dataset(globals_config.post_filter_dataset)
 

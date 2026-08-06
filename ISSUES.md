@@ -24,16 +24,16 @@ Row references are `shard_N[i]`, where `i` is the 0-based index within that shar
 | 3 | `partial_encode` degenerate descriptors → pangram outputs | 312 rows | — | **P0 — garbage** |
 | 4 | indirect_reference refusals / "you didn't give me the text" | 454 (0.17%) | 28 (0.12%) | **P0 — garbage** |
 | 5 | Near-duplicate & verbatim pairs (rewrite, Qwen) | 17–28% | 10.8% | **P0 — no signal** |
-| 6 | Output-token starvation on long inputs | ratio 1.11→0.15 | same | P1 — leak |
+| 6 | AI length scales sublinearly with input length | ratio 1.11→0.15 | same | INFO — generator property |
 | 7 | Empty `final_response`, no retry/fallback | 93 | 5 | P1 — garbage |
 | 8 | Model-specific formatting leakage (markdown / emoji / titles) | 18.7x bold | 6–79% by model | P1 — leak |
 | 9 | Task meta-commentary in AI text | 10x / 19x | 5x / 13x | P1 — leak |
 | 10 | Prompt instruction echoed into the AI text | — | 62 (0.26%) | P1 — garbage |
 | 11 | Unfilled template placeholders | 1,452 (0.53%) | 257 (1.08%) | P2 — garbage |
 | 12 | `use_multiturn=False` on 100% of rows (49% are 2-turn) | 274,312 | 23,716 | P2 — root cause of #3/#4 |
-| 13 | Duplicate originals / boilerplate corpora | 1,428 (0.52%) | 98 | P2 — split leakage |
+| 13 | Duplicate originals + train/test corpus overlap | 1,428 (0.52%) | 98 + 44 shared with train | P2 — contamination |
 | 14 | Encoding residue (U+FFFD, literal `\n`, mojibake) | 399 / 287 | 26 / 23 | P2 — noise |
-| 15 | Undocumented cross-shard model & param heterogeneity | 2 models | 5 models | P2 — docs |
+| 15 | Cross-shard model & param heterogeneity (documentation only) | 2 models | 5 models | P2 — docs |
 
 ---
 
@@ -170,29 +170,52 @@ both opening *"We were able to get two 25 pound boxes of peaches through the eff
 
 ## P1 issues
 
-### 6. Output-token starvation makes AI text systematically shorter as inputs grow
+### 6. AI text scales sublinearly with input length (characterization, not a defect)
 
-No `max_tokens` is passed to the API ([generator.py:35-41](src/fastdetector/generator.py#L35-L41)),
-so the completion budget is whatever `max_model_len = 32000` leaves after the prompt. Median
-`len(final)/len(original)` on cc-2020 shard_0:
+Median `len(final)/len(original)` on cc-2020 shard_0:
 
-| original length | n | median length ratio | no terminal punctuation |
-| --- | --- | --- | --- |
-| < 2,000 chars | 57,827 | 1.11 | 10.6% |
-| 2,000–5,000 | 57,615 | 0.90 | 8.6% |
-| 5,000–10,000 | 15,953 | 0.54 | 8.8% |
-| 10,000–20,000 | 4,563 | 0.30 | 10.3% |
-| > 20,000 | 1,075 | **0.15** | 10.1% |
+| original length | n | median length ratio |
+| --- | --- | --- |
+| < 2,000 chars | 57,827 | 1.11 |
+| 2,000–5,000 | 57,615 | 0.90 |
+| 5,000–10,000 | 15,953 | 0.54 |
+| 10,000–20,000 | 4,563 | 0.30 |
+| > 20,000 | 1,075 | **0.15** |
 
-Consequences: **P(human | text > 42,000 chars) = 98.1%** across shards 0+2 (152 human vs 3 AI), and
-63.7% of AI responses to >12k-char originals are under half the original length (vs 6.7% for
-<3k-char originals). Length becomes a proxy for the label at the tail.
+**This is signal, not error.** Instruct-tuned 8B models stopping after a few hundred to a couple of
+thousand tokens is a genuine property of the generators. An earlier revision listed it as a P1 leak;
+that was wrong. What the two columns' length distributions differ by at the tail is a fact about the
+corpus, recorded here, not a defect to repair.
 
-**Example** — cc-2020 `shard_0[135994]` (revise): 57,376-char original → 1,351-char response.
+*It is not a token budget problem.* `max_tokens` is not passed
+([generator.py:35-41](src/fastdetector/generator.py#L35-L41)), so vLLM already grants each request
+`max_model_len` minus its prompt. Estimated over all 137,033 rows of cc-2020 shard_0 at 4 chars/token,
+median headroom use runs 1.3% → 3.5% across the length buckets above. **Zero** rows use more than 80%
+of their headroom, zero come within 500 tokens of the 32,000 limit, and the largest prompt-plus-output
+observed is ~17,321 tokens. Neither setting `max_tokens` nor raising `max_model_len` would change
+anything.
 
-Note that `max_input_len = 15000` *drops* over-long rows rather than truncating them
-([pipe.py:112-114](src/fastdetector/frontend/pipe.py#L112-L114)), so the inputs themselves are intact —
-the ceiling is on the output side only.
+How far output scales with input is a **per-model property**, worth knowing when weighting the model
+mix. Median output tokens on cc-2021, shortest bucket to longest:
+
+| model | <2k | 2–5k | 5–10k | 10k+ | growth |
+| --- | --- | --- | --- | --- | --- |
+| gemma-4-E4B-it | 345 | 677 | 1,381 | 2,841 | **8.2x** |
+| Qwen3-8B-AWQ | 381 | 694 | 1,408 | 2,819 | 7.4x |
+| Ministral-3-8B | 412 | 676 | 1,030 | 1,441 | 3.5x |
+| Llama-3.1-8B | 380 | 663 | 1,094 | 1,178 | 3.1x |
+| granite-4.1-8b | 361 | 614 | 834 | 932 | **2.6x** |
+
+Prompt wording moves it too: on >10k-char originals, `rewrite` ("as long as possible") reaches a
+median 2,646 output tokens against `indirect_reference`'s 983.
+
+The one thing still worth filtering is a *failed* generation as opposed to a short one — a 5,000-char
+source answered with 200 characters. `is_empty` already covers the bulk of those; `has_length_anomaly`
+exists for the rest and is deliberately unused by `gen.py`.
+
+The `P(human | text > 42,000 chars) = 98.1%` figure quoted in earlier revisions came from the human
+corpus admitting documents longer than any generator produces. It is a property of the source corpus'
+length range, not of AI text.
 
 ### 7. Empty `final_response` when the last turn fails, with no retry or fallback
 
@@ -318,15 +341,30 @@ Related: 27 of the 1,494 `translation_roundtrip` rows (1.8%) never made it back 
 e.g. `shard_1[2009]` (Llama-3.1-8B) opening `"《罗宁：最后的武士》 is a recently released roguelike fighting
 game on App Store, developed by Dreamotion team…"`.
 
-### 13. Duplicate originals and boilerplate corpora
+### 13. Duplicate originals, within each corpus and across the train/test boundary
 
-cc-2020 (0+2): 1,428 rows (0.52%) sit in duplicate-original groups. Largest groups: a cookie-consent
-notice ×76, a Getty *"Your Easy-access (EZA) account allows those in your organisation…"* notice ×57
-and ×25 (spelling variant). cc-2021: 98 rows across 26 distinct duplicated texts, top cookie notice ×20;
-245 rows (1.03%) are cookie/privacy boilerplate.
+cc-2020 is the training corpus and cc-2021 the test corpus, so there is no split inside either one.
+That makes **cross-corpus** overlap the contamination that matters, and it is real. Comparing all
+23,716 cc-2021 rows against cc-2020 shards 0+2:
 
-**Split at the original-text level, not the row level** — otherwise the same human text lands in both
-train and test with different AI partners.
+| | rows | share of test |
+| --- | --- | --- |
+| test originals byte-identical to a train original | 44 (15 distinct texts) | 0.186% |
+| test originals sharing a train original's first 300 chars | 113 | 0.48% |
+
+Both are **floors**: only 2 of cc-2020's 7 shards were checked, so the full figure is plausibly
+around 3x higher. The most repeated overlapping text appears 20 times in the test corpus — it is
+the cookie-consent notice again. The overlap exists because both corpora are Common Crawl snapshots
+and the same boilerplate is served by the same sites year after year.
+
+Within each corpus, duplicates remain a diversity problem rather than a leakage one: cc-2020 (0+2)
+has 1,428 rows (0.52%) in duplicate-original groups — a cookie notice ×76, a Getty *"Your Easy-access
+(EZA) account…"* notice ×57 and ×25 (spelling variant); cc-2021 has 98 rows across 26 distinct
+duplicated texts, and 245 rows (1.03%) are cookie/privacy boilerplate.
+
+Note that duplicates are largely invisible per shard. On cc-2021, deduplicating each of the 7 shards
+independently finds 36 repeats; deduplicating the pooled corpus finds **73**. `is_duplicate` therefore
+has to run on whole corpora, and the train/test check has to run across them.
 
 ### 14. Encoding residue
 

@@ -1,5 +1,5 @@
 [
-    "Improve this text by rewriting it. However, the new text must contain at least half of the original text, unmodified, repeated verbatim.",
-    "Modify this text so that it is as short as possible. However, the new text must contain at least a quarter of the original text, unmodified, repeated verbatim.",
-    "Modify this text to be as long as possible. However, the new text must contain at least half of the original text, unmodified, repeated verbatim."
+    "Improve this text by rewriting it. At least half of the original text must be repeated verbatim, and at most three quarters of it; the remainder must be new prose.",
+    "Modify this text so that it is as short as possible. At least a quarter of the original text must be repeated verbatim, and at most half of it; the remainder must be new prose.",
+    "Modify this text to be as long as possible. At least half of the original text must be repeated verbatim, and at most three quarters of it; the remainder must be new prose."
 ]

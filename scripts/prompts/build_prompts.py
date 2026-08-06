@@ -12,6 +12,14 @@ from fastdetector.prompting.prompt_builder import (
     shuffle,
 )
 
+#: Wraps the source document so a model cannot read the trailing instruction as
+#: part of it, which is what makes instruction tails end up quoted in the output.
+DOCUMENT_FORMAT = "<document>\n{{DOC}}\n</document>\n\n{{TEXT}}"
+
+#: Suppresses the task label ("**Rough Draft:**", "**Recreated Text:**") that
+#: models otherwise put at the top of their answer.
+NO_TITLE = "Begin directly with the text itself. Do not add a title, a heading, or a label naming what you have written."
+
 
 def build_prompts_generic(paths: list[str], dataset_name: str, prompt_type: str, target_size: int, max_stack: int) -> tuple[list, list]:
     """Load, split, resize, stack, format with recursive headers, and save generic prompt sets.
@@ -46,8 +54,8 @@ def build_prompts_generic(paths: list[str], dataset_name: str, prompt_type: str,
         samples = resize(samples, size)
         copies = [shuffle(samples, seed=i) for i in range(max_stack)]
         samples = partial_stack(copies, 1, max_stack)
-        samples = force_reformat(samples, only_first_message=True, modified_format="{{DOC}}\n{{TEXT}}")
-        samples = force_reformat(samples, only_first_message=False, modified_format="{{TEXT}}\nOutput the full new text with no extra statements or commentations.")
+        samples = force_reformat(samples, only_first_message=True, modified_format=DOCUMENT_FORMAT)
+        samples = force_reformat(samples, only_first_message=False, modified_format=f"{{{{TEXT}}}}\nOutput the full new text with no extra statements or commentations.\n{NO_TITLE}")
         samples = apply_recursive_format(samples)
         prompts = generate_dataset(samples, use_multiturn=False)
         add_metadata(prompts, "PROMPT_TYPE", prompt_type)
@@ -98,8 +106,8 @@ def build_indirect_reference(subcategories: dict[str, str], dataset_name: str, p
                 List of generated Prompt objects.
             """
             samples = resize(samples, size)
-            samples = force_reformat(samples, only_first_message=True, modified_format="{{DOC}}\n{{TEXT}}\nDo not output anything besides what you were requested to write, and do not output any extra commentary.")
-            samples = [chat + [followup_text] for chat in samples]
+            samples = force_reformat(samples, only_first_message=True, modified_format=f"{DOCUMENT_FORMAT}\nDo not output anything besides what you were requested to write, and do not output any extra commentary.")
+            samples = [chat + [f"{followup_text}\n{NO_TITLE}"] for chat in samples]
             samples = apply_recursive_format(samples)
             prompts = generate_dataset(samples, use_multiturn=False)
             add_metadata(prompts, "PROMPT_TYPE", prompt_type)

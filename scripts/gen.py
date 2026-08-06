@@ -1,86 +1,92 @@
 import argparse
+import re
 
 from fastdetector.frontend.toml_config import GenConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
+from fastdetector.statistics.filters import (
+    fix_encoding,
+    has_filler_output,
+    has_meta_commentary,
+    has_placeholder,
+    has_prompt_echo,
+    has_refusal,
+    is_empty,
+    normalize_whitespace,
+    strip_added_title,
+    strip_emoji,
+    strip_markdown,
+    strip_wrapper_boilerplate,
+)
 from fastdetector.utils import push_shard, shard_config_name, upload_readme
 
+#: Template placeholders the prompt column keeps unsubstituted.
+PLACEHOLDER_TOKENS = re.compile(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}")
 
-def post_process_response(row: dict) -> dict:
-    """Applies filter and cleanup rules to the final_response field of a row.
+
+def prompt_instructions(prompts: list[dict]) -> list[str]:
+    """Recover the instruction text behind each row, without the document.
+
+    The prompt column stores the template rather than the substituted prompt, so
+    dropping the placeholders leaves the instruction on its own.
 
     Args:
-        row: Dataset row dictionary containing 'original' and 'final_response'.
+        prompts: List of prompt metadata dicts carrying ``chat_turns``.
 
     Returns:
-        Modified row dictionary with post-processed response and modification tracking columns.
+        List of instruction texts, one per row.
     """
-    orig_text = row.get("original", "")
-    orig_resp = row.get("final_response", "")
-    resp = orig_resp
-    
-    orig_sl = orig_text.strip().lower()
-    
-    mod_1, mod_2, mod_3, mod_4 = 0, 0, 0, 0
-    
-    # 1. If it contains the "---" exactly twice, and the original contains no "---" take the content in between the "---".
-    if resp.count("---") == 2 and "---" not in orig_text:
-        resp = resp.split("---")[1]
-        mod_1 = 1
-    else:
-        # 2. Otherwise, if it ends in "---" (after stripping), and the original does not, remove the "---"
-        resp_sl = resp.strip().lower()
-        if resp_sl.endswith("---") and not orig_sl.endswith("---"):
-            resp = resp[:resp.rfind("---")]
-            mod_2 = 1
-            
-    # 3. If the response begins with "here" or "sure" not case sensitive (and this doesn't occur in the original), and this is followed by a singular "---", remove all text from the here or sure to the "---"
-    PREFIXES = ("here ", "sure ", "here,", "sure,", "here:", "sure:", "sure!", "certainly ", "certainly,", "certainly!", "i'm happy to help ")
+    return [PLACEHOLDER_TOKENS.sub("", "\n".join((prompt or {}).get("chat_turns") or [])) for prompt in prompts]
 
-    resp_sl = resp.strip().lower()
-    if not orig_sl.startswith(PREFIXES):
-        if resp_sl.startswith(PREFIXES):
-            if resp.count("---") == 1:
-                resp = resp.split("---", 1)[1]
-                mod_3 = 1
-            
-    # 4. If the response begins with "Here" or "Sure" after stripping and the original does not, and the first newline is within 20 words, remove everything before the first newline
-    resp_stripped = resp.strip()
-    resp_sl = resp_stripped.lower()
-    if resp_sl.startswith(PREFIXES):
-        if not orig_sl.startswith(PREFIXES):
-            first_newline_idx = resp_stripped.find("\n")
-            if first_newline_idx != -1:
-                first_line = resp_stripped[:first_newline_idx]
-                if len(first_line.split()) <= 20:
-                    resp = resp_stripped[first_newline_idx+1:]
-                    
-                    # Also strip a hanging '---' if it immediately follows the removed first line
-                    resp_lstripped = resp.lstrip()
-                    if resp_lstripped.startswith("---"):
-                        if len(resp_lstripped) == 3 or resp_lstripped[3].isspace():
-                            resp = resp_lstripped[3:].lstrip()
-                            
-                    mod_4 = 1
-                    
-    # 5. If more than 25% of the words or over 40 words were dropped during the above process, revert back to the original
-    orig_words = len(orig_resp.split())
-    new_words = len(resp.split())
-    dropped = orig_words - new_words
-    
-    reverted = 0
-    if dropped > 40 or (orig_words > 0 and (dropped / orig_words) > 0.25):
-        resp = orig_resp
-        reverted = 1
-        mod_1 = mod_2 = mod_3 = mod_4 = 0
-        
-    row["final_response"] = resp
-    row["mod_1"] = mod_1
-    row["mod_2"] = mod_2
-    row["mod_3"] = mod_3
-    row["mod_4"] = mod_4
-    row["reverted"] = reverted
-    return row
+
+def clean_columns(originals: list[str], responses: list[str]) -> tuple[list[str], list[str]]:
+    """Repair and normalize the human and AI text columns.
+
+    Wrapper and title stripping run first, against the untouched source text,
+    because both decide what to remove by comparing the two columns. Markdown,
+    emoji and whitespace are then normalized on *both* columns: each is a
+    generator fingerprint rather than a property of AI text, and the source
+    column arrives pre-normalized by the extractor, so cleaning only one side
+    would let formatting alone identify the AI side.
+
+    Args:
+        originals: List of source texts.
+        responses: List of model responses aligned with ``originals``.
+
+    Returns:
+        Tuple of (cleaned originals, cleaned responses).
+    """
+    originals = fix_encoding(originals)
+    responses = strip_wrapper_boilerplate(fix_encoding(responses), originals)
+    responses = strip_added_title(responses, originals)
+    return (normalize_whitespace(strip_emoji(strip_markdown(originals))),
+            normalize_whitespace(strip_emoji(strip_markdown(responses))))
+
+
+def rejected_rows(originals: list[str], responses: list[str],
+                  instructions: list[str]) -> tuple[list[bool], dict[str, int]]:
+    """Flag rows whose generation failed outright.
+
+    Similarity between the two columns is deliberately not considered here; the
+    analysis stage drops over-similar pairs via its own filter conditions.
+
+    Args:
+        originals: List of source texts.
+        responses: List of model responses aligned with ``originals``.
+        instructions: List of instruction texts aligned with ``originals``.
+
+    Returns:
+        Tuple of (per-row rejection flags, per-reason counts).
+    """
+    reasons = {
+        "empty or too short": is_empty(responses),
+        "refusal": has_refusal(responses),
+        "filler output": has_filler_output(responses, originals),
+        "unfilled placeholder": has_placeholder(responses, originals),
+        "task meta-commentary": has_meta_commentary(responses, originals),
+        "echoed instruction": has_prompt_echo(responses, instructions),
+    }
+    return [any(flags) for flags in zip(*reasons.values())], {k: sum(v) for k, v in reasons.items()}
 
 
 def main() -> None:
@@ -118,33 +124,26 @@ def main() -> None:
         batch_id=args.batch_id
     )
 
-    print("Running post-processing on final_response...")
-    result_ds = result_ds.map(post_process_response, num_proc=1, desc="Post-processing")
+    print("Running post-processing...")
+    originals, responses = clean_columns(result_ds["original"], result_ds["final_response"])
+    rejected, counts = rejected_rows(originals, responses, prompt_instructions(result_ds["prompt"]))
 
     total = len(result_ds)
-    if total > 0:
-        count_1 = sum(result_ds["mod_1"])
-        count_2 = sum(result_ds["mod_2"])
-        count_3 = sum(result_ds["mod_3"])
-        count_4 = sum(result_ds["mod_4"])
-        reverted_count = sum(result_ds["reverted"])
-    else:
-        count_1 = count_2 = count_3 = count_4 = 0
-        reverted_count = 0
+    result_ds = result_ds.remove_columns(["original", "final_response"])
+    result_ds = result_ds.add_column("original", originals).add_column("final_response", responses)
+    result_ds = result_ds.select([i for i, drop in enumerate(rejected) if not drop])
 
+    dropped = "\n".join(f"- Dropped ({reason}): {count}" for reason, count in counts.items())
     readme_content += f"""
 
 ## Post Processing Stats
-- Step 1 (Extract between '---'): {count_1}/{total} modified
-- Step 2 (Remove trailing '---'): {count_2}/{total} modified
-- Step 3 (Remove up to '---'): {count_3}/{total} modified
-- Step 4 (Remove first line): {count_4}/{total} modified
-- Reverted due to excessive divergence: {reverted_count}
-"""
+- Rows in: {total}
+- Rows kept: {len(result_ds)}
+{dropped}
 
-    cols_to_remove = [c for c in ["mod_1", "mod_2", "mod_3", "mod_4", "reverted"] if c in result_ds.column_names]
-    if cols_to_remove:
-        result_ds = result_ds.remove_columns(cols_to_remove)
+Reasons overlap, so they sum to more than the number of rows dropped. Pairs whose
+two sides are too similar are filtered downstream by the analysis stage, not here.
+"""
 
     config_name = shard_config_name(args.batch_id)
 
