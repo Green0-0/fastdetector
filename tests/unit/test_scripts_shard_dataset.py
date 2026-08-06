@@ -101,7 +101,6 @@ def test_default_target_dataset_and_num_shards_from_globals_config(monkeypatch, 
     config_file.write_text(
         'dataset_prefix = "org/"\n'
         'raw_dataset = "raw-sharded"\n'
-        'pre_filter_dataset = "p"\n'
         'post_filter_dataset = "pf"\n'
         'gen_dataset = "g"\n'
         'stat_dataset = "s"\n'

@@ -42,6 +42,12 @@ def prompt_paths(repo_root):
     return sorted((repo_root / "prompts").glob("*.json"))
 
 
+def generation_prompt_paths(repo_root):
+    """The prompt sets built by build_prompts.py, excluding the filter stage's
+    own hand-written prompt, which follows a different scheme."""
+    return sorted((repo_root / "prompts").glob("*_dataset_*.json"))
+
+
 def pytest_generate_tests(metafunc):
     """Parameterise over the repo's config and prompt files."""
     if "gen_config_path" in metafunc.fixturenames:
@@ -50,6 +56,9 @@ def pytest_generate_tests(metafunc):
     if "prompt_path" in metafunc.fixturenames:
         paths = prompt_paths(REPO_ROOT)
         metafunc.parametrize("prompt_path", paths, ids=[p.name for p in paths])
+    if "generation_prompt_path" in metafunc.fixturenames:
+        paths = generation_prompt_paths(REPO_ROOT)
+        metafunc.parametrize("generation_prompt_path", paths, ids=[p.name for p in paths])
 
 
 # --------------------------------------------------------------------------
@@ -77,7 +86,6 @@ def test_globals_datasets_are_distinct(repo_root):
     config = GlobalsConfig(**load_toml(str(repo_root / "config" / "globals.toml")))
     datasets = [
         config.raw_dataset,
-        config.pre_filter_dataset,
         config.post_filter_dataset,
         config.gen_dataset,
         config.stat_dataset,
@@ -455,3 +463,55 @@ def test_all_numbered_gen_configs_agree_on_the_source_column(repo_root):
         for path in gen_config_paths(repo_root)
     }
     assert len(columns) == 1, f"gen shards disagree on the source column: {columns}"
+
+
+# --------------------------------------------------------------------------
+# Prompt-scheme invariants (see PROMPT_FIXES.md)
+# --------------------------------------------------------------------------
+
+
+def test_the_document_is_delimited(generation_prompt_path):
+    # An undelimited document lets the model read the trailing instruction as
+    # part of the text and quote it back.
+    for index, prompt in enumerate(load_prompts([str(generation_prompt_path)])):
+        assert "<document>\n{{DOC}}\n</document>" in prompt.chat_turns[0], \
+            f"prompt {index} in {generation_prompt_path.name} does not delimit the document"
+
+
+def test_every_prompt_suppresses_a_task_title(generation_prompt_path):
+    for index, prompt in enumerate(load_prompts([str(generation_prompt_path)])):
+        assert any("Do not add a title" in turn for turn in prompt.chat_turns), \
+            f"prompt {index} in {generation_prompt_path.name} may be answered with a task label"
+
+
+def test_placeholders_are_doubly_braced(prompt_path):
+    # An f-string in the builder silently halves the braces, which turns
+    # {{DOC}} into an inert literal.
+    for index, prompt in enumerate(load_prompts([str(prompt_path)])):
+        for turn in prompt.chat_turns:
+            bare = re.sub(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}", "", turn)
+            assert not re.search(r"\{(?:DOC|TEXT|RESP_\d+)\}", bare), \
+                f"prompt {index} in {prompt_path.name} has a single-braced placeholder"
+
+
+def test_no_instruction_variant_appears_in_both_prompt_splits(repo_root):
+    # The train and test prompt sets must not share a variant, or the corpora
+    # built from them overlap by construction.
+    variants = {v.strip() for path in (repo_root / "sample_prompts").glob("*/*.json")
+                for v in json.loads(path.read_text())}
+    blobs = {}
+    for split in ("train", "test"):
+        path = repo_root / "prompts" / f"combined_dataset_{split}.json"
+        blobs[split] = json.dumps(json.loads(path.read_text()))
+    both = [v for v in variants if json.dumps(v)[1:-1] in blobs["train"]
+            and json.dumps(v)[1:-1] in blobs["test"]]
+    assert not both, f"{len(both)} variant(s) in both splits, e.g. {both[:1]}"
+
+
+def test_every_sample_variant_reaches_a_prompt_split(repo_root):
+    variants = {v.strip() for path in (repo_root / "sample_prompts").glob("*/*.json")
+                for v in json.loads(path.read_text())}
+    built = "".join(json.dumps(json.loads((repo_root / "prompts" / f"combined_dataset_{s}.json").read_text()))
+                    for s in ("train", "test"))
+    missing = [v for v in variants if json.dumps(v)[1:-1] not in built]
+    assert not missing, f"{len(missing)} sample variant(s) unused, e.g. {missing[:1]}"

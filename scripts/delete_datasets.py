@@ -7,7 +7,6 @@ from fastdetector.frontend.toml_loader import load_toml
 
 
 NON_RAW_DATASET_FIELDS = [
-    "pre_filter_dataset",
     "post_filter_dataset",
     "gen_dataset",
     "stat_dataset",

@@ -1,5 +1,4 @@
 raw_dataset = "someone/input-only"
-pre_filter_dataset = "processed"
 post_filter_dataset = "filtered"
 gen_dataset = "output-only"
 stat_dataset = "stat"

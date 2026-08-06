@@ -33,7 +33,6 @@ def main() -> None:
     )
 
     source_dataset = globals_config.resolve_dataset(globals_config.raw_dataset)
-    intermediate_dataset = globals_config.resolve_dataset(globals_config.pre_filter_dataset)
     config_name = shard_config_name(args.batch_id)
 
     print("Running filtering generation pipeline...")
@@ -74,26 +73,31 @@ def main() -> None:
         q = quantile(ds[col])
         ds = ds.add_column(f"{col}_quantile", q)
 
-    readme_content = gen_readme
-    print(f"Uploading updated dataset to {intermediate_dataset} (config '{config_name}')...")
-    push_shard(ds, intermediate_dataset, config_name=config_name)
-    upload_readme(
-        dataset_name=intermediate_dataset,
-        readme_content=readme_content,
-    )
-
     conditions = filter_config.conditions
     print(f"Filtering dataset with conditions: {conditions}")
+    ds = ds.add_column("row_index", list(range(len(ds))))
     ds_filtered = apply_filter_conditions(ds, conditions, filter_config.filter_type)
+    passed_conditions = set(ds_filtered["row_index"])
 
     if filter_config.langdetect_threshold is not None:
         print(f"Running langdetect filter (keeping >= {filter_config.langdetect_threshold} English probability)...")
         flagged = is_non_english(ds_filtered["collected_subset"], filter_config.langdetect_threshold)
         ds_filtered = ds_filtered.select([i for i, remove in enumerate(flagged) if not remove])
 
-    filtered_dataset = globals_config.resolve_dataset(globals_config.post_filter_dataset)
+    kept = set(ds_filtered["row_index"])
+    rejected = [i for i in range(len(ds)) if i not in kept]
+    trashed_ds = ds.select(rejected)
+    if rejected:  # add_column rejects an empty column on an empty table
+        trashed_ds = trashed_ds.add_column(
+            "rejected_for", ["filter conditions" if i not in passed_conditions else "not English"
+                             for i in rejected])
+    trashed_ds = trashed_ds.remove_columns("row_index")
+    ds_filtered = ds_filtered.remove_columns("row_index")
 
-    filtered_readme = f"""
+    filtered_dataset = globals_config.resolve_dataset(globals_config.post_filter_dataset)
+    trashed_name = f"{config_name}_trashed_data"
+
+    filtered_readme = gen_readme + f"""
 ## Filtering Applied
 - Conditions: {conditions}
 - Filter type: {filter_config.filter_type}
@@ -101,16 +105,20 @@ def main() -> None:
 - Config: {config_name}
 - Rows before filter: {len(ds)}
 - Rows after filter: {len(ds_filtered)}
+- Rows trashed: {len(trashed_ds)}
+
+Every row the pipeline produced is here: the kept rows in '{config_name}' and the
+rejected ones in '{trashed_name}', which carries a 'rejected_for' column naming
+the stage that cut them.
 """
 
     print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(ds_filtered)} samples...")
     push_shard(ds_filtered, filtered_dataset, config_name=config_name)
+    if len(trashed_ds):
+        print(f"Uploading {len(trashed_ds)} trashed rows to {filtered_dataset} (config '{trashed_name}')...")
+        push_shard(trashed_ds, filtered_dataset, config_name=trashed_name)
 
-    upload_readme(
-        dataset_name=filtered_dataset,
-        readme_content=filtered_readme,
-        append_readme_source=intermediate_dataset
-    )
+    upload_readme(dataset_name=filtered_dataset, readme_content=filtered_readme)
 
 
 if __name__ == "__main__":

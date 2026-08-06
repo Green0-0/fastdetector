@@ -58,7 +58,7 @@ def run_main(ds: Dataset, cfg: AnalysisConfig, name: str = "d/s") -> tuple[str, 
     Returns:
         Tuple of (readme markdown, {filename: bytes}) as it would be uploaded.
     """
-    globals_config = GlobalsConfig(raw_dataset="raw", pre_filter_dataset="pre",
+    globals_config = GlobalsConfig(raw_dataset="raw",
                                    post_filter_dataset="post", gen_dataset="gen",
                                    stat_dataset=name, eval_dataset="eval")
     captured = {}

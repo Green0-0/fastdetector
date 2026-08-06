@@ -65,7 +65,30 @@ def test_the_text_between_two_rules_is_extracted():
 
 def test_rules_the_original_also_uses_are_left_alone():
     response = f"Preamble\n---\n{BODY}\n---\nTrailer"
-    assert clean("source --- with a rule", response) == response
+    assert clean(f"source\n---\n{BODY}", response) == response
+
+
+def test_an_inline_dash_run_in_the_original_is_not_a_rule():
+    # "---" used as an em-dash substitute must not disable rule stripping.
+    assert clean("source --- with an inline dash", f"Title\n---\n{BODY}") == BODY
+
+
+def test_rules_separating_sections_keep_the_final_section():
+    # Several rules mean the model is separating sections, so the text after
+    # the last one is content, not a trailer.
+    last = "Exxus Slim Battery | 1400 mah | $11.99 - Add to cart"
+    response = f"{BODY}\n---\n{BODY}\n---\n{last}"
+    assert clean("plain source", response).endswith(last)
+
+
+def test_a_long_dash_run_is_consumed_whole():
+    # Splitting on the bare substring left the remaining dashes behind.
+    assert clean("plain source", f"Title\n{'-' * 38}\n{BODY}") == BODY
+
+
+def test_dashes_inside_a_line_are_not_a_rule():
+    response = f"{BODY} --- still the same line"
+    assert clean("plain source", response) == response
 
 
 def test_a_trailing_rule_is_dropped():

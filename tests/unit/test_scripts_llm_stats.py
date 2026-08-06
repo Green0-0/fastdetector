@@ -70,7 +70,6 @@ def run_main(monkeypatch):
 
         globals_config = GlobalsConfig(
             raw_dataset="raw",
-            pre_filter_dataset="pre",
             post_filter_dataset="post",
             gen_dataset="gen",
             stat_dataset="stat",

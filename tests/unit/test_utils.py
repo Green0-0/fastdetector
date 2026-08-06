@@ -409,3 +409,34 @@ def test_numeric_strings_are_coerced_for_numeric_operators():
     dataset = Dataset.from_list([{"n": "10"}, {"n": "2"}])
     filtered = apply_filter_conditions(dataset, [condition("n", ">", 5)])
     assert filtered["n"] == ["10"]
+
+
+# --------------------------------------------------------------------------
+# trashed-data configs must never be mistaken for a shard
+# --------------------------------------------------------------------------
+
+
+def test_a_trashed_config_alongside_a_shard_is_ignored(fake_hub):
+    fake_hub.configs = ["shard_0", "shard_0_trashed_data", "shard_1", "shard_1_trashed_data"]
+    load_dataset_auto_shard("user/ds", subset_index=1)
+    assert fake_hub.loads == [("user/ds", "shard_1", "train")]
+
+
+def test_the_default_batch_id_still_lands_on_shard_zero(fake_hub):
+    # gen.py defaults --batch-id to 0, so the no-shard-specified path is this one.
+    fake_hub.configs = ["shard_0", "shard_0_trashed_data"]
+    load_dataset_auto_shard("user/ds", subset_index=0)
+    assert fake_hub.loads == [("user/ds", "shard_0", "train")]
+
+
+def test_a_lone_trashed_config_is_not_silently_loaded_as_shard_zero(fake_hub):
+    # The single-config fallback must not fire for a trashed-only repo.
+    fake_hub.configs = ["shard_0_trashed_data"]
+    with pytest.raises(ValueError, match="no config named 'shard_0'"):
+        load_dataset_auto_shard("user/ds", subset_index=0)
+
+
+def test_a_lone_mismatched_shard_config_is_not_loaded_as_shard_zero(fake_hub):
+    fake_hub.configs = ["shard_5"]
+    with pytest.raises(ValueError, match="no config named 'shard_0'"):
+        load_dataset_auto_shard("user/ds", subset_index=0)

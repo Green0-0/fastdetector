@@ -6,7 +6,6 @@ from fastdetector.frontend.toml_config import GlobalsConfig
 FIELDS = dict(
     dataset_prefix="user/corpus-",
     raw_dataset="raw",
-    pre_filter_dataset="processed",
     post_filter_dataset="filtered",
     gen_dataset="rewritten",
     stat_dataset="stat",
@@ -17,7 +16,6 @@ FIELDS = dict(
 def test_resolve_non_raw_datasets_returns_all_non_raw_datasets():
     config = GlobalsConfig(**FIELDS)
     assert resolve_non_raw_datasets(config) == [
-        "user/corpus-processed",
         "user/corpus-filtered",
         "user/corpus-rewritten",
         "user/corpus-stat",

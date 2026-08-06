@@ -12,7 +12,6 @@ class GlobalsConfig(BaseModel):
 
     # Dataset Name Paths
     raw_dataset: str
-    pre_filter_dataset: str
     post_filter_dataset: str
     gen_dataset: str
     stat_dataset: str

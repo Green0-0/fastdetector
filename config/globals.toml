@@ -3,7 +3,6 @@ dataset_prefix = "G-reen/cc-2021-"
 
 # Dataset stage names (prepended by dataset_prefix)
 raw_dataset = "raw-sharded"
-pre_filter_dataset = "processed"
 post_filter_dataset = "filtered"
 gen_dataset = "rewritten"
 stat_dataset = "stat"

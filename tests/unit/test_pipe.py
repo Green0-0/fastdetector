@@ -10,7 +10,6 @@ from fastdetector.frontend.toml_config import GlobalsConfig, PipeConfig
 GLOBALS_FIELDS = {
     "dataset_prefix": "user/base-",
     "raw_dataset": "raw",
-    "pre_filter_dataset": "processed",
     "post_filter_dataset": "filtered",
     "gen_dataset": "rewritten",
     "stat_dataset": "stat",

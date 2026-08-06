@@ -13,7 +13,6 @@ from fastdetector.statistics.filters import (
     has_refusal,
     is_empty,
     normalize_whitespace,
-    strip_added_title,
     strip_wrapper_boilerplate,
 )
 from fastdetector.utils import push_shard, shard_config_name, upload_readme
@@ -21,6 +20,16 @@ from fastdetector.utils import push_shard, shard_config_name, upload_readme
 
 def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
     """Clean the AI column. The human column is read but never modified.
+
+    Markdown, emoji and leading headings are deliberately left alone. The human
+    column uses markdown and emoji too, so stripping them from the AI side alone
+    would turn "contains bold" into a perfect *human* signal; and a heading is
+    usually legitimate writing rather than a task label, so removing it costs
+    real content.
+
+    Nothing here is lossy at the row level: ``final_response`` derives from the
+    last turn, so the untouched model output remains in ``response_1`` when that
+    is non-empty and in ``response_0`` otherwise.
 
     Args:
         responses: List of model responses to clean.
@@ -30,13 +39,16 @@ def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
     Returns:
         List of cleaned responses.
     """
-    responses = strip_wrapper_boilerplate(fix_encoding(responses), originals)
-    return normalize_whitespace(strip_added_title(responses, originals))
+    return normalize_whitespace(strip_wrapper_boilerplate(fix_encoding(responses), originals))
 
 
-def rejected_rows(originals: list[str], responses: list[str],
-                  instructions: list[str]) -> tuple[list[bool], dict[str, int]]:
-    """Flag rows whose generation failed outright.
+def rejection_reasons(originals: list[str], responses: list[str],
+                      instructions: list[str]) -> dict[str, list[bool]]:
+    """Flag rows whose generation failed outright, one boolean list per reason.
+
+    Reasons overlap: a row may trip several. Similarity between the two columns
+    is deliberately not a reason; the analysis stage drops over-similar pairs
+    through its own filter conditions.
 
     Args:
         originals: List of source texts.
@@ -44,9 +56,9 @@ def rejected_rows(originals: list[str], responses: list[str],
         instructions: List of instruction texts aligned with ``originals``.
 
     Returns:
-        Tuple of (per-row rejection flags, per-reason counts).
+        Dict mapping each reason to its per-row flags.
     """
-    reasons = {
+    return {
         "empty or too short": is_empty(responses),
         "refusal": has_refusal(responses),
         "filler output": has_filler_output(responses, originals),
@@ -54,7 +66,6 @@ def rejected_rows(originals: list[str], responses: list[str],
         "task meta-commentary": has_meta_commentary(responses, originals),
         "echoed instruction": has_prompt_echo(responses, instructions),
     }
-    return [any(flags) for flags in zip(*reasons.values())], {k: sum(v) for k, v in reasons.items()}
 
 
 def main() -> None:
@@ -97,27 +108,41 @@ def main() -> None:
                     for prompt in result_ds["prompt"]]
     originals = result_ds["original"]
     responses = clean_responses(result_ds["final_response"], originals)
-    rejected, counts = rejected_rows(originals, responses, instructions)
+    reasons = rejection_reasons(originals, responses, instructions)
+    rejected = [any(flags) for flags in zip(*reasons.values())]
 
     total = len(result_ds)
     result_ds = result_ds.remove_columns("final_response").add_column("final_response", responses)
+    labels = [", ".join(name for name, flags in reasons.items() if flags[i])
+              for i, drop in enumerate(rejected) if drop]
+    trashed_ds = result_ds.select([i for i, drop in enumerate(rejected) if drop])
+    if labels:  # add_column rejects an empty column on an empty table
+        trashed_ds = trashed_ds.add_column("rejected_for", labels)
     result_ds = result_ds.select([i for i, drop in enumerate(rejected) if not drop])
 
-    dropped = "\n".join(f"- Dropped ({reason}): {count}" for reason, count in counts.items())
+    config_name = shard_config_name(args.batch_id)
+    trashed_name = f"{config_name}_trashed_data"
+
+    dropped = "\n".join(f"- Dropped ({reason}): {sum(flags)}" for reason, flags in reasons.items())
     readme_content += f"""
 
 ## Post Processing Stats
 - Rows in: {total}
 - Rows kept: {len(result_ds)}
+- Rows trashed: {len(trashed_ds)}
 {dropped}
 
-Note: Reasons overlap, so they sum to more than the number of rows dropped.
+Note: Reasons overlap, so they sum to more than the number of rows trashed. The
+trashed rows are kept in the '{trashed_name}' config with a 'rejected_for' column
+naming the reasons. That config is not pushed to the statistics dataset, so the
+analysis stage never sees it.
 """
-
-    config_name = shard_config_name(args.batch_id)
 
     print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
     push_shard(result_ds, target_dataset, config_name=config_name)
+    if len(trashed_ds):
+        print(f"Pushing {len(trashed_ds)} trashed rows to '{target_dataset}' (config '{trashed_name}')...")
+        push_shard(trashed_ds, target_dataset, config_name=trashed_name)
     upload_readme(dataset_name=target_dataset, readme_content=readme_content)
 
     print(f"Pushing cloned dataset to '{stat_dataset}' (config '{config_name}') with a stub readme...")

@@ -105,7 +105,11 @@ def load_dataset_auto_shard(
         elif wanted in configs:
             config_name = wanted
             print(f"Resolved shard {subset_index} to config '{config_name}' for dataset {dataset_name}")
-        elif len(configs) == 1 and subset_index == 0:
+        elif len(configs) == 1 and subset_index == 0 and not configs[0].startswith("shard_"):
+            # Only a genuinely unsharded dataset takes this path. A lone
+            # "shard_*" config that did not match `wanted` is the wrong shard,
+            # or a sidecar such as "shard_0_trashed_data", and loading it would
+            # silently substitute different data.
             config_name = configs[0]
             print(
                 f"Dataset '{dataset_name}' is not sharded; loading its only "
