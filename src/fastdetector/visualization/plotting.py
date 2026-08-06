@@ -4,25 +4,45 @@ Each function takes plain arrays and labels and returns finished bytes (or, for
 the table, finished markdown), so nothing here knows what a classifier is.
 """
 
-from typing import Iterable, NamedTuple, Optional, Sequence
+from typing import Iterable, Optional, Sequence
 import io
 
 import matplotlib.pyplot as plt
 import numpy as np
 
+#: Metric keys whose heading is the key uppercased rather than title-cased.
+ACRONYMS = frozenset({"auroc", "tpr", "fpr", "tnr", "fnr", "tp", "fp", "tn", "fn"})
 
-class Column(NamedTuple):
-    """One column of a markdown metric table.
 
-    Attributes:
-        header: Column heading.
-        key: Key read from each row's values mapping.
-        format: Format spec applied to the value.
+def header(key: str) -> str:
+    """Derive a column heading from the metric key it renders.
+
+    Args:
+        key: Key read out of a row's values mapping.
+
+    Returns:
+        The key uppercased if it is an acronym, else title-cased with
+        underscores as spaces.
     """
+    return key.upper() if key.lower() in ACRONYMS else key.replace("_", " ").title()
 
-    header: str
-    key: str
-    format: str = "{value:.4f}"
+
+def cell(value) -> str:
+    """Format one table value, dispatching on its type.
+
+    Counts arrive as ints and rates as floats, so the type says how to render
+    it; a float that merely happens to be whole (an FPR of 0.0, an AUROC of
+    1.0) is still a rate and keeps its decimals.
+
+    Args:
+        value: Integer count, float rate, or None for a value the row lacks.
+
+    Returns:
+        Formatted cell text.
+    """
+    if value is None:
+        return "-"
+    return format(value, ",d") if isinstance(value, (int, np.integer)) else format(value, ".4f")
 
 
 def _png(dpi: Optional[int] = None) -> bytes:
@@ -171,13 +191,14 @@ def sweep_plot(thresholds: np.ndarray, curves: Sequence[tuple], aggregate: np.nd
     return _png()
 
 
-def table(rows: Sequence[dict], columns: Sequence[Column], row_header: str = "Name",
+def table(rows: Sequence[dict], columns: Sequence[str], row_header: str = "Name",
           mark_key: Optional[str] = None, skip_marks: Iterable[str] = ()) -> str:
     """Render ``{"name", "values"}`` rows as a markdown table.
 
     Args:
         rows: Table rows, each a ``{"name": str, "values": dict}`` mapping.
-        columns: Columns to render, read by key out of each row's values.
+        columns: Metric keys to render, in order; each is also its own heading
+            by way of ``header``.
         row_header: Header label for the first column.
         mark_key: Metric to mark the best (highest) and worst row by, if any.
         skip_marks: Row names that are never marked.
@@ -194,8 +215,7 @@ def table(rows: Sequence[dict], columns: Sequence[Column], row_header: str = "Na
         marks[rows[ranked[0][1]]["name"]] = "❗ "
         marks[rows[ranked[-1][1]]["name"]] = "✔️ "
 
-    body = [f"| {marks[row['name']]}{row['name']} | " + " | ".join(
-        "-" if (value := row["values"].get(column.key)) is None else column.format.format(value=value)
-        for column in columns) + " |" for row in rows]
-    return "\n".join([f"| {row_header} | " + " | ".join(c.header for c in columns) + " |",
+    body = [f"| {marks[row['name']]}{row['name']} | "
+            + " | ".join(cell(row["values"].get(key)) for key in columns) + " |" for row in rows]
+    return "\n".join([f"| {row_header} | " + " | ".join(header(key) for key in columns) + " |",
                       "|---|" + "|".join("---" for _ in columns) + "|", *body])

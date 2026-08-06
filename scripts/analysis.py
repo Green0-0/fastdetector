@@ -12,21 +12,6 @@ from fastdetector.frontend.toml_config import AnalysisConfig, ClassifierConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.utils import apply_filter_conditions, load_dataset_all_shards, upload_readme
 from fastdetector.visualization import metrics, plotting
-from fastdetector.visualization.plotting import Column
-
-#: Univariate table: one row per statistic of interest.
-UNIVARIATE_COLUMNS = [Column("N", "count", "{value:,.0f}"), Column("Mean", "mean"), Column("Median", "median"),
-                      Column("Std Dev", "std"), Column("Min", "min"), Column("Max", "max"),
-                      Column("Invalid/Error", "invalid", "{value:,.0f}")]
-
-#: Per-subset classifier table (prompt subsets, generator configs).
-SUBSET_COLUMNS = [Column("N", "n", "{value:,.0f}"), Column("AUROC", "auroc"), Column("TPR", "tpr"),
-                  Column("FPR", "fpr"), Column("Accuracy", "acc"), Column("F1", "f1")]
-
-#: Classifier comparison table, over metrics merged with their threshold.
-COMPARISON_COLUMNS = [Column("Threshold", "threshold_value"), Column("AUROC", "auroc"),
-                      Column("TPR @ Threshold", "tpr"), Column("FPR @ Threshold", "fpr"),
-                      Column("Accuracy", "acc"), Column("F1", "f1")]
 
 
 # --------------------------------------------------------------------------
@@ -305,11 +290,11 @@ def evaluate(clf: ClassifierConfig, test: Scores, val: Optional[Scores],
     flip, manual = clf.direction == "lower_is_ai", clf.manual_threshold
 
     if manual is not None:
-        threshold, values, chart = manual, {"threshold_value": manual}, None
+        threshold, values, chart = manual, {"threshold": manual}, None
     else:
         thresholds, accuracy, candidates = metrics.sweep(val.values, val.is_ai, flip)
         threshold = candidates[clf.threshold_type]
-        values = {"threshold_value": threshold, "optimal_acc": float(np.max(accuracy))}
+        values = {"threshold": threshold, "optimal_accuracy": float(np.max(accuracy))}
         chart = plotting.sweep_plot(
             thresholds,
             [(metrics.sweep(scores, np.full(scores.size, is_ai), flip, thresholds)[1], name)
@@ -364,7 +349,8 @@ def subset_table(run: Run, overall: Subset, subsets: list[Subset], row_header: s
     """
     rows = [{"name": overall.name, "values": run.subsets[overall]}]
     rows += [{"name": sub.label, "values": run.subsets[sub]} for sub in subsets]
-    return plotting.table(rows, SUBSET_COLUMNS, row_header, mark_key="auroc", skip_marks={overall.name})
+    return plotting.table(rows, ["n", "auroc", "tpr", "fpr", "accuracy", "f1"], row_header,
+                          mark_key="auroc", skip_marks={overall.name})
 
 
 def build_contents(body: str) -> list[str]:
@@ -577,8 +563,8 @@ def main() -> None:
     if statistics:
         univariate_table = plotting.table(
             [{"name": name, "values": metrics.describe(values)} for name, values in statistics],
-            UNIVARIATE_COLUMNS, row_header="Statistic")
-        univariate = f"""Every statistic the report does arithmetic on, over the {len(test_ds):,}-row evaluation split. `Invalid/Error` counts rows whose value is missing or non-finite; those rows are excluded from the other columns.
+            ["n", "mean", "median", "std", "min", "max", "invalid"], row_header="Statistic")
+        univariate = f"""Every statistic the report does arithmetic on, over the {len(test_ds):,}-row evaluation split. `Invalid` counts rows whose value is missing or non-finite; those rows are excluded from the other columns.
 
 {univariate_table}"""
         correlation = """Pearson correlation between every statistic of interest, computed over the rows where both statistics are present.
@@ -612,8 +598,9 @@ The same distances, split by the {len(groups.prompts)} prompt subset(s).
 {embeds}"""
         comparison_table = plotting.table(
             [{"name": name, "values": {**run.subsets[groups.overall], **run.values}} for name, run in runs.items()],
-            COMPARISON_COLUMNS, row_header="Classifier", mark_key="auroc")
-        comparison = f"""AUROC is threshold-free; TPR, FPR, accuracy and F1 are measured at each classifier's own pinned threshold (shown in the first column). Rows a classifier produced no usable score for are excluded from its metrics and counted in the univariate table's `Invalid/Error` column.
+            ["threshold", "auroc", "tpr", "fpr", "accuracy", "f1"], row_header="Classifier",
+            mark_key="auroc")
+        comparison = f"""AUROC is threshold-free; TPR, FPR, accuracy and F1 are measured at each classifier's own pinned threshold (shown in the first column). Rows a classifier produced no usable score for are excluded from its metrics and counted in the univariate table's `Invalid` column.
 
 {comparison_table}
 
@@ -715,21 +702,7 @@ Threshold {threshold_description(clf)} = {fmt(run.threshold)}; scores read from 
 
 {body}"""
 
-    # Machine-readable spec of the results, consumed by compare_summary.py.
-    summary_stats = {"overall": {}, "prompts": {}, "models": {}, "thresholds": {}}
-    for name, run in runs.items():
-        summary_stats["overall"][name] = run.subsets[groups.overall]
-        summary_stats["thresholds"][name] = dict(run.values)
-        for key, family in (("prompts", groups.prompts), ("models", groups.models)):
-            for sub in family:
-                if sub in run.subsets:
-                    summary_stats[key].setdefault(sub.label, {})[name] = run.subsets[sub]
-    # The metrics are already native floats and ints; default= is the safety net
-    # for anything a future statistic hands back as a NumPy value.
-    charts["summary_stats.json"] = json.dumps(summary_stats, indent=2,
-                                              default=lambda value: value.tolist()).encode("utf-8")
-
-    print("Uploading README, charts, and summary_stats.json to Hub...")
+    print("Uploading README and charts to Hub...")
     upload_readme(dataset, files=charts, readme_content=readme)
     print("Done!")
 

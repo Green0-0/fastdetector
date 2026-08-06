@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --partition=compsci-gpu
 #SBATCH --job-name=fd_llm_stats
 #SBATCH --output=slurm/logs/%x_%A_%a.out
 #SBATCH --error=slurm/logs/%x_%A_%a.err

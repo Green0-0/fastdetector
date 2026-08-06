@@ -54,23 +54,23 @@ def classifier_metrics(scores: np.ndarray, is_ai: np.ndarray, threshold: float, 
         flip: True when a *lower* score means AI.
 
     Returns:
-        Dict of counts and rates: ``n``, ``acc``, ``f1``, ``auroc``, ``tpr``,
-        ``fnr``, ``fpr``, ``tnr``, ``precision``, ``recall`` and the raw
-        ``TP``/``FP``/``TN``/``FN`` counts.
+        Dict of counts and rates: ``n``, ``accuracy``, ``f1``, ``auroc``,
+        ``tpr``, ``fnr``, ``fpr``, ``tnr``, ``precision``, ``recall`` and the
+        raw ``tp``/``fp``/``tn``/``fn`` counts.
     """
     called = scores <= threshold if flip else scores > threshold
     tp, fp = int(np.sum(called & is_ai)), int(np.sum(called & ~is_ai))
     tn, fn = int(np.sum(~called & ~is_ai)), int(np.sum(~called & is_ai))
-    precision, recall, f1, fpr, tnr, acc = (float(v) for v in _rates(tp, fp, tn, fn))
+    precision, recall, f1, fpr, tnr, accuracy = (float(v) for v in _rates(tp, fp, tn, fn))
 
     try:
         auroc = float(roc_auc_score(is_ai, -scores if flip else scores))
     except Exception:
         auroc = float("nan")
 
-    return {"n": tp + fp + tn + fn, "acc": acc, "f1": f1, "auroc": auroc, "tpr": recall,
+    return {"n": tp + fp + tn + fn, "accuracy": accuracy, "f1": f1, "auroc": auroc, "tpr": recall,
             "fnr": float(_ratios(fn, tp + fn)), "fpr": fpr, "tnr": tnr, "precision": precision,
-            "recall": recall, "TP": tp, "FP": fp, "TN": tn, "FN": fn}
+            "recall": recall, "tp": tp, "fp": fp, "tn": tn, "fn": fn}
 
 
 def sweep(scores: np.ndarray, is_ai: np.ndarray, flip: bool,
@@ -122,13 +122,13 @@ def describe(values: np.ndarray) -> dict:
         values: The statistic's value for every row.
 
     Returns:
-        Dict of ``count``, ``mean``, ``median``, ``std``, ``min``, ``max`` and
+        Dict of ``n``, ``mean``, ``median``, ``std``, ``min``, ``max`` and
         ``invalid`` (rows whose value was missing or non-finite).
     """
     finite = values[np.isfinite(values)]
     summary = {name: float(getattr(np, name)(finite)) if finite.size else float("nan")
                for name in ("mean", "median", "std", "min", "max")}
-    return {"count": int(values.size), **summary, "invalid": int(values.size - finite.size)}
+    return {"n": int(values.size), **summary, "invalid": int(values.size - finite.size)}
 
 
 def correlations(columns: list[np.ndarray]) -> np.ndarray:

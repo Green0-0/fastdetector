@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --partition=compsci
 #SBATCH --job-name=fd_analysis
 #SBATCH --output=slurm/logs/%x_%j.out
 #SBATCH --error=slurm/logs/%x_%j.err

@@ -2,8 +2,9 @@ import numpy as np
 import pytest
 
 from fastdetector.visualization.plotting import (
-    Column,
     _correlation_label,
+    cell,
+    header,
     heatmap,
     histogram,
     sweep_plot,
@@ -12,7 +13,7 @@ from fastdetector.visualization.plotting import (
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
-COLUMNS = [Column("AUROC", "auroc"), Column("N", "n", "{value:,.0f}")]
+COLUMNS = ["auroc", "n"]
 
 
 def row(name: str, **values) -> dict:
@@ -32,8 +33,26 @@ def test_a_table_has_a_header_a_separator_and_one_line_per_row():
     assert len(lines) == 4
 
 
-def test_values_are_rendered_with_their_column_format():
+def test_rates_keep_their_decimals_and_counts_are_grouped():
     assert "| 0.5000 | 1,234 |" in table([row("a", auroc=0.5, n=1234)], COLUMNS)
+
+
+def test_a_whole_rate_is_still_rendered_as_a_rate():
+    # 1.0 is a float because it is a rate, and must not be read as a count.
+    assert "| 1.0000 | 1 |" in table([row("a", auroc=1.0, n=1)], COLUMNS)
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [("auroc", "AUROC"), ("tpr", "TPR"), ("n", "N"), ("f1", "F1"), ("mean", "Mean"),
+     ("accuracy", "Accuracy"), ("optimal_accuracy", "Optimal Accuracy")],
+)
+def test_a_heading_is_derived_from_its_key(key, expected):
+    assert header(key) == expected
+
+
+def test_a_missing_cell_is_a_dash():
+    assert cell(None) == "-"
 
 
 def test_a_missing_value_becomes_a_dash():

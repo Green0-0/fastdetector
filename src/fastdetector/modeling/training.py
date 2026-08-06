@@ -344,7 +344,7 @@ def train(
             wandb.log({"iteration_count": step,
                        "eval_bucket/auroc": bucket["auroc"],
                        "eval_bucket/f1": bucket["f1"],
-                       "eval_bucket/accuracy": bucket["acc"],
+                       "eval_bucket/accuracy": bucket["accuracy"],
                        "eval_bucket/tpr": bucket["tpr"],
                        "eval_bucket/fpr": bucket["fpr"]})
 

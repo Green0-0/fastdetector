@@ -275,7 +275,7 @@ def test_a_swept_classifier_pins_a_threshold_and_renders_its_sweep():
                    scores, scores, [Subset("", "Overall")])
     assert 0.4 < run.threshold < 0.6
     assert run.sweep_chart.startswith(b"\x89PNG")
-    assert set(run.values) == {"threshold_value", "optimal_acc"}
+    assert set(run.values) == {"threshold", "optimal_accuracy"}
 
 
 def test_a_manual_threshold_skips_the_sweep_entirely():
@@ -284,7 +284,7 @@ def test_a_manual_threshold_skips_the_sweep_entirely():
                    scores, None, [Subset("", "Overall")])
     assert run.threshold == 0.5
     assert run.sweep_chart is None
-    assert run.values == {"threshold_value": 0.5}
+    assert run.values == {"threshold": 0.5}
 
 
 def overlapping_scores(size: int = 100) -> Scores:
@@ -453,24 +453,9 @@ def test_every_chart_the_readme_embeds_was_rendered_and_nothing_else(report):
     assert all(files[name].startswith(b"\x89PNG") for name in embedded)
 
 
-def test_the_summary_stats_cover_every_breakdown(report):
-    summary = json.loads(report[1]["summary_stats.json"].decode())
-    assert set(summary) == {"overall", "prompts", "models", "thresholds"}
-    assert set(summary["overall"]) == {"Score"}
-    assert set(summary["prompts"]) == {"revise", "rewrite"}
-    assert len(summary["models"]) == 2
-
-
-def test_the_summary_stats_keep_the_keys_compare_summary_reads(report):
-    summary = json.loads(report[1]["summary_stats.json"].decode())
-    for key in ("acc", "f1", "auroc", "tpr", "fnr", "fpr", "precision", "recall"):
-        assert key in summary["overall"]["Score"]
-    assert set(summary["thresholds"]["Score"]) == {"threshold_value", "optimal_acc"}
-
-
 def test_a_clean_separation_is_reported_as_one(report):
-    summary = json.loads(report[1]["summary_stats.json"].decode())
-    assert summary["overall"]["Score"]["auroc"] > 0.95
+    auroc = float(re.search(r"scores AUROC ([\d.]+)", report[0]).group(1))
+    assert auroc > 0.95
 
 
 def test_filtering_is_reported_as_loaded_versus_analyzed():
@@ -555,10 +540,8 @@ def test_a_manual_threshold_of_zero_is_not_read_as_unset():
     readme, files = run_main(ds, cfg)
     assert not any(name.startswith("SWEEP_") for name in files)
     assert "pinned manually at 0" in readme
-    summary = json.loads(files["summary_stats.json"].decode())
-    assert summary["thresholds"]["Score"] == {"threshold_value": 0.0}
     # Every AI score is positive and every human score negative, so 0 separates.
-    assert (summary["overall"]["Score"]["TP"], summary["overall"]["Score"]["FP"]) == (50, 0)
+    assert "catching 100.00% of AI rows at 0.00% false positives" in readme
 
 
 def test_a_config_with_no_classes_at_all_is_rejected():

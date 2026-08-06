@@ -25,7 +25,7 @@ def scores_and_labels(human, ai):
 def test_a_higher_is_ai_classifier_calls_scores_above_the_threshold_ai():
     scores, is_ai = scores_and_labels([0.4], [0.5, 0.6])
     result = classifier_metrics(scores, is_ai, 0.5, flip=False)
-    assert (result["TP"], result["FN"], result["TN"]) == (1, 1, 1)
+    assert (result["tp"], result["fn"], result["tn"]) == (1, 1, 1)
 
 
 def test_a_lower_is_ai_classifier_calls_the_threshold_itself_ai():
@@ -33,14 +33,14 @@ def test_a_lower_is_ai_classifier_calls_the_threshold_itself_ai():
     # is what makes a threshold of 0 usable for an integer bucket column.
     scores, is_ai = scores_and_labels([0.6], [0.4, 0.5])
     result = classifier_metrics(scores, is_ai, 0.5, flip=True)
-    assert (result["TP"], result["FN"], result["TN"]) == (2, 0, 1)
+    assert (result["tp"], result["fn"], result["tn"]) == (2, 0, 1)
 
 
 def test_a_perfect_separation_scores_everything_at_one():
     scores, is_ai = scores_and_labels([0.0, 0.1], [0.9, 1.0])
     result = classifier_metrics(scores, is_ai, 0.5, flip=False)
     assert result["auroc"] == 1.0
-    assert result["acc"] == 1.0
+    assert result["accuracy"] == 1.0
     assert (result["tpr"], result["fpr"]) == (1.0, 0.0)
     assert result["n"] == 4
 
@@ -49,7 +49,7 @@ def test_the_confusion_counts_add_up_to_n():
     rng = np.random.default_rng(0)
     scores, is_ai = scores_and_labels(rng.normal(0, 1, 50), rng.normal(1, 1, 70))
     result = classifier_metrics(scores, is_ai, 0.5, flip=False)
-    assert result["TP"] + result["FP"] + result["TN"] + result["FN"] == result["n"] == 120
+    assert result["tp"] + result["fp"] + result["tn"] + result["fn"] == result["n"] == 120
 
 
 def test_a_flipped_classifier_is_not_reported_with_an_inverted_auroc():
@@ -67,7 +67,7 @@ def test_auroc_is_nan_when_only_one_class_is_present():
 def test_metrics_of_an_empty_split_are_zero_rather_than_a_crash():
     result = classifier_metrics(np.array([]), np.array([], bool), 0.5, flip=False)
     assert result["n"] == 0
-    assert result["acc"] == 0.0
+    assert result["accuracy"] == 0.0
 
 
 def test_rates_are_consistent_with_each_other():
@@ -103,7 +103,7 @@ def test_the_accuracy_threshold_separates_two_clean_clusters():
     _, accuracy, candidates = sweep(scores, is_ai, flip=False)
     assert accuracy.max() == pytest.approx(1.0)
     # The pick is the first threshold on the perfect plateau, not its middle.
-    assert classifier_metrics(scores, is_ai, candidates["accuracy"], flip=False)["acc"] == 1.0
+    assert classifier_metrics(scores, is_ai, candidates["accuracy"], flip=False)["accuracy"] == 1.0
 
 
 def test_a_constant_column_still_produces_a_sweep():
@@ -128,7 +128,7 @@ def test_the_sweep_accuracy_curve_matches_metrics_at_the_same_threshold():
     thresholds, accuracy, _ = sweep(scores, is_ai, flip=False)
     for index in (0, 37, 99):
         direct = classifier_metrics(scores, is_ai, float(thresholds[index]), flip=False)
-        assert accuracy[index] == pytest.approx(direct["acc"])
+        assert accuracy[index] == pytest.approx(direct["accuracy"])
 
 
 def test_a_flipped_sweep_accuracy_curve_also_matches_metrics():
@@ -137,7 +137,7 @@ def test_a_flipped_sweep_accuracy_curve_also_matches_metrics():
     thresholds, accuracy, _ = sweep(scores, is_ai, flip=True)
     for index in (5, 50, 95):
         direct = classifier_metrics(scores, is_ai, float(thresholds[index]), flip=True)
-        assert accuracy[index] == pytest.approx(direct["acc"])
+        assert accuracy[index] == pytest.approx(direct["accuracy"])
 
 
 def test_an_fpr_target_is_met_when_any_threshold_can_meet_it():
@@ -154,7 +154,7 @@ def test_an_fpr_target_is_met_when_any_threshold_can_meet_it():
 
 def test_describe_reports_the_usual_summary():
     result = describe(np.array([1.0, 2.0, 3.0]))
-    assert result["count"] == 3
+    assert result["n"] == 3
     assert result["mean"] == 2.0
     assert result["median"] == 2.0
     assert (result["min"], result["max"]) == (1.0, 3.0)
@@ -163,14 +163,14 @@ def test_describe_reports_the_usual_summary():
 
 def test_describe_counts_non_finite_rows_and_excludes_them():
     result = describe(np.array([1.0, np.nan, 3.0, np.inf]))
-    assert result["count"] == 4
+    assert result["n"] == 4
     assert result["invalid"] == 2
     assert result["mean"] == 2.0
 
 
 def test_describe_of_an_all_invalid_column_is_nan_but_still_counts_the_rows():
     result = describe(np.full(4, np.nan))
-    assert result["count"] == 4
+    assert result["n"] == 4
     assert result["invalid"] == 4
     assert result["mean"] != result["mean"]
 
