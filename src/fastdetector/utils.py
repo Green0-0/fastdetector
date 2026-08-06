@@ -6,8 +6,6 @@ from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download
 from huggingface_hub.errors import HfHubHTTPError
 from datasets import Dataset, load_dataset, get_dataset_config_names, concatenate_datasets
 
-_RETRYABLE_PUSH_STATUS = frozenset({409, 412})
-
 
 def shard_config_name(shard_index: int) -> str:
     """Return the HF config name used for a given shard index.
@@ -51,7 +49,7 @@ def push_shard(
             return
         except HfHubHTTPError as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
-            if status not in _RETRYABLE_PUSH_STATUS or attempt == max_attempts:
+            if status not in frozenset({409, 412}) or attempt == max_attempts:
                 raise
             delay = min(base_delay * 2 ** (attempt - 1), max_delay) * (0.5 + random.random())
             print(
