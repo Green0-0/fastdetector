@@ -292,14 +292,18 @@ def evaluate(clf: ClassifierConfig, test: Scores, val: Optional[Scores],
     if manual is not None:
         threshold, values, chart = manual, {"threshold": manual}, None
     else:
-        thresholds, accuracy, candidates = metrics.sweep(val.values, val.is_ai, flip)
-        threshold = candidates[clf.threshold_type]
-        values = {"threshold": threshold, "optimal_accuracy": float(np.max(accuracy))}
+        points = metrics.operating_points(val.values, val.is_ai, flip)
+        threshold = points[clf.threshold_type].threshold
+        values = {"threshold": threshold, "optimal_accuracy": points["accuracy"].accuracy}
+        # The chart wants an even axis every source column can share, which is
+        # not the exact grid the threshold above was pinned on.
+        thresholds, accuracy = metrics.sweep(val.values, val.is_ai, flip)
         chart = plotting.sweep_plot(
             thresholds,
             [(metrics.sweep(scores, np.full(scores.size, is_ai), flip, thresholds)[1], name)
              for scores, is_ai, name in val.by_source() if scores.size],
-            accuracy, candidates, f"Threshold Sweep: {clf.name}")
+            accuracy, {name: point.threshold for name, point in points.items()},
+            f"Threshold Sweep: {clf.name}")
 
     scored = {sub: metrics.classifier_metrics(part.values, part.is_ai, threshold, flip)
               for sub in subsets for part in [test.subset(sub.mask)]}
@@ -395,7 +399,7 @@ def main() -> None:
     globals_config, cfg = load_config_pair(args.globals_config, args.analysis_config, AnalysisConfig)
     if cfg.fixed_classes is None and cfg.auto_class_column is None:
         raise ValueError("Must provide fixed_classes or auto_class_column")
-    known = {"accuracy", "f1", *metrics.FPR_TARGETS}
+    known = set(metrics.THRESHOLD_TYPES)
     named = {c.threshold_type for c in cfg.classifiers}
     if not named <= known:
         raise ValueError(f"Unknown threshold type(s) {sorted(named - known)}; pick from {sorted(known)}")

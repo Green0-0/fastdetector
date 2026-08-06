@@ -12,6 +12,7 @@ from fastdetector.statistics.filters import (
     has_prompt_echo,
     has_refusal,
     is_empty,
+    is_unchanged,
     normalize_whitespace,
     strip_wrapper_boilerplate,
 )
@@ -51,6 +52,7 @@ def rejection_reasons(originals: list[str], responses: list[str],
         "unfilled placeholder": has_placeholder(responses, originals),
         "task meta-commentary": has_meta_commentary(responses, originals),
         "echoed instruction": has_prompt_echo(responses, instructions),
+        "identical to source": is_unchanged(responses, originals),
     }
 
 

@@ -235,6 +235,22 @@ def has_placeholder(texts: list[str], originals: list[str]) -> list[bool]:
     ]
 
 
+def is_unchanged(texts: list[str], originals: list[str]) -> list[bool]:
+    """Flag responses the model handed back verbatim instead of rewriting.
+
+    Args:
+        texts: List of text strings to check.
+        originals: List of source texts aligned with ``texts``.
+
+    Returns:
+        List of booleans, ``True`` where the row should be removed.
+    """
+    return [
+        text == original
+        for text, original in zip(_as_strings(texts), _as_strings(originals))
+    ]
+
+
 def has_meta_commentary(texts: list[str], originals: list[str]) -> list[bool]:
     """Flag responses that narrate the rewriting task instead of performing it.
 

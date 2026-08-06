@@ -6,7 +6,7 @@ from accelerate import PartialState
 from accelerate.utils import broadcast_object_list
 from peft import LoraConfig, get_peft_model
 from scipy.special import softmax
-from sklearn.metrics import precision_recall_fscore_support, roc_auc_score, roc_curve
+from sklearn.metrics import precision_recall_fscore_support
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
@@ -20,7 +20,7 @@ from transformers import (
 )
 
 from fastdetector.modeling.training_utils import load_splits
-from fastdetector.visualization.metrics import classifier_metrics
+from fastdetector.visualization.metrics import classifier_metrics, detector_metrics
 
 
 def log(message) -> None:
@@ -43,22 +43,6 @@ def bcast(obj):
         The main process's value of ``obj``.
     """
     return broadcast_object_list([obj])[0]
-
-
-def _tpr_at_fpr(fprs: np.ndarray, tprs: np.ndarray, target: float) -> float:
-    """Read the best true positive rate a false positive budget buys.
-
-    Args:
-        fprs: False positive rates from ``roc_curve``, ascending.
-        tprs: True positive rates, aligned with *fprs*.
-        target: Largest false positive rate the operating point may have.
-
-    Returns:
-        The highest true positive rate whose false positive rate is within
-        *target*, or NaN when the curve is undefined.
-    """
-    within = np.flatnonzero(fprs <= target)
-    return float(tprs[within[-1]]) if within.size else float("nan")
 
 
 def _build_head(hidden: int, n_labels: int, norm: bool = True,
@@ -348,23 +332,16 @@ def train(
                        "eval_bucket/tpr": bucket["tpr"],
                        "eval_bucket/fpr": bucket["fpr"]})
 
-        if 0 < int(is_ai.sum()) < is_ai.size:
-            score_auroc = float(roc_auc_score(is_ai, scores))
-            fprs, tprs, _ = roc_curve(is_ai, scores)
-        else:
-            score_auroc, fprs, tprs = float("nan"), np.empty(0), np.empty(0)
+        score = detector_metrics(scores, is_ai)
         if main:
             wandb.log({"iteration_count": step,
-                       "eval_score/auroc": score_auroc,
-                       "eval_score/tpr_at_fpr_1pct": _tpr_at_fpr(fprs, tprs, 0.01),
-                       "eval_score/tpr_at_fpr_0_5pct": _tpr_at_fpr(fprs, tprs, 0.005),
-                       "eval_score/tpr_at_fpr_0_1pct": _tpr_at_fpr(fprs, tprs, 0.001)})
+                       **{f"eval_score/{name}": value for name, value in score.items()}})
 
         precision, recall, f1, actual = precision_recall_fscore_support(
             labels, buckets, labels=np.arange(n_buckets), zero_division=0)
         predicted = np.bincount(buckets, minlength=n_buckets)
 
-        return {"score_auroc": score_auroc,
+        return {"score_auroc": score["auroc"],
                 "pearson_bucket": float(np.corrcoef(buckets, val_scores)[0, 1]),
                 "pearson_score": float(np.corrcoef(scores, val_scores)[0, 1]),
                 "accuracy": float((buckets == labels).mean()),

@@ -45,7 +45,8 @@ def test_the_output_stays_aligned_with_the_input():
 # --------------------------------------------------------------------------
 
 REASONS = {"empty or too short", "refusal", "filler output",
-           "unfilled placeholder", "task meta-commentary", "echoed instruction"}
+           "unfilled placeholder", "task meta-commentary", "echoed instruction",
+           "identical to source"}
 
 
 def rejected(reasons):
@@ -76,6 +77,12 @@ def test_each_failure_mode_is_reported_under_its_own_reason():
     assert reasons["unfilled placeholder"] == [False, False, False, True]
 
 
+def test_a_response_handed_back_verbatim_is_rejected():
+    reasons = rejection_reasons([BODY], [BODY], [""])
+    assert rejected(reasons) == [True]
+    assert reasons["identical to source"] == [True]
+
+
 def test_reasons_may_overlap_on_one_row():
     reasons = rejection_reasons(["source"], ["I cannot fulfill this request."], [""])
     assert rejected(reasons) == [True]
@@ -84,7 +91,10 @@ def test_reasons_may_overlap_on_one_row():
 
 def test_similarity_is_not_a_rejection_reason():
     # Over-similar pairs are the analysis stage's job, not this one.
-    assert rejected(rejection_reasons([BODY], [BODY], [""])) == [False]
+    # Only an exact copy is rejected here, so keep the two sides distinct.
+    reasons = rejection_reasons([BODY], [f"{BODY} word120"], [""])
+    assert reasons["identical to source"] == [False]
+    assert rejected(reasons) == [False]
 
 
 def test_an_empty_dataset_still_reports_every_reason():

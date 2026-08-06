@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import NamedTuple, Optional
 
 import numpy as np
 from sklearn.metrics import roc_auc_score
@@ -9,6 +9,28 @@ FPR_TARGETS: dict[str, float] = {
     "fpr_0_5pct": 0.005,
     "fpr_0_01pct": 0.0001,
 }
+
+#: Every threshold a classifier can be pinned at: the two best-metric points,
+#: then one per false positive budget.
+THRESHOLD_TYPES: tuple[str, ...] = ("accuracy", "f1", *FPR_TARGETS)
+
+
+class OperatingPoint(NamedTuple):
+    """One pinned threshold, and the metrics it buys.
+
+    Attributes:
+        threshold: The decision threshold itself.
+        tpr: True positive rate there.
+        fpr: False positive rate there.
+        accuracy: Accuracy there.
+        f1: F1 there.
+    """
+
+    threshold: float
+    tpr: float
+    fpr: float
+    accuracy: float
+    f1: float
 
 
 def _ratios(numerator, denominator) -> np.ndarray:
@@ -43,6 +65,100 @@ def _rates(tp, fp, tn, fn) -> tuple:
             _ratios(fp, fp + tn), _ratios(tn, fp + tn), _ratios(tp + tn, tp + fp + tn + fn))
 
 
+def _counts(scores: np.ndarray, is_ai: np.ndarray, thresholds: np.ndarray, flip: bool) -> tuple:
+    """Confusion counts at every threshold of a grid.
+
+    Counts are read off a sorted copy of the scores, so the cost is one sort
+    rather than one pass per threshold.
+
+    Args:
+        scores: Flat array of scores.
+        is_ai: Aligned labels, True where the score came from AI text.
+        thresholds: Thresholds to count at.
+        flip: True when a *lower* score means AI, which puts the threshold
+            itself on the AI side.
+
+    Returns:
+        Tuple of (tp, fp, tn, fn) arrays, each aligned with *thresholds*.
+    """
+    order = np.argsort(scores, kind="stable")
+    below = np.searchsorted(scores[order], thresholds, side="right")
+    ai_below = np.concatenate([[0], np.cumsum(is_ai[order])])[below]
+    total, ai = scores.size, int(np.sum(is_ai))
+    tp, fp = ((ai_below, below - ai_below) if flip
+              else (ai - ai_below, total - below - ai + ai_below))
+    return tp, fp, total - ai - fp, ai - tp
+
+
+def auroc(scores: np.ndarray, is_ai: np.ndarray, flip: bool = False) -> float:
+    """Area under the ROC curve, as NaN wherever it is not defined.
+
+    Args:
+        scores: Flat array of scores.
+        is_ai: Aligned labels, True where the score came from AI text.
+        flip: True when a *lower* score means AI; the scores are negated so a
+            flipped classifier is not reported with an inverted AUROC.
+
+    Returns:
+        The AUROC, or NaN when the split holds only one class or no rows.
+    """
+    try:
+        return float(roc_auc_score(is_ai, -scores if flip else scores))
+    except Exception:
+        return float("nan")
+
+
+def operating_points(scores: np.ndarray, is_ai: np.ndarray, flip: bool = False) -> dict:
+    """Pin every threshold a classifier can be asked to run at.
+
+    Candidates are the distinct scores themselves rather than an even grid, so
+    a tight false positive budget lands on the best point actually available
+    instead of the nearest grid line. One extra candidate below the lowest
+    score supplies the endpoint where every row is called one way.
+
+    Args:
+        scores: Flat array of scores.
+        is_ai: Aligned labels, True where the score came from AI text.
+        flip: True when a *lower* score means AI.
+
+    Returns:
+        ``{threshold type: OperatingPoint}`` over :data:`THRESHOLD_TYPES`: the
+        best-accuracy and best-F1 points, then the loosest threshold whose
+        false positive rate stays inside each :data:`FPR_TARGETS` budget, or
+        the lowest false positive rate reachable when none of them does.
+    """
+    unique = np.unique(scores).astype(float)
+    thresholds = (np.concatenate([[np.nextafter(unique[0], -np.inf)], unique])
+                  if unique.size else np.zeros(1))
+    _, recall, f1, fpr, _, accuracy = _rates(*_counts(scores, is_ai, thresholds, flip))
+
+    picked = {"accuracy": int(np.argmax(accuracy)), "f1": int(np.argmax(f1))}
+    for name, target in FPR_TARGETS.items():
+        within = np.flatnonzero(fpr <= target)
+        within = within if within.size else np.array([int(np.argmin(fpr))])
+        picked[name] = int(within[-1] if flip else within[0])
+    return {name: OperatingPoint(float(thresholds[index]), float(recall[index]), float(fpr[index]),
+                                 float(accuracy[index]), float(f1[index]))
+            for name, index in picked.items()}
+
+
+def detector_metrics(scores: np.ndarray, is_ai: np.ndarray, flip: bool = False) -> dict:
+    """Score a continuous detector the way a training run logs it.
+
+    Args:
+        scores: Flat array of scores.
+        is_ai: Aligned labels, True where the score came from AI text.
+        flip: True when a *lower* score means AI.
+
+    Returns:
+        Dict of ``auroc`` plus one ``tpr_at_<budget>`` per :data:`FPR_TARGETS`,
+        each the true positive rate that budget buys.
+    """
+    points = operating_points(scores, is_ai, flip)
+    return {"auroc": auroc(scores, is_ai, flip),
+            **{f"tpr_at_{name}": points[name].tpr for name in FPR_TARGETS}}
+
+
 def classifier_metrics(scores: np.ndarray, is_ai: np.ndarray, threshold: float, flip: bool) -> dict:
     """Score a classifier at a fixed threshold.
 
@@ -63,22 +179,19 @@ def classifier_metrics(scores: np.ndarray, is_ai: np.ndarray, threshold: float, 
     tn, fn = int(np.sum(~called & ~is_ai)), int(np.sum(~called & is_ai))
     precision, recall, f1, fpr, tnr, accuracy = (float(v) for v in _rates(tp, fp, tn, fn))
 
-    try:
-        auroc = float(roc_auc_score(is_ai, -scores if flip else scores))
-    except Exception:
-        auroc = float("nan")
-
-    return {"n": tp + fp + tn + fn, "accuracy": accuracy, "f1": f1, "auroc": auroc, "tpr": recall,
+    return {"n": tp + fp + tn + fn, "accuracy": accuracy, "f1": f1,
+            "auroc": auroc(scores, is_ai, flip), "tpr": recall,
             "fnr": float(_ratios(fn, tp + fn)), "fpr": fpr, "tnr": tnr, "precision": precision,
             "recall": recall, "tp": tp, "fp": fp, "tn": tn, "fn": fn}
 
 
 def sweep(scores: np.ndarray, is_ai: np.ndarray, flip: bool,
           thresholds: Optional[np.ndarray] = None, steps: int = 100) -> tuple:
-    """Walk a classifier's whole score range, threshold by threshold.
+    """Trace a classifier's accuracy across its whole score range.
 
-    Counts are read off a sorted copy of the scores, so the cost is one sort
-    rather than one pass per threshold.
+    The grid is evenly spaced rather than sitting on the scores themselves, so
+    several sources can be drawn against one axis; :func:`operating_points` is
+    what picks a threshold to actually run at.
 
     Args:
         scores: Flat array of scores.
@@ -90,29 +203,13 @@ def sweep(scores: np.ndarray, is_ai: np.ndarray, flip: bool,
         steps: How many default thresholds to place.
 
     Returns:
-        Tuple of (thresholds, accuracy curve, {threshold type: value}). The
-        candidate thresholds are best-accuracy, best-F1 and the tightest
-        threshold meeting each :data:`FPR_TARGETS` bound.
+        Tuple of (thresholds, accuracy curve).
     """
     if thresholds is None:
         low, high = (float(np.min(scores)), float(np.max(scores))) if scores.size else (0.0, 1.0)
         pad = abs(low) * 1e-6 + 1e-6 if low == high else 0.0
         thresholds = np.linspace(low - pad, high + pad, steps)
-
-    order = np.argsort(scores, kind="stable")
-    below = np.searchsorted(scores[order], thresholds, side="right")
-    ai_below = np.concatenate([[0], np.cumsum(is_ai[order])])[below]
-    total, ai = scores.size, int(np.sum(is_ai))
-    tp, fp = ((ai_below, below - ai_below) if flip
-              else (ai - ai_below, total - below - ai + ai_below))
-    _, _, f1, fpr, _, accuracy = _rates(tp, fp, total - ai - fp, ai - tp)
-
-    picked = {"accuracy": float(thresholds[np.argmax(accuracy)]), "f1": float(thresholds[np.argmax(f1)])}
-    for name, target in FPR_TARGETS.items():
-        within = np.flatnonzero(fpr <= target)
-        within = within if within.size else np.array([np.argmin(fpr)])
-        picked[name] = float(thresholds[within[-1] if flip else within[0]])
-    return thresholds, accuracy, picked
+    return thresholds, _rates(*_counts(scores, is_ai, thresholds, flip))[5]
 
 
 def describe(values: np.ndarray) -> dict:

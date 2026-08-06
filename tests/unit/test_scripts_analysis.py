@@ -270,10 +270,12 @@ def separable_scores(size: int = 40) -> Scores:
 
 
 def test_a_swept_classifier_pins_a_threshold_and_renders_its_sweep():
-    scores = separable_scores()
-    run = evaluate(make_classifier("S", "_score"),
-                   scores, scores, [Subset("", "Overall")])
-    assert 0.4 < run.threshold < 0.6
+    scores, overall = separable_scores(), Subset("", "Overall")
+    run = evaluate(make_classifier("S", "_score"), scores, scores, [overall])
+    # Pinned on the scores themselves, so it lands on the start of the perfect
+    # plateau (the top human score) rather than somewhere inside the gap.
+    assert 0.4 <= run.threshold < 0.6
+    assert run.subsets[overall]["accuracy"] == 1.0
     assert run.sweep_chart.startswith(b"\x89PNG")
     assert set(run.values) == {"threshold", "optimal_accuracy"}
 
@@ -297,14 +299,16 @@ def overlapping_scores(size: int = 100) -> Scores:
 
 
 def test_each_classifier_sweeps_for_its_own_criterion():
-    scores, cfg = overlapping_scores(), make_analysis_config()
+    scores, cfg, overall = overlapping_scores(), make_analysis_config(), Subset("", "Overall")
     strict = evaluate(make_classifier("F", "_s", threshold_type="fpr_0_01pct"),
-                      scores, scores, [Subset("", "Overall")])
+                      scores, scores, [overall])
     balanced = evaluate(make_classifier("A", "_s", threshold_type="accuracy"),
-                        scores, scores, [Subset("", "Overall")])
+                        scores, scores, [overall])
     # Best accuracy sits inside the overlap; a 0.01% FPR target has to clear the
-    # top of the human range, so it pins a strictly higher threshold.
-    assert balanced.threshold < 0.7 < strict.threshold
+    # top of the human range, which it now does exactly rather than overshooting
+    # it and giving up AI rows for no false positive saving.
+    assert balanced.threshold < 0.7 <= strict.threshold
+    assert strict.subsets[overall]["fpr"] == 0.0
 
 
 def test_every_subset_is_scored():
