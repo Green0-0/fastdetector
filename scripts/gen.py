@@ -21,16 +21,6 @@ from fastdetector.utils import push_shard, shard_config_name, upload_readme
 def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
     """Clean the AI column. The human column is read but never modified.
 
-    Markdown, emoji and leading headings are deliberately left alone. The human
-    column uses markdown and emoji too, so stripping them from the AI side alone
-    would turn "contains bold" into a perfect *human* signal; and a heading is
-    usually legitimate writing rather than a task label, so removing it costs
-    real content.
-
-    Nothing here is lossy at the row level: ``final_response`` derives from the
-    last turn, so the untouched model output remains in ``response_1`` when that
-    is non-empty and in ``response_0`` otherwise.
-
     Args:
         responses: List of model responses to clean.
         originals: List of source texts aligned with ``responses``, used only to
@@ -45,11 +35,7 @@ def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
 def rejection_reasons(originals: list[str], responses: list[str],
                       instructions: list[str]) -> dict[str, list[bool]]:
     """Flag rows whose generation failed outright, one boolean list per reason.
-
-    Reasons overlap: a row may trip several. Similarity between the two columns
-    is deliberately not a reason; the analysis stage drops over-similar pairs
-    through its own filter conditions.
-
+    
     Args:
         originals: List of source texts.
         responses: List of model responses aligned with ``originals``.
@@ -104,8 +90,7 @@ def main() -> None:
     )
 
     print("Running post-processing...")
-    instructions = [re.sub(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}", "", "\n".join(prompt["chat_turns"]))
-                    for prompt in result_ds["prompt"]]
+    instructions = [re.sub(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}", "", "\n".join(prompt["chat_turns"])) for prompt in result_ds["prompt"]]
     originals = result_ds["original"]
     responses = clean_responses(result_ds["final_response"], originals)
     reasons = rejection_reasons(originals, responses, instructions)
@@ -116,7 +101,7 @@ def main() -> None:
     labels = [", ".join(name for name, flags in reasons.items() if flags[i])
               for i, drop in enumerate(rejected) if drop]
     trashed_ds = result_ds.select([i for i, drop in enumerate(rejected) if drop])
-    if labels:  # add_column rejects an empty column on an empty table
+    if labels:
         trashed_ds = trashed_ds.add_column("rejected_for", labels)
     result_ds = result_ds.select([i for i, drop in enumerate(rejected) if not drop])
 
@@ -130,13 +115,7 @@ def main() -> None:
 - Rows in: {total}
 - Rows kept: {len(result_ds)}
 - Rows trashed: {len(trashed_ds)}
-{dropped}
-
-Note: Reasons overlap, so they sum to more than the number of rows trashed. The
-trashed rows are kept in the '{trashed_name}' config with a 'rejected_for' column
-naming the reasons. That config is not pushed to the statistics dataset, so the
-analysis stage never sees it.
-"""
+{dropped}"""
 
     print(f"Pushing dataset to '{target_dataset}' (config '{config_name}')...")
     push_shard(result_ds, target_dataset, config_name=config_name)

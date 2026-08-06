@@ -87,10 +87,8 @@ def main() -> None:
     kept = set(ds_filtered["row_index"])
     rejected = [i for i in range(len(ds)) if i not in kept]
     trashed_ds = ds.select(rejected)
-    if rejected:  # add_column rejects an empty column on an empty table
-        trashed_ds = trashed_ds.add_column(
-            "rejected_for", ["filter conditions" if i not in passed_conditions else "not English"
-                             for i in rejected])
+    if rejected:
+        trashed_ds = trashed_ds.add_column("rejected_for", ["filter conditions" if i not in passed_conditions else "not English" for i in rejected])
     trashed_ds = trashed_ds.remove_columns("row_index")
     ds_filtered = ds_filtered.remove_columns("row_index")
 
@@ -106,10 +104,6 @@ def main() -> None:
 - Rows before filter: {len(ds)}
 - Rows after filter: {len(ds_filtered)}
 - Rows trashed: {len(trashed_ds)}
-
-Every row the pipeline produced is here: the kept rows in '{config_name}' and the
-rejected ones in '{trashed_name}', which carries a 'rejected_for' column naming
-the stage that cut them.
 """
 
     print(f"Uploading filtered dataset '{config_name}' to {filtered_dataset} with {len(ds_filtered)} samples...")

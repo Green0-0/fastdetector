@@ -6,11 +6,6 @@ from langdetect.lang_detect_exception import LangDetectException
 
 from fastdetector.statistics.statistics_basic import pairwise_jaccards
 
-#: A horizontal rule is a line that is nothing but dashes. Matching a bare
-#: "---" substring instead splits inside a longer run of dashes and also fires
-#: on an inline em-dash substitute, neither of which is a rule.
-RULE_LINE = re.compile(r"(?m)^[ \t]*-{3,}[ \t]*$")
-
 
 def _as_strings(texts: list[str]) -> list[str]:
     """Coerce a column to strings, mapping missing values to the empty string.
@@ -74,14 +69,13 @@ def strip_wrapper_boilerplate(
             if body.strip() and len(opener.split()) <= max_wrapper_words:
                 cleaned = body.strip()
 
+        RULE_LINE = re.compile(r"(?m)^[ \t]*-{3,}[ \t]*$")
+
         if not RULE_LINE.search(original):
             rules = list(RULE_LINE.finditer(cleaned))
             if rules and len(cleaned[:rules[0].start()].split()) <= max_wrapper_words:
                 cleaned = cleaned[rules[0].end():].strip()
                 rules = list(RULE_LINE.finditer(cleaned))
-            # One rule left over is a footer marker. Several mean the model is
-            # using rules to separate sections, and the text after the last one
-            # is the final section rather than a trailer.
             if len(rules) == 1 and len(cleaned[rules[0].end():].split()) <= max_wrapper_words:
                 cleaned = cleaned[:rules[0].start()].strip()
 
