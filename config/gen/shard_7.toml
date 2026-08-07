@@ -3,13 +3,13 @@ prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "aphrodite"
-model_name = "Qwen/Qwen3-8B-AWQ"
-parallelization_type = "data"
+model_name = "cyankiwi/gemma-4-31B-it-AWQ-4bit"
+parallelization_type = "tensor"
 temperature = 1.25
 top_p = 1.0
 top_k = -1
 top_a = 0.1
-xtc = 0.3
+xtc_probability = 0.3
 nsigma = 1.5
 disable_thinking = true
 presence_penalty = 1.5

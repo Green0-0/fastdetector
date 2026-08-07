@@ -3,12 +3,18 @@ prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "vllm"
-model_name = "cyankiwi/Ministral-3-8B-Instruct-2512-AWQ-4bit"
-parallelization_type = "data"
+model_name = "RedHatAI/Hy3-NVFP4-FP8"
+parallelization_type = "tensor"
 temperature = 0.6
 top_p = 0.9
 top_k = 40
 disable_thinking = false
 presence_penalty = 1.5
-max_model_len = 32000
-max_input_len = 15000
+
+# 178 GB of weights is ~83 GiB of each 96 GiB card, so the default 0.85 budget
+# is smaller than the weights alone and the engine never starts. What is left
+# over is only a few GiB of KV cache, hence the short context and small batch.
+gpu_memory_utilization = 0.96
+max_model_len = 16384
+max_input_len = 7000
+max_num_seqs = 32

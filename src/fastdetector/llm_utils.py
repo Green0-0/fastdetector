@@ -87,6 +87,11 @@ def launch_engine_server(
     max_model_len: int = 16000,
     max_num_seqs: int = 256,
     max_num_batched_tokens: int = 2048,
+    tokenizer_mode: str | None = None,
+    reasoning_parser: str | None = None,
+    kv_cache_dtype: str | None = None,
+    config_format: str | None = None,
+    load_format: str | None = None,
 ) -> subprocess.Popen:
     """Launch the LLM server with data-parallel size = GPU count.
 
@@ -103,6 +108,14 @@ def launch_engine_server(
         max_num_batched_tokens: Maximum number of batched tokens per engine
             step (with chunked prefill this may be smaller than
             max_model_len; larger values trade latency for throughput).
+        tokenizer_mode: Tokenizer backend to use (e.g. "mistral",
+            "deepseek_v4"). ``None`` leaves the engine default ("auto").
+        reasoning_parser: Parser that splits a reasoning trace out of the
+            reply, keeping it out of the message content. ``None`` disables it.
+        kv_cache_dtype: KV cache dtype (e.g. "fp8"). ``None`` leaves "auto".
+        config_format: Checkpoint config layout (e.g. "mistral"), for
+            checkpoints that ship no HuggingFace ``config.json``.
+        load_format: Checkpoint weight layout (e.g. "mistral").
 
     Returns:
         The subprocess.Popen handle once the server is healthy.
@@ -133,6 +146,19 @@ def launch_engine_server(
         "--disable-uvicorn-access-log",
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
+
+    # Only forward what the config actually set, so every unset option keeps
+    # the engine's own default rather than a guess made here.
+    optional_flags = {
+        "--tokenizer-mode": tokenizer_mode,
+        "--reasoning-parser": reasoning_parser,
+        "--kv-cache-dtype": kv_cache_dtype,
+        "--config-format": config_format,
+        "--load-format": load_format,
+    }
+    for flag, value in optional_flags.items():
+        if value is not None:
+            cmd += [flag, str(value)]
 
     dist_port = port
     while dist_port == port:
@@ -231,6 +257,7 @@ def llm_server_context(
     max_model_len: int = 16000,
     max_num_seqs: int = 256,
     max_num_batched_tokens: int = 2048,
+    **engine_options,
 ):
     """Context manager to launch and clean up an LLM server.
 
@@ -249,6 +276,10 @@ def llm_server_context(
         max_model_len: Maximum model context length.
         max_num_seqs: Maximum number of concurrent sequences per engine step.
         max_num_batched_tokens: Maximum number of batched tokens per engine step.
+        **engine_options: Optional engine flags forwarded to
+            :func:`launch_engine_server` (``tokenizer_mode``,
+            ``reasoning_parser``, ``kv_cache_dtype``, ``config_format``,
+            ``load_format``).
 
     Yields:
         The API base URL string.
@@ -278,6 +309,7 @@ def llm_server_context(
             max_model_len=max_model_len,
             max_num_seqs=max_num_seqs,
             max_num_batched_tokens=max_num_batched_tokens,
+            **engine_options,
         )
         yield f"http://localhost:{port}/v1"
     finally:

@@ -3,12 +3,12 @@ prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "vllm"
-model_name = "cyankiwi/granite-4.1-8b-AWQ-INT4"
-parallelization_type = "data"
-temperature = 0.6
-top_p = 0.9
-top_k = 40
-disable_thinking = false
+model_name = "cyankiwi/Qwen3.6-27B-AWQ-INT4"
+parallelization_type = "tensor"
+temperature = 0.7
+top_p = 0.8
+top_k = 20
+disable_thinking = true
 presence_penalty = 1.5
 max_model_len = 32000
 max_input_len = 15000

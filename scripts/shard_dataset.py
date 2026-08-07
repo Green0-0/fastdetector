@@ -20,7 +20,15 @@ def main() -> None:
         default=None,
         help="Target dataset identifier. Defaults to resolving raw_dataset in globals_config.",
     )
-    parser.add_argument("--num-shards", type=int, default=8, help="Number of shards to split into.")
+    parser.add_argument(
+        "--num-shards",
+        type=int,
+        default=10,
+        help=(
+            "Number of shards to split into. Not every shard needs a generation "
+            "config; spare shards are held back for models added later."
+        ),
+    )
     parser.add_argument("--num-samples", type=int, default=None, help="Optional cap on the total number of samples.")
     args = parser.parse_args()
 

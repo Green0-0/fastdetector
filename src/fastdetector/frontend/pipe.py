@@ -126,6 +126,13 @@ def run_pipeline(
         server_kwargs = {}
         if pipe_config.max_model_len is not None:
             server_kwargs["max_model_len"] = pipe_config.max_model_len
+        if pipe_config.gpu_memory_utilization is not None:
+            server_kwargs["gpu_memory_utilization"] = pipe_config.gpu_memory_utilization
+        for option in ("tokenizer_mode", "reasoning_parser", "kv_cache_dtype",
+                       "config_format", "load_format"):
+            value = getattr(pipe_config, option)
+            if value is not None:
+                server_kwargs[option] = value
         with llm_server_context(
             engine=engine,
             model_name=pipe_config.model_name,

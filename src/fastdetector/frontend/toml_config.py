@@ -62,6 +62,17 @@ class PipeConfig(BaseModel):
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 2048
 
+    # Engine server options (local engines only). Each maps to the engine flag
+    # of the same name and is only passed when set, so the engine's own default
+    # applies otherwise. Checkpoints that ship a non-HuggingFace layout or a
+    # custom tokenizer/reasoning format need these to load at all.
+    tokenizer_mode: Optional[str] = None
+    reasoning_parser: Optional[str] = None
+    kv_cache_dtype: Optional[str] = None
+    config_format: Optional[str] = None
+    load_format: Optional[str] = None
+    gpu_memory_utilization: Optional[float] = None
+
     # API settings
     api_url: Optional[str] = None
     api_key_env: Optional[str] = None

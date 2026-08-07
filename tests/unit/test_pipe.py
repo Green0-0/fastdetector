@@ -296,6 +296,36 @@ def test_max_model_len_is_only_forwarded_when_configured(pipeline_env):
     assert "max_model_len" not in pipeline_env.calls["llm_server_context"]
 
 
+def test_engine_options_reach_the_server_when_configured(pipeline_env):
+    run(
+        pipeline_env,
+        engine="vllm",
+        tokenizer_mode="deepseek_v4",
+        reasoning_parser="deepseek_v4",
+        kv_cache_dtype="fp8",
+        config_format="mistral",
+        load_format="mistral",
+        gpu_memory_utilization=0.93,
+    )
+    call = pipeline_env.calls["llm_server_context"]
+    assert call["tokenizer_mode"] == "deepseek_v4"
+    assert call["reasoning_parser"] == "deepseek_v4"
+    assert call["kv_cache_dtype"] == "fp8"
+    assert call["config_format"] == "mistral"
+    assert call["load_format"] == "mistral"
+    assert call["gpu_memory_utilization"] == 0.93
+
+
+def test_unset_engine_options_are_not_forwarded(pipeline_env):
+    # An unset option has to stay absent so the engine's own default applies,
+    # rather than being pinned to a value chosen here.
+    run(pipeline_env, engine="vllm")
+    call = pipeline_env.calls["llm_server_context"]
+    for option in ("tokenizer_mode", "reasoning_parser", "kv_cache_dtype",
+                   "config_format", "load_format", "gpu_memory_utilization"):
+        assert option not in call
+
+
 def test_api_engines_use_the_configured_url_without_launching_anything(pipeline_env):
     run(pipeline_env, engine="oai", api_url="https://api.example/v1")
     assert "llm_server_context" not in pipeline_env.calls

@@ -266,6 +266,54 @@ def test_launch_passes_the_configured_engine_flags(stub_engine, free_port):
     assert "--disable-uvicorn-access-log" in argv
 
 
+def test_launch_passes_the_optional_engine_flags(stub_engine, free_port):
+    """Checkpoints with a non-HF layout or custom tokenizer need these to load."""
+    proc = launch_engine_server(
+        EngineConfig.VLLM,
+        "some/model",
+        free_port,
+        venv_path=stub_engine.venv_path,
+        parallelization_type="tensor",
+        tokenizer_mode="deepseek_v4",
+        reasoning_parser="deepseek_v4",
+        kv_cache_dtype="fp8",
+        config_format="mistral",
+        load_format="mistral",
+    )
+    try:
+        argv = stub_engine.recorded()["argv"]
+    finally:
+        _terminate_proc(proc, EngineConfig.VLLM)
+
+    for flag, value in (
+        ("--tokenizer-mode", "deepseek_v4"),
+        ("--reasoning-parser", "deepseek_v4"),
+        ("--kv-cache-dtype", "fp8"),
+        ("--config-format", "mistral"),
+        ("--load-format", "mistral"),
+    ):
+        assert argv[argv.index(flag) + 1] == value
+
+
+def test_unset_optional_flags_are_omitted(stub_engine, free_port):
+    """Passing a flag with an engine default would override that default."""
+    proc = launch_engine_server(
+        EngineConfig.VLLM,
+        "some/model",
+        free_port,
+        venv_path=stub_engine.venv_path,
+        parallelization_type="tensor",
+    )
+    try:
+        argv = stub_engine.recorded()["argv"]
+    finally:
+        _terminate_proc(proc, EngineConfig.VLLM)
+
+    for flag in ("--tokenizer-mode", "--reasoning-parser", "--kv-cache-dtype",
+                 "--config-format", "--load-format"):
+        assert flag not in argv
+
+
 def test_launch_gives_the_distributed_backend_its_own_port(stub_engine, free_port):
     """Test that distributed master port is assigned distinctly from API port."""
     proc = launch_engine_server(

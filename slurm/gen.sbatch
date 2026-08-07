@@ -8,8 +8,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --gres=gpu:a5000:4
-#SBATCH --array=0-7
+#SBATCH --gres=gpu:rtx_pro_6000:2
+#SBATCH --array=0-8
 
 set -euo pipefail
 
@@ -33,16 +33,28 @@ export VLLM_CACHE_ROOT="${FD_CACHE_ROOT}/vllm"
 mkdir -p "${TRITON_CACHE_DIR}" "${TORCHINDUCTOR_CACHE_DIR}" "${VLLM_CACHE_ROOT}"
 trap 'rm -rf "${FD_CACHE_ROOT}"' EXIT
 
-# ---- vLLM venv (launched as a subprocess by the pipeline) ----
-if [[ ! -x .vllm/bin/vllm ]]; then
-  echo "vLLM venv not found at .vllm; see README.md" >&2
+GEN_CONFIG="config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml"
+
+if [[ ! -f "${GEN_CONFIG}" ]]; then
+  echo "No gen config at ${GEN_CONFIG}." >&2
   exit 1
 fi
 
-if [[ ! -f "config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml" ]]; then
-  echo "No gen config at config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml." >&2
-  exit 1
-fi
+# ---- Engine venv (launched as a subprocess by the pipeline) ----
+# Shards are split across both engines, so check the one this shard asks for.
+ENGINE=$(sed -n 's/^[[:space:]]*engine[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${GEN_CONFIG}" | head -1)
+case "${ENGINE}" in
+  vllm|aphrodite)
+    if [[ ! -x ".${ENGINE}/bin/${ENGINE}" ]]; then
+      echo "${ENGINE} venv not found at .${ENGINE}; see README.md" >&2
+      exit 1
+    fi
+    ;;
+  "")
+    echo "Could not read an engine from ${GEN_CONFIG}." >&2
+    exit 1
+    ;;
+esac
 
 echo "Generating shard ${SLURM_ARRAY_TASK_ID:-0}..."
 python scripts/gen.py \

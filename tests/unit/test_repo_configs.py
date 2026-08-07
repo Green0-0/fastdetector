@@ -447,14 +447,18 @@ def test_filter_config_references_an_existing_prompt_file(repo_root):
     assert (repo_root / config.prompt_file).is_file(), config.prompt_file
 
 
-def test_numbered_gen_configs_are_contiguous(repo_root):
-    # Batch ids are handed out as 0..N-1; a gap means one shard never runs.
-    indices = sorted(
+def test_numbered_gen_configs_claim_distinct_shards(repo_root):
+    # A shard index is both the source subset a run reads and the config name it
+    # writes, so two configs sharing one index would overwrite each other. Gaps
+    # are fine: the source is split into more shards than there are models, and
+    # the spare ones are held back for models added later.
+    indices = [
         int(path.stem.split("_")[1])
         for path in gen_config_paths(repo_root)
         if path.stem.split("_")[1].isdigit()
-    )
-    assert indices == list(range(len(indices)))
+    ]
+    assert len(set(indices)) == len(indices), f"duplicate shard index: {indices}"
+    assert all(index >= 0 for index in indices)
 
 
 def test_all_numbered_gen_configs_agree_on_the_source_column(repo_root):
