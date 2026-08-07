@@ -5,8 +5,6 @@ prompt_file = "prompts/combined_dataset_test.json"
 engine = "vllm"
 model_name = "mistralai/Mistral-Small-4-119B-2603-NVFP4"
 parallelization_type = "pipeline"
-# Mistral Small 4 model card: temperature 0.0-0.7 with reasoning_effort="none"
-# (the template default), 0.7 with "high". No top_p/top_k/penalty specified.
 temperature = 0.7
 disable_thinking = false
 max_model_len = 32000

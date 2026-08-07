@@ -5,8 +5,6 @@ prompt_file = "prompts/combined_dataset_test.json"
 engine = "vllm"
 model_name = "nvidia/Gemma-4-31B-IT-NVFP4"
 parallelization_type = "pipeline"
-# Gemma 4 official: temperature=1.0, top_p=0.95, top_k=64 (model card +
-# generation_config.json). No presence_penalty is recommended for this family.
 temperature = 1.0
 top_p = 0.95
 top_k = 64

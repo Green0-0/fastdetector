@@ -5,8 +5,6 @@ prompt_file = "prompts/combined_dataset_test.json"
 engine = "vllm"
 model_name = "nvidia/Llama-3.3-70B-Instruct-NVFP4"
 parallelization_type = "pipeline"
-# Llama 3.3 official: temperature=0.6, top_p=0.9 (generation_config.json).
-# Meta specifies no top_k and no presence_penalty.
 temperature = 0.6
 top_p = 0.9
 disable_thinking = false

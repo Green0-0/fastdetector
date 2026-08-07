@@ -5,8 +5,6 @@ prompt_file = "prompts/combined_dataset_test.json"
 engine = "vllm"
 model_name = "nvidia/Qwen3.6-27B-NVFP4"
 parallelization_type = "pipeline"
-# Qwen3.6 official non-thinking mode: temperature=0.7, top_p=0.80, top_k=20,
-# presence_penalty=1.5 (model card "Instruct (or non-thinking) mode").
 temperature = 0.7
 top_p = 0.8
 top_k = 20
