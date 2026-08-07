@@ -105,9 +105,11 @@ def test_pipe_config_sampling_params_default_to_none():
 
 
 def test_pipe_config_server_batching_defaults():
+    # Unset by default: the engine sizes its own batches unless a config
+    # deliberately reins it in.
     config = PipeConfig(**PIPELINE_FIELDS)
-    assert config.max_num_seqs == 256
-    assert config.max_num_batched_tokens == 2048
+    assert config.max_num_seqs is None
+    assert config.max_num_batched_tokens is None
     assert config.parallelization_type == "data"
 
 

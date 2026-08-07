@@ -5,22 +5,16 @@ prompt_file = "prompts/combined_dataset_test.json"
 engine = "vllm"
 model_name = "deepseek-ai/DeepSeek-V4-Flash-0731"
 parallelization_type = "tensor"
-temperature = 0.6
-top_p = 0.9
-top_k = 40
+# DeepSeek-V4-Flash official: temperature=1.0, top_p=1.0 for non-agentic use
+# (model card and the vLLM recipe). Non-think is the template default.
+temperature = 1.0
+top_p = 1.0
 disable_thinking = false
-presence_penalty = 1.5
 
-# 167 GB of weights across two cards; MLA keeps the KV cache cheap but there is
-# still only ~11 GiB per card left for it.
-gpu_memory_utilization = 0.93
+gpu_memory_utilization = 0.97
 max_model_len = 16384
 max_input_len = 7000
-max_num_seqs = 32
 
-# The checkpoint ships no chat template and uses its own tokenizer encoding.
-# The reasoning parser keeps the model's thinking trace out of the reply, which
-# is what lands in the dataset.
 tokenizer_mode = "deepseek_v4"
 reasoning_parser = "deepseek_v4"
 kv_cache_dtype = "fp8"

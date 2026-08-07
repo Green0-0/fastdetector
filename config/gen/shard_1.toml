@@ -3,12 +3,13 @@ prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "vllm"
-model_name = "cyankiwi/gemma-4-31B-it-AWQ-4bit"
-parallelization_type = "tensor"
-temperature = 0.7
-top_p = 0.8
-top_k = -1
+model_name = "nvidia/Gemma-4-31B-IT-NVFP4"
+parallelization_type = "pipeline"
+# Gemma 4 official: temperature=1.0, top_p=0.95, top_k=64 (model card +
+# generation_config.json). No presence_penalty is recommended for this family.
+temperature = 1.0
+top_p = 0.95
+top_k = 64
 disable_thinking = true
-presence_penalty = 1.5
 max_model_len = 32000
 max_input_len = 15000

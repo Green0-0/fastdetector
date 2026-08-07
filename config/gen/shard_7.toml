@@ -3,8 +3,10 @@ prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
 engine = "aphrodite"
+# Aphrodite's NVFP4 path is broken on sm_120, so the Aphrodite shards run
+# the AWQ-INT4 builds while the vLLM shards run NVFP4.
 model_name = "cyankiwi/gemma-4-31B-it-AWQ-4bit"
-parallelization_type = "tensor"
+parallelization_type = "pipeline"
 temperature = 1.25
 top_p = 1.0
 top_k = -1
@@ -12,6 +14,5 @@ top_a = 0.1
 xtc_probability = 0.3
 nsigma = 1.5
 disable_thinking = true
-presence_penalty = 1.5
 max_model_len = 32000
 max_input_len = 15000

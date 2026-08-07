@@ -281,7 +281,8 @@ def test_local_engines_launch_a_server_and_use_its_url(pipeline_env):
     assert launch["venv_path"] == ".vllm"
     assert launch["max_model_len"] == 4096
     assert launch["max_num_seqs"] == 8
-    assert launch["max_num_batched_tokens"] == 2048
+    # Not configured, so it is not forwarded and the engine picks its own.
+    assert "max_num_batched_tokens" not in launch
     assert pipeline_env.calls["build_dataset"]["api_url"] == "http://localhost:9999/v1"
     assert pipeline_env.calls["server_closed"] is True
 
@@ -322,7 +323,8 @@ def test_unset_engine_options_are_not_forwarded(pipeline_env):
     run(pipeline_env, engine="vllm")
     call = pipeline_env.calls["llm_server_context"]
     for option in ("tokenizer_mode", "reasoning_parser", "kv_cache_dtype",
-                   "config_format", "load_format", "gpu_memory_utilization"):
+                   "config_format", "load_format", "gpu_memory_utilization",
+                   "max_num_seqs", "max_num_batched_tokens"):
         assert option not in call
 
 

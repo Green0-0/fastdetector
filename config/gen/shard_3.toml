@@ -4,17 +4,14 @@ prompt_file = "prompts/combined_dataset_test.json"
 [pipeline]
 engine = "vllm"
 model_name = "mistralai/Mistral-Small-4-119B-2603-NVFP4"
-parallelization_type = "tensor"
-temperature = 0.6
-top_p = 0.9
-top_k = 40
+parallelization_type = "pipeline"
+# Mistral Small 4 model card: temperature 0.0-0.7 with reasoning_effort="none"
+# (the template default), 0.7 with "high". No top_p/top_k/penalty specified.
+temperature = 0.7
 disable_thinking = false
-presence_penalty = 1.5
 max_model_len = 32000
 max_input_len = 15000
 
-# This checkpoint ships Mistral's native "consolidated" layout (params.json /
-# tekken.json) with no HuggingFace config.json, so all three have to be told.
 tokenizer_mode = "mistral"
 config_format = "mistral"
 load_format = "mistral"

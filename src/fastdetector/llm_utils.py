@@ -85,8 +85,8 @@ def launch_engine_server(
     parallelization_type: str,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
-    max_num_seqs: int = 256,
-    max_num_batched_tokens: int = 2048,
+    max_num_seqs: int | None = None,
+    max_num_batched_tokens: int | None = None,
     tokenizer_mode: str | None = None,
     reasoning_parser: str | None = None,
     kv_cache_dtype: str | None = None,
@@ -105,9 +105,9 @@ def launch_engine_server(
         gpu_memory_utilization: Fraction of GPU memory to use (0–1).
         max_model_len: Maximum model context length.
         max_num_seqs: Maximum number of concurrent sequences per engine step.
+            ``None`` lets the engine choose.
         max_num_batched_tokens: Maximum number of batched tokens per engine
-            step (with chunked prefill this may be smaller than
-            max_model_len; larger values trade latency for throughput).
+            step. ``None`` lets the engine choose.
         tokenizer_mode: Tokenizer backend to use (e.g. "mistral",
             "deepseek_v4"). ``None`` leaves the engine default ("auto").
         reasoning_parser: Parser that splits a reasoning trace out of the
@@ -141,8 +141,6 @@ def launch_engine_server(
         "--port", str(port),
         f"--{parallelization_type}-parallel-size", str(gpu_count),
         "--max-model-len", str(max_model_len),
-        "--max-num-seqs", str(max_num_seqs),
-        "--max-num-batched-tokens", str(max_num_batched_tokens),
         "--disable-uvicorn-access-log",
         "--gpu-memory-utilization", str(gpu_memory_utilization),
     ]
@@ -155,6 +153,8 @@ def launch_engine_server(
         "--kv-cache-dtype": kv_cache_dtype,
         "--config-format": config_format,
         "--load-format": load_format,
+        "--max-num-seqs": max_num_seqs,
+        "--max-num-batched-tokens": max_num_batched_tokens,
     }
     for flag, value in optional_flags.items():
         if value is not None:
@@ -255,8 +255,8 @@ def llm_server_context(
     port: int | None = None,
     gpu_memory_utilization: float = 0.85,
     max_model_len: int = 16000,
-    max_num_seqs: int = 256,
-    max_num_batched_tokens: int = 2048,
+    max_num_seqs: int | None = None,
+    max_num_batched_tokens: int | None = None,
     **engine_options,
 ):
     """Context manager to launch and clean up an LLM server.

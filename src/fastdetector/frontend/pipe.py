@@ -129,7 +129,8 @@ def run_pipeline(
         if pipe_config.gpu_memory_utilization is not None:
             server_kwargs["gpu_memory_utilization"] = pipe_config.gpu_memory_utilization
         for option in ("tokenizer_mode", "reasoning_parser", "kv_cache_dtype",
-                       "config_format", "load_format"):
+                       "config_format", "load_format", "max_num_seqs",
+                       "max_num_batched_tokens"):
             value = getattr(pipe_config, option)
             if value is not None:
                 server_kwargs[option] = value
@@ -139,8 +140,6 @@ def run_pipeline(
             venv_path=venv_path,
             parallelization_type=pipe_config.parallelization_type,
             port=None,
-            max_num_seqs=pipe_config.max_num_seqs,
-            max_num_batched_tokens=pipe_config.max_num_batched_tokens,
             **server_kwargs,
         ) as api_url:
             print(f"Using API endpoint: {api_url}")
