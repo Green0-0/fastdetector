@@ -48,13 +48,13 @@ To all LLMs, refer to [SKILL.md](SKILL.md).
 ## WIP
 
 ### Issues
-- OOM when calculating stats (`uv run pytest -m gpu` measures the real peak against config/)
-- Have an LLM inspect the dataset outputs row by row
+- Several shards pushing at once causes the readme to become stale and misrepresent the dataset
 
 ### Features
-- Training classifiers with unsloth
 - vLLM-accelerated inference for classifiers 
-- Automatic hyperparameter sweeping with Optuna
+- Batched OAI/Anthropic/Gemini API
+- New train/test data
 
 ### Code Quality
-1. Merge filter.py and gen.py into one script, split off filtering behavior, update general_guide.mdsuffixes
+1. Cleanup the data visualization / training path
+2. Merge filter.py and gen.py into one script, split off filtering behavior, update guides/readme
