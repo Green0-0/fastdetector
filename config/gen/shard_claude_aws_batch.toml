@@ -1,0 +1,27 @@
+source_column = "collected_subset"
+prompt_file = "prompts/combined_dataset_test.json"
+
+[pipeline]
+# Claude Platform on AWS: Anthropic-operated, SigV4 auth, AWS Marketplace
+# billing. Supports the Message Batches API. This is NOT Amazon Bedrock -
+# Bedrock uses "anthropic."-prefixed model IDs and does not expose Batches.
+engine = "anthropic_aws"
+model_name = "claude-opus-5"
+parallelization_type = "none"
+
+# Sampling params are deliberately absent: temperature/top_p/top_k were removed
+# in the Claude 5 family and return a 400. Defaults only.
+disable_thinking = false
+
+batch = true
+batch_state_dir = ".batch_state"
+batch_poll_interval_secs = 300
+
+# Required - there is no default region for this client. Credentials resolve
+# through the standard AWS chain; ANTHROPIC_AWS_WORKSPACE_ID must also be set.
+aws_region = "us-east-1"
+
+max_input_len = 15000
+# Bounds thinking AND response text together, and thinking is on by default on
+# Claude 5, so this needs headroom well beyond the expected answer length.
+max_output_tokens = 16000

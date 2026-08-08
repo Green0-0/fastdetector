@@ -141,11 +141,27 @@ def test_local_engine_configs_only_set_supported_sampling_params(
 
 
 def test_api_engine_configs_declare_an_endpoint(gen_config_path):
-    config = GenConfig(**load_toml(str(gen_config_path)))
-    if config.pipeline.engine.is_local_server:
+    """Every hosted-API config must say where requests go and how they authenticate.
+
+    What counts as "where" differs by transport: the first-party endpoints take
+    an explicit api_url, Azure derives it from the resource endpoint, and Claude
+    Platform on AWS derives it from the region while authenticating through the
+    AWS credential chain rather than a key.
+    """
+    pipeline = GenConfig(**load_toml(str(gen_config_path))).pipeline
+    if pipeline.engine.is_local_server:
         pytest.skip("local engines get their URL from the launched server")
-    assert config.pipeline.api_url, "an API engine needs api_url"
-    assert config.pipeline.api_key_env, "an API engine needs api_key_env"
+
+    if pipeline.engine is EngineConfig.AZURE_OAI:
+        assert pipeline.azure_endpoint, "Azure needs azure_endpoint"
+        assert pipeline.azure_api_version, "Azure needs azure_api_version"
+        assert pipeline.api_key_env, "Azure authenticates with a key"
+    elif pipeline.engine is EngineConfig.ANTHROPIC_AWS:
+        # SigV4 through the standard AWS chain - no key env var to declare.
+        assert pipeline.aws_region, "Claude Platform on AWS needs an explicit region"
+    else:
+        assert pipeline.api_url, "an API engine needs api_url"
+        assert pipeline.api_key_env, "an API engine needs api_key_env"
 
 
 def test_filter_config_engine_is_coherent(repo_root):

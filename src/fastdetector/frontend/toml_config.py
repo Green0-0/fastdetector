@@ -58,6 +58,12 @@ class PipeConfig(BaseModel):
     max_model_len: Optional[int] = None
     max_input_len: Optional[int] = None
 
+    # Cap on generated tokens. Required by the Anthropic Messages API, which
+    # rejects a request without max_tokens. Note it bounds thinking *plus*
+    # response text together, and thinking is on by default on the Claude 5
+    # family, so leave headroom beyond the expected answer length.
+    max_output_tokens: Optional[int] = None
+
     max_num_seqs: Optional[int] = None
     max_num_batched_tokens: Optional[int] = None
 
@@ -71,6 +77,55 @@ class PipeConfig(BaseModel):
     # API settings
     api_url: Optional[str] = None
     api_key_env: Optional[str] = None
+
+    # Offline batch transport. Roughly half the synchronous price on every
+    # provider, in exchange for an unbounded (up to 24h) turnaround per chat
+    # turn - so a multi-turn prompt file serialises that wait once per turn.
+    batch: bool = False
+    batch_state_dir: str = ".batch_state"
+    batch_poll_interval_secs: int = 120
+
+    # Azure OpenAI. When set, model_name is a *deployment* name.
+    azure_endpoint: Optional[str] = None
+    azure_api_version: Optional[str] = None
+
+    # Claude Platform on AWS. Model IDs stay bare - the "anthropic." prefix
+    # belongs to Amazon Bedrock, which does not expose Message Batches.
+    aws_region: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_engine_settings(self) -> "PipeConfig":
+        """Reject configurations the provider APIs would fail on at request time.
+
+        Returns:
+            Self instance if validation succeeds.
+
+        Raises:
+            ValueError: If a required per-provider field is missing.
+        """
+        if self.engine.provider == "anthropic" and self.max_output_tokens is None:
+            raise ValueError(
+                "max_output_tokens is required for Anthropic engines: the "
+                "Messages API rejects a request without max_tokens."
+            )
+        if bool(self.azure_endpoint) != bool(self.azure_api_version):
+            raise ValueError(
+                "azure_endpoint and azure_api_version must be set together."
+            )
+        if self.batch and self.engine.is_local_server:
+            raise ValueError(
+                f"batch = true is not available for the {self.engine.value} engine; "
+                f"offline batching is a hosted-API feature."
+            )
+        if self.engine.provider == "anthropic" and not self.batch:
+            # The synchronous path goes through AsyncOpenAI and speaks only the
+            # chat-completions dialect. Anthropic is reachable here through the
+            # Message Batches API only.
+            raise ValueError(
+                f"The {self.engine.value} engine currently requires batch = true; "
+                f"there is no synchronous Anthropic transport in this pipeline."
+            )
+        return self
 
 
 class GenConfig(BaseModel):

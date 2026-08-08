@@ -12,6 +12,9 @@ dependencies = [
     "datasets>=4.8.5",
     "huggingface-hub>=1.14.0",
     "openai>=1.30.0",
+    # [aws] pulls the SigV4 signing deps for Claude Platform on AWS, which is
+    # where the Message Batches API is reachable with AWS billing.
+    "anthropic[aws]>=0.69.0",
     "levenshtein>=0.25.0",
     "sentence-transformers>=3.0.0",
     "transformers>=5.0.0",

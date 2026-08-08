@@ -223,7 +223,11 @@ def test_build_dataset_accumulates_usage_across_turns(recording_batch_generate):
 
 
 def test_build_dataset_accumulates_failures(monkeypatch):
-    """Test failure count accumulation across API request turns."""
+    """Test failure count accumulation across API request turns.
+
+    A row whose turn fails is not carried into later turns, so two rows
+    failing at turn 0 cost two failures, not one per turn.
+    """
     monkeypatch.setattr(
         generator_module,
         "batch_generate",
@@ -231,7 +235,39 @@ def test_build_dataset_accumulates_failures(monkeypatch):
     )
     prompts = PromptSet([prompt(["a {{DOC}}", "b"])])
     *_, failed = build_dataset(["s0", "s1"], "http://x/v1", prompts, {})
-    assert failed == 4
+    assert failed == 2
+
+
+def test_build_dataset_drops_rows_whose_earlier_turn_failed(monkeypatch):
+    """Rows with an empty prior response are excluded from subsequent turns.
+
+    Replaying them would build an empty assistant message (rejected outright by
+    Anthropic) and bill for a generation conditioned on nothing.
+    """
+    calls = []
+
+    def fake(api_url, inputs, generation_params, api_key="EMPTY", model_name=""):
+        calls.append(inputs)
+        # Row 0 fails on the first turn; row 1 succeeds throughout.
+        texts = ["" if msgs[-1]["content"].endswith("s0") else "ok" for msgs in inputs]
+        return texts, 0, 0, sum(1 for t in texts if not t)
+
+    monkeypatch.setattr(generator_module, "batch_generate", fake)
+    prompts = PromptSet([prompt(["a {{DOC}}", "b"])])
+    columns, *_ = build_dataset(["s0", "s1"], "http://x/v1", prompts, {})
+
+    assert [len(inputs) for inputs in calls] == [2, 1]
+    assert columns["response_0"] == ["", "ok"]
+    assert columns["response_1"] == ["", "ok"]
+    assert columns["final_response"] == ["", "ok"]
+
+
+def test_build_messages_rejects_an_empty_prior_response():
+    """A failed prior turn must never be replayed as an empty assistant turn."""
+    with pytest.raises(ValueError, match="empty"):
+        generator_module._build_messages(
+            prompt(["first {{DOC}}", "second"], use_multiturn=True), 1, [""]
+        )
 
 
 def test_build_dataset_forwards_credentials_and_params(recording_batch_generate):

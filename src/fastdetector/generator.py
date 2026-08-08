@@ -1,13 +1,37 @@
 import asyncio
+import time
+from dataclasses import dataclass
 from typing import Any
 
 from openai import AsyncOpenAI
 
+from fastdetector.batch_state import BatchState
 from fastdetector.prompting.prompts import Prompt, PromptSet
+from fastdetector.providers import BatchProvider, build_body
 
 MAX_RETRIES = 5
 
 MAX_CONCURRENT = 256
+
+
+@dataclass
+class BatchContext:
+    """Everything the offline-batch transport needs beyond the request bodies.
+
+    Args:
+        provider: The transport to submit through.
+        provider_name: "openai" or "anthropic" - selects the payload dialect.
+        state: Durable record of submitted jobs, so a killed run resumes
+            polling instead of resubmitting (and re-paying for) a batch.
+        max_output_tokens: Output cap; required for Anthropic.
+        poll_interval_secs: Delay between status checks.
+    """
+
+    provider: BatchProvider
+    provider_name: str
+    state: BatchState
+    max_output_tokens: int | None
+    poll_interval_secs: int = 120
 
 
 async def _send_request(
@@ -148,6 +172,99 @@ def batch_generate(
     return asyncio.run(_batch_generate_async(api_url, inputs, generation_params, api_key, model_name))
 
 
+def batch_generate_offline(
+    ctx: BatchContext,
+    inputs: list[list[dict[str, str]]],
+    generation_params: dict[str, Any],
+    model_name: str,
+    turn_index: int,
+) -> tuple[list[str], int, int, int]:
+    """Run one chat turn through a provider's offline batch API.
+
+    Mirrors :func:`batch_generate`'s contract exactly - same argument shape,
+    same ``(texts, prompt_tokens, completion_tokens, failed)`` return, failures
+    as aligned empty strings - so callers do not care which transport ran.
+
+    Submitting is the expensive, irreversible step: the job ID is persisted
+    before anything else happens, and a run that already has one for this turn
+    resumes polling rather than submitting again.
+
+    Args:
+        ctx: Provider, state handle, and polling settings.
+        inputs: Conversations for the rows active at this turn.
+        generation_params: Params already filtered to this provider's accepted set.
+        model_name: Model ID, or an Azure deployment name.
+        turn_index: Chat turn index, used as the state key.
+
+    Returns:
+        A tuple of (response strings, total prompt tokens, total completion
+        tokens, failed request count).
+    """
+    if not inputs:
+        return [], 0, 0, 0
+
+    record = ctx.state.get(turn_index)
+    if record and record["provider"] == ctx.provider.name:
+        job_id = record["job_id"]
+        n_requests = record["n_requests"]
+        print(f"  Resuming batch for turn {turn_index} from saved job(s).", flush=True)
+        if n_requests != len(inputs):
+            raise RuntimeError(
+                f"Saved batch for turn {turn_index} covers {n_requests} requests but "
+                f"this run built {len(inputs)}. The source shard or prompt file changed "
+                f"since submission; delete the state file to start over (abandoning the "
+                f"in-flight batch) or restore the original inputs."
+            )
+    else:
+        if record:
+            raise RuntimeError(
+                f"Saved batch for turn {turn_index} was submitted to "
+                f"'{record['provider']}' but this run is configured for "
+                f"'{ctx.provider.name}'. Results cannot be mixed across providers; "
+                f"use a separate batch_state_dir per provider."
+            )
+        bodies = [
+            build_body(ctx.provider_name, messages, generation_params,
+                       model_name, ctx.max_output_tokens)
+            for messages in inputs
+        ]
+        job_id = ctx.provider.submit(bodies)
+        n_requests = len(bodies)
+        ctx.state.record(turn_index, job_id, ctx.provider.name, n_requests)
+
+    waited = 0
+    while True:
+        terminal, status = ctx.provider.poll(job_id)
+        if terminal:
+            print(f"  Batch finished after {waited}s (status: {status}).", flush=True)
+            break
+        print(
+            f"  Waiting on batch ({status}); {waited}s elapsed.",
+            flush=True,
+        )
+        time.sleep(ctx.poll_interval_secs)
+        waited += ctx.poll_interval_secs
+
+    results = ctx.provider.fetch(job_id, n_requests)
+    ctx.state.mark_complete(turn_index)
+
+    failures: dict[str, int] = {}
+    for result in results:
+        if result.failed:
+            reason = result.error or "empty response"
+            failures[reason] = failures.get(reason, 0) + 1
+    if failures:
+        summary = ", ".join(f"{count}x {reason}" for reason, count in sorted(failures.items()))
+        print(f"WARNING: {sum(failures.values())}/{len(results)} requests failed: {summary}")
+
+    return (
+        [r.text for r in results],
+        sum(r.prompt_tokens for r in results),
+        sum(r.completion_tokens for r in results),
+        sum(1 for r in results if r.failed),
+    )
+
+
 def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> list[dict]:
     """Build an OpenAI-compatible message list for a single prompt's chat turn.
 
@@ -178,6 +295,15 @@ def _build_messages(prompt: Prompt, turn_index: int, responses: list[str]) -> li
             text = text.replace(f"{{{{RESP_{i}}}}}", responses[i])
         chat_messages.append({"role": "user", "content": text})
         if t < turn_index:
+            # A failed earlier turn leaves "" here. Anthropic rejects empty text
+            # blocks outright, and every provider would be billed for a
+            # generation conditioned on nothing, so build_dataset drops such
+            # rows before this point. Fail loudly if one slips through.
+            if not responses[t].strip():
+                raise ValueError(
+                    f"Turn {t} response is empty while building turn {turn_index}. "
+                    f"Rows whose earlier turn failed must be excluded from later turns."
+                )
             chat_messages.append({"role": "assistant", "content": responses[t]})
 
     if not prompt.use_multiturn:
@@ -194,17 +320,25 @@ def build_dataset(
     generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
+    batch_ctx: "BatchContext | None" = None,
 ) -> tuple[dict[str, list[Any]], int, int, int]:
     """Iteratively build a dataset dict by batching across the prompt dimension.
 
     For each chat turn:
-    1. Collect the messages for every sample that has a turn at this index.
-    2. Call batch_generate to fire all requests concurrently.
+    1. Collect the messages for every sample still eligible at this index.
+    2. Dispatch them - concurrently against a live endpoint, or as one offline
+       batch job when *batch_ctx* is given.
     3. Scatter the responses back into a per-sample column (response_N).
     4. Append the response to each sample's response history for the next turn.
 
+    A sample is eligible at a turn when its prompt has a turn at that index
+    *and* none of its earlier turns came back empty. Dropping rows with a
+    failed ancestor keeps invalid conversation histories (an empty assistant
+    message) out of later requests and avoids paying to condition a generation
+    on nothing.
+
     Some rows will have empty strings in response_N columns if their prompt
-    has fewer chat turns than the maximum.
+    has fewer chat turns than the maximum, or if an earlier turn failed.
 
     Special tokens replaced in prompts:
     - {{DOC}} is replaced with the sample text (done in PromptSet.map).
@@ -217,6 +351,9 @@ def build_dataset(
         generation_params: Overrides for sampling params.
         api_key: API key for the endpoint.
         model_name: Model name for the API call.
+        batch_ctx: When given, dispatch each turn through the provider's
+            offline batch API instead of the live endpoint. ``None`` (the
+            default) keeps the synchronous path.
 
     Returns:
         A tuple of (dataset_columns_dict, total_prompt_tokens, total_completion_tokens, total_failed_requests).
@@ -243,13 +380,27 @@ def build_dataset(
         active_indices: list[int] = []
 
         for sample_idx, prompt in enumerate(mapped_prompts):
-            if turn_idx < len(prompt.chat_turns):
-                prior_responses = responses_grouped[sample_idx]
-                messages = _build_messages(prompt, turn_idx, prior_responses)
-                batch_inputs.append(messages)
-                active_indices.append(sample_idx)
+            prior_responses = responses_grouped[sample_idx]
+            if turn_idx >= len(prompt.chat_turns):
+                continue
+            # A row whose earlier turn came back empty cannot continue: its
+            # history would carry an empty assistant message, which Anthropic
+            # rejects and which every provider bills for while producing
+            # garbage that post-processing discards anyway.
+            if any(not response.strip() for response in prior_responses):
+                continue
+            messages = _build_messages(prompt, turn_idx, prior_responses)
+            batch_inputs.append(messages)
+            active_indices.append(sample_idx)
 
-        batch_responses, p_tokens, c_tokens, f_reqs = batch_generate(api_url, batch_inputs, generation_params, api_key, model_name)
+        if batch_ctx is None:
+            batch_responses, p_tokens, c_tokens, f_reqs = batch_generate(
+                api_url, batch_inputs, generation_params, api_key, model_name
+            )
+        else:
+            batch_responses, p_tokens, c_tokens, f_reqs = batch_generate_offline(
+                batch_ctx, batch_inputs, generation_params, model_name, turn_idx
+            )
         total_prompt_tokens += p_tokens
         total_completion_tokens += c_tokens
         total_failed_requests += f_reqs
