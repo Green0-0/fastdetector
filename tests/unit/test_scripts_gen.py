@@ -32,6 +32,19 @@ def test_markdown_and_emoji_are_left_alone():
     assert clean_responses([text], ["plain source"]) == [text]
 
 
+def test_a_leaked_reasoning_trace_is_removed():
+    trace = " ".join(f"pondering{i}" for i in range(200))
+    assert clean_responses([f"<think>{trace}</think>\n{BODY}"], ["plain source"]) == [BODY]
+
+
+def test_the_trace_is_cut_before_the_wrapper_budget_is_measured():
+    # A trace longer than the answer would blow the wrapper word budget and
+    # revert the row, so it has to be gone before that step runs.
+    trace = " ".join(f"pondering{i}" for i in range(400))
+    text = f"<think>{trace}</think>\nSure, here it is:\n---\n{BODY}"
+    assert clean_responses([text], ["plain source"]) == [BODY]
+
+
 def test_a_clean_response_survives_untouched():
     assert clean_responses([BODY], ["source text"]) == [BODY]
 

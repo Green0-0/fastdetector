@@ -19,6 +19,23 @@ def _as_strings(texts: list[str]) -> list[str]:
     return [str(text) if text is not None else "" for text in texts]
 
 
+def strip_reasoning_trace(texts: list[str]) -> list[str]:
+    """Drop a leaked reasoning trace, keeping only what follows it.
+    
+    Args:
+        texts: List of model responses to clean.
+
+    Returns:
+        List of responses with any leading reasoning trace removed, unchanged
+        where no closing tag is present.
+    """
+    results = []
+    for text in _as_strings(texts):
+        matches = list(re.compile(r"</\s*think\s*>", re.IGNORECASE).finditer(text))
+        results.append(text[matches[-1].end():].lstrip() if matches else text)
+    return results
+
+
 def normalize_whitespace(texts: list[str]) -> list[str]:
     """Collapse whitespace so the human and AI columns share one convention.
 

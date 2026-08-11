@@ -17,6 +17,7 @@ from fastdetector.statistics.filters import (
     strip_added_title,
     strip_emoji,
     strip_markdown,
+    strip_reasoning_trace,
     strip_wrapper_boilerplate,
 )
 
@@ -26,6 +27,43 @@ BODY = " ".join(f"word{i}" for i in range(120))
 def clean(original: str, response: str) -> str:
     """Post-process one response against its source text."""
     return strip_wrapper_boilerplate([response], [original])[0]
+
+
+# --------------------------------------------------------------------------
+# Issue 0: leaked reasoning traces
+# --------------------------------------------------------------------------
+
+
+def test_everything_up_to_the_closing_think_tag_is_dropped():
+    assert strip_reasoning_trace(["<think>weighing it up</think>The answer."]) == ["The answer."]
+
+
+def test_a_trace_with_no_opening_tag_is_still_dropped():
+    assert strip_reasoning_trace(["planning ahead</think>The answer."]) == ["The answer."]
+
+
+def test_the_last_closing_tag_wins():
+    # Two traces means everything before the final close is still trace.
+    assert strip_reasoning_trace(["a</think>b</think>The answer."]) == ["The answer."]
+
+
+def test_the_tag_is_matched_case_insensitively_and_across_stray_spaces():
+    assert strip_reasoning_trace(["hmm</ THINK >The answer."]) == ["The answer."]
+
+
+def test_whitespace_left_behind_by_the_tag_is_removed():
+    assert strip_reasoning_trace(["hmm</think>\n\n  The answer."]) == ["The answer."]
+
+
+def test_a_response_with_no_closing_tag_is_untouched():
+    text = "A <think> that never closes stays put."
+    assert strip_reasoning_trace([text]) == [text]
+
+
+def test_a_response_that_is_only_a_trace_becomes_empty():
+    # is_empty then rejects the row rather than a trace reaching the dataset.
+    assert strip_reasoning_trace(["<think>all of it</think>"]) == [""]
+    assert is_empty(strip_reasoning_trace(["<think>all of it</think>"])) == [True]
 
 
 # --------------------------------------------------------------------------

@@ -14,6 +14,7 @@ from fastdetector.statistics.filters import (
     is_empty,
     is_unchanged,
     normalize_whitespace,
+    strip_reasoning_trace,
     strip_wrapper_boilerplate,
 )
 from fastdetector.utils import push_shard, shard_config_name, upload_readme
@@ -21,6 +22,9 @@ from fastdetector.utils import push_shard, shard_config_name, upload_readme
 
 def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
     """Clean the AI column. The human column is read but never modified.
+
+    A leaked reasoning trace is stripped first, so every later step sees the
+    answer alone rather than measuring its budgets against the trace.
 
     Args:
         responses: List of model responses to clean.
@@ -30,7 +34,9 @@ def clean_responses(responses: list[str], originals: list[str]) -> list[str]:
     Returns:
         List of cleaned responses.
     """
-    return normalize_whitespace(strip_wrapper_boilerplate(fix_encoding(responses), originals))
+    return normalize_whitespace(
+        strip_wrapper_boilerplate(fix_encoding(strip_reasoning_trace(responses)), originals)
+    )
 
 
 def rejection_reasons(originals: list[str], responses: list[str],
