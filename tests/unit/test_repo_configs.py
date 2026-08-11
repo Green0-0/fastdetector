@@ -152,11 +152,7 @@ def test_api_engine_configs_declare_an_endpoint(gen_config_path):
     if pipeline.engine.is_local_server:
         pytest.skip("local engines get their URL from the launched server")
 
-    if pipeline.engine is EngineConfig.AZURE_OAI:
-        assert pipeline.azure_endpoint, "Azure needs azure_endpoint"
-        assert pipeline.azure_api_version, "Azure needs azure_api_version"
-        assert pipeline.api_key_env, "Azure authenticates with a key"
-    elif pipeline.engine is EngineConfig.ANTHROPIC_AWS:
+    if pipeline.engine is EngineConfig.ANTHROPIC_AWS:
         # SigV4 through the standard AWS chain - no key env var to declare.
         assert pipeline.aws_region, "Claude Platform on AWS needs an explicit region"
     else:

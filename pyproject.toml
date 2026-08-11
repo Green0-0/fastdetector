@@ -12,9 +12,7 @@ dependencies = [
     "datasets>=4.8.5",
     "huggingface-hub>=1.14.0",
     "openai>=1.30.0",
-    # [aws] pulls the SigV4 signing deps for Claude Platform on AWS, which is
-    # where the Message Batches API is reachable with AWS billing.
-    "anthropic[aws]>=0.69.0",
+    "anthropic[aws]>=0.90.0",
     "levenshtein>=0.25.0",
     "sentence-transformers>=3.0.0",
     "transformers>=5.0.0",
@@ -41,13 +39,7 @@ test = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# "scripts" and "scripts/stats" make the CLI entry points importable so their
-# pure helpers (post-processing, compute plans, readme building) can be tested
-# without running the pipelines.
 pythonpath = ["src", "scripts", "scripts/stats"]
-# Expensive tiers are deselected by default so a bare `pytest` is safe to run
-# on a laptop. A `-m` on the command line REPLACES this one, so
-# `pytest -m gpu` runs exactly the GPU tier.
 addopts = "--strict-markers --strict-config -m 'not gpu and not slow and not network and not vllm'"
 markers = [
     "gpu: requires a CUDA device (auto-skipped when none is visible)",

@@ -17,6 +17,12 @@ source .venv/bin/activate
 export PYTHONUNBUFFERED=1
 export HF_HOME="${HF_HOME:-/usr/project/xtmp/fastdetector_hf_cache}"
 
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
 # ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/
 export PATH=$CUDA_HOME/bin:$PATH
@@ -41,7 +47,6 @@ if [[ ! -f "${GEN_CONFIG}" ]]; then
 fi
 
 # ---- Engine venv (launched as a subprocess by the pipeline) ----
-# Shards are split across both engines, so check the one this shard asks for.
 ENGINE=$(sed -n 's/^[[:space:]]*engine[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${GEN_CONFIG}" | head -1)
 case "${ENGINE}" in
   vllm|aphrodite)

@@ -5,10 +5,9 @@ from transformers import AutoTokenizer
 from datasets import Dataset
 from fastdetector.utils import load_dataset_auto_shard
 from fastdetector.prompting.prompts import PromptSet, load_prompts
-from fastdetector.batch_state import BatchState
-from fastdetector.generator import BatchContext, build_dataset
+from fastdetector.generator import build_dataset
 from fastdetector.llm_utils import llm_server_context
-from fastdetector.providers import make_provider
+from fastdetector.providers import BatchState, make_provider
 from fastdetector.frontend.toml_config import GlobalsConfig, PipeConfig
 from fastdetector.frontend.engine_config import EngineConfig
 
@@ -58,9 +57,6 @@ def run_pipeline(
                 if engine.provider == "openai":
                     generation_params["reasoning_effort"] = "none"
                 elif engine.provider == "anthropic":
-                    # Thinking is on by default in the Claude 5 family, and
-                    # disabling it is only accepted at effort "high" or below -
-                    # which is the default, so no effort is sent alongside.
                     generation_params["thinking"] = {"type": "disabled"}
                 else:
                     extra_body["chat_template_kwargs"] = {"enable_thinking": False}
@@ -162,20 +158,13 @@ def run_pipeline(
         else:
             api_key = "EMPTY"
 
-        batch_ctx = None
+        provider = None
+        state = None
         if pipe_config.batch:
             run_key = f"{engine.value}_{pipe_config.model_name}_shard{batch_id}"
-            batch_ctx = BatchContext(
-                provider=make_provider(pipe_config),
-                provider_name=engine.provider,
-                state=BatchState(pipe_config.batch_state_dir, run_key),
-                max_output_tokens=pipe_config.max_output_tokens,
-                poll_interval_secs=pipe_config.batch_poll_interval_secs,
-            )
-            print(
-                f"Using offline batch transport ({engine.value}); state in "
-                f"{batch_ctx.state.path}"
-            )
+            provider = make_provider(pipe_config)
+            state = BatchState(pipe_config.batch_state_dir, run_key)
+            print(f"Using offline batch transport ({engine.value}); state in {state.path}")
         else:
             print(f"Using API endpoint: {pipe_config.api_url}")
             if pipe_config.max_output_tokens is not None:
@@ -183,12 +172,14 @@ def run_pipeline(
 
         result_dict, prompt_tokens, completion_tokens, failed_requests = build_dataset(
             samples,
-            api_url=pipe_config.api_url,
+            api_url=pipe_config.api_url or "",
             prompts=prompts,
             generation_params=generation_params,
             api_key=api_key,
             model_name=pipe_config.model_name,
-            batch_ctx=batch_ctx,
+            provider=provider,
+            state=state,
+            config=pipe_config if provider is not None else None,
         )
 
     if result_dict:

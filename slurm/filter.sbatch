@@ -11,13 +11,16 @@
 #SBATCH --gres=gpu:a5000:4
 #SBATCH --array=0-7
 
-# <prefix>-raw -> <prefix>-processed -> <prefix>-filtered, one shard per task.
-
 set -euo pipefail
 
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
-export HF_HOME="${HF_HOME:-/usr/project/xtmp/fastdetector_hf_cache}"
+
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
 
 # ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/

@@ -1,11 +1,13 @@
-"""Offline-batch providers and the factory that selects one from config."""
 import os
 
 from fastdetector.frontend.engine_config import EngineConfig
-from fastdetector.providers.base import BatchProvider, BatchResult, order_results
-from fastdetector.providers.payloads import build_body
+from fastdetector.providers.objects import (
+    BatchProvider,
+    BatchResult,
+    BatchState,
+)
 
-__all__ = ["BatchProvider", "BatchResult", "build_body", "make_provider", "order_results"]
+__all__ = ["BatchProvider", "BatchResult", "BatchState", "make_provider"]
 
 
 def make_provider(pipe_config) -> BatchProvider:
@@ -31,15 +33,6 @@ def make_provider(pipe_config) -> BatchProvider:
         from fastdetector.providers.openai_batch import OpenAIBatchProvider
 
         return OpenAIBatchProvider(api_key=api_key, base_url=pipe_config.api_url)
-
-    if engine == EngineConfig.AZURE_OAI:
-        from fastdetector.providers.openai_batch import OpenAIBatchProvider
-
-        return OpenAIBatchProvider(
-            api_key=api_key,
-            azure_endpoint=pipe_config.azure_endpoint,
-            azure_api_version=pipe_config.azure_api_version,
-        )
 
     if engine == EngineConfig.ANTHROPIC:
         from fastdetector.providers.anthropic_batch import AnthropicBatchProvider

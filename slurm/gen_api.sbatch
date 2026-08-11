@@ -1,38 +1,35 @@
 #!/bin/bash
-# Generation against a hosted API (no local engine, no GPU).
-#
-# Offline batch jobs have a 24h completion window per chat turn, and prompts
-# with two turns serialise that wait twice, so the walltime here is deliberately
-# generous. The run is resumable: submitted batch IDs are persisted under
-# batch_state_dir, so a requeued job resumes polling instead of resubmitting
-# (and re-paying for) work already in flight.
 #SBATCH --partition=compsci
 #SBATCH --job-name=fd_gen_api
-#SBATCH --output=slurm/logs/%x_%A_%a.out
-#SBATCH --error=slurm/logs/%x_%A_%a.err
+#SBATCH --output=slurm/logs/%x_%j.out
+#SBATCH --error=slurm/logs/%x_%j.err
 #SBATCH --time=3-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
-#SBATCH --array=0-8
 
 set -euo pipefail
 
+GEN_CONFIG="config/gen/shard_claude_aws_batch.toml"
+SHARD=0
+
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
-export HF_HOME="${HF_HOME:-/usr/project/xtmp/fastdetector_hf_cache}"
 
-GEN_CONFIG="config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml"
-
-if [[ ! -f "${GEN_CONFIG}" ]]; then
-  echo "No gen config at ${GEN_CONFIG}." >&2
-  exit 1
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
 fi
 
-ENGINE=$(sed -n 's/^[[:space:]]*engine[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${GEN_CONFIG}" | head -1)
+read_key() {
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\"\([^\"]*\)\".*/\1/p" "${GEN_CONFIG}" | head -1
+}
+
+ENGINE=$(read_key engine)
 case "${ENGINE}" in
-  oai|azure_oai|anthropic|anthropic_aws) ;;
+  oai|anthropic|anthropic_aws) ;;
   vllm|aphrodite)
     echo "${GEN_CONFIG} uses the ${ENGINE} engine; submit it with gen.sbatch (needs a GPU)." >&2
     exit 1
@@ -43,18 +40,17 @@ case "${ENGINE}" in
     ;;
 esac
 
-# Fail fast on missing credentials rather than after building every request.
-case "${ENGINE}" in
-  anthropic_aws)
-    : "${ANTHROPIC_AWS_WORKSPACE_ID:?must be set for Claude Platform on AWS}"
-    : "${AWS_REGION:?must be set for Claude Platform on AWS}"
-    ;;
-esac
+API_KEY_ENV=$(read_key api_key_env)
+if [[ -n "${API_KEY_ENV}" && -z "${!API_KEY_ENV:-}" ]]; then
+  echo "${API_KEY_ENV} is unset, but ${GEN_CONFIG} names it as the API key." >&2
+  exit 1
+fi
+if [[ "${ENGINE}" == "anthropic_aws" ]]; then
+  : "${ANTHROPIC_AWS_WORKSPACE_ID:?must be set for Claude Platform on AWS}"
+fi
 
-echo "Generating shard ${SLURM_ARRAY_TASK_ID:-0} via ${ENGINE}..."
+echo "Generating shard ${SHARD} from ${GEN_CONFIG} via ${ENGINE}..."
 python scripts/gen.py \
     --globals-config config/globals.toml \
     --gen-config "${GEN_CONFIG}" \
-    --batch-id "${SLURM_ARRAY_TASK_ID:-0}"
-
-echo "Generation complete for shard ${SLURM_ARRAY_TASK_ID:-0}."
+    --batch-id "${SHARD}"

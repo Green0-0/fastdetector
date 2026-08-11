@@ -1,22 +1,7 @@
-"""Offline batch transport for the Anthropic Message Batches API.
-
-Covers both the first-party API and Claude Platform on AWS. The latter is
-Anthropic-operated access through AWS infrastructure - SigV4 auth, AWS
-Marketplace billing - with same-day API parity, so the batch surface is
-identical and only the client constructor differs. Model IDs stay bare
-("claude-opus-5"); the "anthropic." prefix belongs to Amazon Bedrock, which is
-a different product and does not expose the Message Batches API at all.
-
-Batches are billed at roughly half the synchronous rate, with most completing
-well inside the 24h window.
-"""
 import json
 from typing import Any
 
-from fastdetector.providers.base import BatchResult, order_results
-
-# Per-batch ceiling. Larger inputs are split across several jobs.
-MAX_REQUESTS_PER_JOB = 100_000
+from fastdetector.providers.objects import BatchResult
 
 
 class AnthropicBatchProvider:
@@ -28,15 +13,12 @@ class AnthropicBatchProvider:
         use_aws: bool = False,
         aws_region: str | None = None,
     ) -> None:
-        """Build the appropriate client for the target transport.
+        """Build the client for the target transport.
 
         Args:
-            api_key: Anthropic API key. Ignored when *use_aws* is set, since
-                Claude Platform on AWS authenticates via the standard AWS
-                credential chain.
+            api_key: Anthropic API key. Ignored when *use_aws* is set.
             use_aws: Route through Claude Platform on AWS.
-            aws_region: AWS region. Required for the AWS transport - unlike
-                the Bedrock client there is no default fallback.
+            aws_region: AWS region, required for the AWS transport.
 
         Raises:
             ValueError: if the AWS transport is selected without a region.
@@ -51,8 +33,6 @@ class AnthropicBatchProvider:
                     "export AWS_REGION."
                 )
             self.name = "anthropic_aws"
-            # workspace_id comes from ANTHROPIC_AWS_WORKSPACE_ID; credentials
-            # resolve through the normal AWS chain.
             self.client = AnthropicAWS(aws_region=aws_region)
         else:
             from anthropic import Anthropic
@@ -60,22 +40,58 @@ class AnthropicBatchProvider:
             self.name = "anthropic"
             self.client = Anthropic(api_key=api_key)
 
-    def submit(self, bodies: list[dict[str, Any]]) -> str:
+    def submit(
+        self,
+        inputs: list[list[dict[str, str]]],
+        generation_params: dict[str, Any],
+        model_name: str,
+        max_output_tokens: int | None,
+    ) -> str:
         """Create one batch per chunk of requests.
 
         Args:
-            bodies: Messages API request bodies in caller order.
+            inputs: Conversations in caller order.
+            generation_params: Params already filtered to this provider's set.
+            model_name: Model ID, bare (the "anthropic." prefix is Bedrock's).
+            max_output_tokens: Required output cap; bounds thinking plus
+                response text together.
 
         Returns:
-            A JSON-encoded list of batch IDs. Opaque to the caller.
+            A JSON-encoded list of batch IDs.
+
+        Raises:
+            ValueError: if max_output_tokens is unset, or a sampling param that
+                the Claude 5 family rejects survived filtering.
         """
+        if max_output_tokens is None:
+            raise ValueError(
+                "max_output_tokens is required for Anthropic requests (the API "
+                "rejects a Messages request without max_tokens)."
+            )
+        forbidden = {
+            "temperature", "top_p", "top_k", "presence_penalty"
+        } & generation_params.keys()
+        if forbidden:
+            raise ValueError(
+                f"Sampling params {sorted(forbidden)} are removed in the Claude 5 "
+                f"family and return a 400."
+            )
+
         job_ids: list[str] = []
-        for start in range(0, len(bodies), MAX_REQUESTS_PER_JOB):
-            chunk = bodies[start:start + MAX_REQUESTS_PER_JOB]
+        for start in range(0, len(inputs), 100_000):
+            chunk = inputs[start:start + 100_000]
             batch = self.client.messages.batches.create(
                 requests=[
-                    {"custom_id": _custom_id(start + offset), "params": body}
-                    for offset, body in enumerate(chunk)
+                    {
+                        "custom_id": f"req-{start + offset}",
+                        "params": {
+                            "model": model_name,
+                            "max_tokens": max_output_tokens,
+                            "messages": messages,
+                            **generation_params,
+                        },
+                    }
+                    for offset, messages in enumerate(chunk)
                 ]
             )
             job_ids.append(batch.id)
@@ -112,52 +128,39 @@ class AnthropicBatchProvider:
 
         for jid in json.loads(job_id):
             for entry in self.client.messages.batches.results(jid):
-                result = _parse_entry(entry)
-                found.setdefault(result.index, result)
+                index = int(entry.custom_id.removeprefix("req-"))
+                if index in found:
+                    continue
+                outcome = entry.result
 
-        return order_results(found, n_requests)
+                if outcome.type != "succeeded":
+                    inner = getattr(getattr(outcome, "error", None), "error", None)
+                    found[index] = BatchResult(
+                        index, "", 0, 0,
+                        error=getattr(inner, "type", None) or outcome.type)
+                    continue
 
+                message = outcome.message
 
-def _custom_id(index: int) -> str:
-    """Encode a caller index as a batch custom_id."""
-    return f"req-{index}"
+                if message.stop_reason == "refusal":
+                    category = getattr(
+                        getattr(message, "stop_details", None), "category", None)
+                    found[index] = BatchResult(
+                        index, "", 0, 0,
+                        error=f"refusal ({category or 'unspecified'})")
+                    continue
 
+                found[index] = BatchResult(
+                    index=index,
+                    text="".join(
+                        block.text for block in message.content
+                        if block.type == "text"
+                    ),
+                    prompt_tokens=message.usage.input_tokens,
+                    completion_tokens=message.usage.output_tokens,
+                )
 
-def _parse_entry(entry: Any) -> BatchResult:
-    """Convert one streamed batch result into a BatchResult.
-
-    Args:
-        entry: An item yielded by messages.batches.results().
-
-    Returns:
-        The parsed result, with error set for anything but a usable success.
-    """
-    index = int(entry.custom_id.removeprefix("req-"))
-    outcome = entry.result
-
-    if outcome.type != "succeeded":
-        # errored / canceled / expired all land here. Expired means the batch
-        # ran out its window; those requests were never billed and can be
-        # resubmitted.
-        detail = getattr(getattr(outcome, "error", None), "type", None)
-        return BatchResult(index, "", 0, 0, error=detail or outcome.type)
-
-    message = outcome.message
-
-    # Claude 5 ships elevated safety classifiers: a declined request is a
-    # *successful* result carrying stop_reason "refusal" and empty content,
-    # not an error. Without this branch it would silently become an empty
-    # response with no explanation.
-    if message.stop_reason == "refusal":
-        category = getattr(getattr(message, "stop_details", None), "category", None)
-        return BatchResult(index, "", 0, 0, error=f"refusal ({category or 'unspecified'})")
-
-    text = "".join(
-        block.text for block in message.content if getattr(block, "type", None) == "text"
-    )
-    return BatchResult(
-        index=index,
-        text=text,
-        prompt_tokens=message.usage.input_tokens,
-        completion_tokens=message.usage.output_tokens,
-    )
+        return [
+            found.get(i, BatchResult(i, "", 0, 0, error="missing from batch output"))
+            for i in range(n_requests)
+        ]

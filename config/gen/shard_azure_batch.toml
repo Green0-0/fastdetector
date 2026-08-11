@@ -2,19 +2,16 @@ source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
-engine = "azure_oai"
-# On Azure this is the *deployment* name, not the model name.
+engine = "oai"
 model_name = "gpt-5-6-batch"
 parallelization_type = "none"
-disable_thinking = false
+disable_thinking = true
 
-# Offline Global Batch: ~50% of the synchronous rate, 24h completion window.
 batch = true
 batch_state_dir = ".batch_state"
 batch_poll_interval_secs = 300
 
-azure_endpoint = "https://YOUR-RESOURCE.openai.azure.com"
-azure_api_version = "2024-10-21"
+api_url = "https://YOUR-RESOURCE.openai.azure.com/openai/v1/"
 api_key_env = "AZURE_OPENAI_API_KEY"
 
 max_input_len = 15000
