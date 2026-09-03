@@ -1,12 +1,28 @@
 import asyncio
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from openai import AsyncOpenAI
 
 from fastdetector.frontend.toml_config import PipeConfig
+from fastdetector.generation_checkpoint import GenerationCheckpoint, TurnLog
 from fastdetector.prompting.prompts import Prompt, PromptSet
 from fastdetector.providers import BatchProvider, BatchState
+
+@dataclass(frozen=True)
+class _RequestResult:
+    """One online request result with an unambiguous success state."""
+
+    text: str
+    prompt_tokens: int
+    completion_tokens: int
+    error: str | None = None
+
+    @property
+    def succeeded(self) -> bool:
+        return self.error is None and bool(self.text.strip())
+
 
 async def _send_request(
     client: AsyncOpenAI,
@@ -14,7 +30,7 @@ async def _send_request(
     messages: list[dict[str, str]],
     generation_params: dict[str, Any],
     model_name: str = "",
-) -> tuple[str, int, int]:
+) -> _RequestResult:
     """Send a single chat completion request.
 
     Args:
@@ -25,8 +41,7 @@ async def _send_request(
         model_name: Model name for the API call.
 
     Returns:
-        Tuple of (response_text, prompt_tokens, completion_tokens).
-        On failure, returns ("", 0, 0).
+        Structured response with explicit error state.
     """
     async with semaphore:
         try:
@@ -40,15 +55,20 @@ async def _send_request(
 
             if not response.choices:
                 print("Request returned no choices (possibly content-filtered).")
-                return "", 0, 0
+                return _RequestResult("", 0, 0, "response contained no choices")
 
             usage = getattr(response, "usage", None)
             prompt_tokens = usage.prompt_tokens if usage else 0
             completion_tokens = usage.completion_tokens if usage else 0
-            return response.choices[0].message.content or "", prompt_tokens, completion_tokens
+            text = response.choices[0].message.content or ""
+            if not text.strip():
+                return _RequestResult(
+                    text, prompt_tokens, completion_tokens, "response contained no usable text"
+                )
+            return _RequestResult(text, prompt_tokens, completion_tokens)
         except Exception as e:
             print(f"Request failed: {e}")
-            return "", 0, 0
+            return _RequestResult("", 0, 0, str(e))
 
 
 async def _batch_generate_async(
@@ -57,6 +77,8 @@ async def _batch_generate_async(
     generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
+    row_ids: list[int] | None = None,
+    turn_log: TurnLog | None = None,
 ) -> tuple[list[str], int, int, int]:
     """Fire requests concurrently with a bounded semaphore.
 
@@ -68,11 +90,22 @@ async def _batch_generate_async(
         generation_params: Overrides for sampling params.
         api_key: API key for the endpoint (use "EMPTY" for local vLLM).
         model_name: Model name for the API call.
+        row_ids: Stable sample indices aligned with ``inputs``. Required with
+            ``turn_log``.
+        turn_log: Optional durable log which records each successful response.
 
     Returns:
         A tuple of (list of assistant response strings, total prompt tokens,
         total completion tokens, failed request count). Failed requests appear as empty strings.
     """
+    if (row_ids is None) != (turn_log is None):
+        raise ValueError("row_ids and turn_log must be provided together")
+    stable_ids = list(range(len(inputs))) if row_ids is None else row_ids
+    if len(stable_ids) != len(inputs):
+        raise ValueError("row_ids must have the same length as inputs")
+    if not inputs:
+        return [], 0, 0, 0
+
     client = AsyncOpenAI(
         base_url=api_url,
         api_key=api_key,
@@ -85,32 +118,41 @@ async def _batch_generate_async(
     failed_count = 0
 
     try:
-        async def _tracked_request(messages: list[dict[str, str]]) -> tuple[str, int, int]:
+        async def _tracked_request(
+            row_id: int, messages: list[dict[str, str]]
+        ) -> _RequestResult:
             """Send a request and update progress and failure counts.
 
             Args:
                 messages: List of message dicts.
 
             Returns:
-                Tuple of (response_text, prompt_tokens, completion_tokens).
+                Structured result.
             """
             nonlocal completed, failed_count
             result = await _send_request(client, semaphore, messages, generation_params, model_name=model_name)
             completed += 1
-            if result[0] == "" and result[1] == 0 and result[2] == 0:
+            if not result.succeeded:
                 failed_count += 1
+            elif turn_log is not None:
+                turn_log.append(
+                    row_id, result.text, result.prompt_tokens, result.completion_tokens
+                )
             if completed % 100 == 0 or completed == total:
                 print(f"  Progress: {completed}/{total} requests complete", flush=True)
             return result
 
-        tasks = [_tracked_request(messages) for messages in inputs]
+        tasks = [
+            _tracked_request(row_id, messages)
+            for row_id, messages in zip(stable_ids, inputs)
+        ]
         results = await asyncio.gather(*tasks)
     finally:
         await client.close()
 
-    texts = [r[0] for r in results]
-    prompt_tokens = sum(r[1] for r in results)
-    completion_tokens = sum(r[2] for r in results)
+    texts = [result.text for result in results]
+    prompt_tokens = sum(result.prompt_tokens for result in results)
+    completion_tokens = sum(result.completion_tokens for result in results)
 
     if failed_count > 0:
         print(
@@ -127,6 +169,8 @@ def batch_generate(
     generation_params: dict[str, Any],
     api_key: str = "EMPTY",
     model_name: str = "",
+    row_ids: list[int] | None = None,
+    turn_log: TurnLog | None = None,
 ) -> tuple[list[str], int, int, int]:
     """Send a batch of OpenAI-compatible chat conversations concurrently.
 
@@ -138,12 +182,19 @@ def batch_generate(
         generation_params: Overrides for sampling params.
         api_key: API key for the endpoint (use "EMPTY" for local vLLM).
         model_name: Model name for the API call.
+        row_ids: Stable sample indices aligned with ``inputs``. Required with
+            ``turn_log``.
+        turn_log: Optional durable log which records completed requests.
 
     Returns:
         A tuple of (list of assistant response strings, total prompt tokens,
         total completion tokens, failed request count). Failed requests appear as empty strings.
     """
-    return asyncio.run(_batch_generate_async(api_url, inputs, generation_params, api_key, model_name))
+    return asyncio.run(
+        _batch_generate_async(
+            api_url, inputs, generation_params, api_key, model_name, row_ids, turn_log
+        )
+    )
 
 
 def batch_generate_offline(
@@ -284,6 +335,8 @@ def build_dataset(
     provider: BatchProvider | None = None,
     state: BatchState | None = None,
     config: PipeConfig | None = None,
+    checkpoint: GenerationCheckpoint | None = None,
+    max_failure_rate: float | None = None,
 ) -> tuple[dict[str, list[Any]], int, int, int]:
     """Iteratively build a dataset dict by batching across the prompt dimension.
 
@@ -315,6 +368,10 @@ def build_dataset(
             offline batch API instead of the live endpoint.
         state: Durable record of submitted jobs. Required with *provider*.
         config: Pipeline settings for the batch path. Required with *provider*.
+        checkpoint: Prepared online-generation checkpoint. Not used with an
+            offline batch provider.
+        max_failure_rate: Abort when failures exceed this fraction of the
+            active rows in any online turn. ``None`` disables the guard.
 
     Returns:
         A tuple of (dataset_columns_dict, total_prompt_tokens, total_completion_tokens, total_failed_requests).
@@ -330,6 +387,10 @@ def build_dataset(
             "provider, state, and config must be given together to use the "
             "offline batch path."
         )
+    if provider is not None and checkpoint is not None:
+        raise ValueError("online generation checkpoints cannot be combined with an offline provider")
+    if max_failure_rate is not None and not 0.0 <= max_failure_rate <= 1.0:
+        raise ValueError("max_failure_rate must be between 0 and 1")
     print(f"Processing {len(samples)} samples...")
 
     if not samples:
@@ -359,15 +420,64 @@ def build_dataset(
             batch_inputs.append(messages)
             active_indices.append(sample_idx)
 
+        active_count = len(batch_inputs)
+        attempted_count = active_count
         if provider is None:
-            batch_responses, p_tokens, c_tokens, f_reqs = batch_generate(
-                api_url, batch_inputs, generation_params, api_key, model_name
-            )
+            if checkpoint is None:
+                batch_responses, p_tokens, c_tokens, f_reqs = batch_generate(
+                    api_url, batch_inputs, generation_params, api_key, model_name
+                )
+            else:
+                turn_log = checkpoint.turn(turn_idx)
+                cached = {
+                    row_id: saved
+                    for row_id in active_indices
+                    if (saved := turn_log.get(row_id)) is not None
+                }
+                pending = [
+                    (row_id, messages)
+                    for row_id, messages in zip(active_indices, batch_inputs)
+                    if row_id not in cached
+                ]
+                attempted_count = len(pending)
+                if cached:
+                    print(f"  Restored {len(cached)} responses from checkpoint.")
+                generated, p_tokens, c_tokens, f_reqs = batch_generate(
+                    api_url,
+                    [messages for _, messages in pending],
+                    generation_params,
+                    api_key,
+                    model_name,
+                    row_ids=[row_id for row_id, _ in pending],
+                    turn_log=turn_log,
+                )
+                generated_by_id = dict(zip((row_id for row_id, _ in pending), generated))
+                batch_responses = [
+                    cached[row_id].text if row_id in cached else generated_by_id[row_id]
+                    for row_id in active_indices
+                ]
+                p_tokens += sum(record.prompt_tokens for record in cached.values())
+                c_tokens += sum(record.completion_tokens for record in cached.values())
         else:
             assert state is not None and config is not None  # checked on entry
             batch_responses, p_tokens, c_tokens, f_reqs = batch_generate_offline(
                 provider, state, config, batch_inputs, generation_params,
                 model_name, turn_idx
+            )
+        if (
+            provider is None
+            and max_failure_rate is not None
+            and active_count
+            and f_reqs / active_count > max_failure_rate
+        ):
+            if checkpoint is not None:
+                checkpoint.flush()
+            raise RuntimeError(
+                f"Generation engine appears unhealthy on turn {turn_idx}: "
+                f"{f_reqs}/{attempted_count} newly attempted requests failed "
+                f"({f_reqs / active_count:.1%} of {active_count} active rows), "
+                f"above the configured "
+                f"{max_failure_rate:.1%} limit. The checkpoint was retained."
             )
         total_prompt_tokens += p_tokens
         total_completion_tokens += c_tokens

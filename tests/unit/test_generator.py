@@ -387,7 +387,7 @@ def test_batch_generate_keeps_failed_rows_aligned(fake_openai_server):
 
 
 def test_batch_generate_treats_a_null_content_as_an_empty_string(fake_openai_server):
-    """Test that null message content is converted to an empty string."""
+    """Null content is empty and must remain retryable even when usage exists."""
     def null_content(payload):
         return 200, {
             "id": "x",
@@ -409,9 +409,9 @@ def test_batch_generate_treats_a_null_content_as_an_empty_string(fake_openai_ser
         fake_openai_server.url, [[{"role": "user", "content": "hi"}]], {}
     )
     assert texts == [""]
-    # Usage was reported, so this is a truncated answer rather than a failure.
+    # Preserve reported usage, but do not mistake it for a usable response.
     assert prompt_tokens == 7
-    assert failed == 0
+    assert failed == 1
 
 
 def test_batch_generate_with_no_inputs_does_not_call_the_server(fake_openai_server):

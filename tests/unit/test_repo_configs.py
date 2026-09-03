@@ -143,10 +143,10 @@ def test_local_engine_configs_only_set_supported_sampling_params(
 def test_api_engine_configs_declare_an_endpoint(gen_config_path):
     """Every hosted-API config must say where requests go and how they authenticate.
 
-    What counts as "where" differs by transport: the first-party endpoints take
-    an explicit api_url, Azure derives it from the resource endpoint, and Claude
-    Platform on AWS derives it from the region while authenticating through the
-    AWS credential chain rather than a key.
+    What counts as "where" differs by transport: the OpenAI-compatible engines
+    take an explicit api_url, the Anthropic SDK has one fixed endpoint and needs
+    only a key, and Claude Platform on AWS derives it from the region while
+    authenticating through the AWS credential chain rather than a key.
     """
     pipeline = GenConfig(**load_toml(str(gen_config_path))).pipeline
     if pipeline.engine.is_local_server:
@@ -155,6 +155,9 @@ def test_api_engine_configs_declare_an_endpoint(gen_config_path):
     if pipeline.engine is EngineConfig.ANTHROPIC_AWS:
         # SigV4 through the standard AWS chain - no key env var to declare.
         assert pipeline.aws_region, "Claude Platform on AWS needs an explicit region"
+    elif pipeline.engine is EngineConfig.ANTHROPIC:
+        # api.anthropic.com is the SDK's only endpoint; there is no URL to set.
+        assert pipeline.api_key_env, "the anthropic engine needs api_key_env"
     else:
         assert pipeline.api_url, "an API engine needs api_url"
         assert pipeline.api_key_env, "an API engine needs api_key_env"

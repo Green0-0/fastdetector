@@ -17,7 +17,7 @@ export PYTHONUNBUFFERED=1
 export HF_HOME="${HF_HOME:-/usr/project/xtmp/fastdetector_hf_cache}"
 
 # ---- CUDA setup ----
-export CUDA_HOME=/usr/local/cuda-13.0/
+export CUDA_HOME=/usr/local/cuda-13.3/
 export PATH=$CUDA_HOME/bin:$PATH
 export CPATH=$CUDA_HOME/include:${CPATH:-}
 export CPLUS_INCLUDE_PATH=$CUDA_HOME/include:${CPLUS_INCLUDE_PATH:-}

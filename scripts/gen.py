@@ -4,6 +4,7 @@ import re
 from fastdetector.frontend.toml_config import GenConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
+from fastdetector.generation_checkpoint import GenerationCheckpoint
 from fastdetector.statistics.filters import (
     fix_encoding,
     has_filler_output,
@@ -88,13 +89,20 @@ def main() -> None:
     print(f"Target Dataset: {target_dataset}")
     print(f"Engine: {task_config.pipeline.engine}")
 
+    checkpoint = None
+    if not task_config.pipeline.batch:
+        checkpoint = GenerationCheckpoint(
+            task_config.pipeline.checkpoint_dir, f"gen_shard_{args.batch_id}"
+        )
+
     result_ds, readme_content = run_pipeline(
         globals_config=globals_config,
         pipe_config=task_config.pipeline,
         prompt_file=task_config.prompt_file,
         source_column=task_config.source_column,
         source_dataset_name=source_dataset,
-        batch_id=args.batch_id
+        batch_id=args.batch_id,
+        checkpoint=checkpoint,
     )
 
     print("Running post-processing...")
@@ -136,6 +144,8 @@ def main() -> None:
     push_shard(result_ds, stat_dataset, config_name=config_name)
     stub_readme = "# WIP Fastdetector dataset\nWaiting for statistics to finish generating...\n"
     upload_readme(dataset_name=stat_dataset, readme_content=stub_readme)
+    if checkpoint is not None:
+        checkpoint.retire()
 
 
 if __name__ == "__main__":

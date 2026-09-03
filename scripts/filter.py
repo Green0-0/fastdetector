@@ -2,6 +2,7 @@ import argparse
 from fastdetector.frontend.toml_config import FilterConfig
 from fastdetector.frontend.toml_loader import load_config_pair
 from fastdetector.frontend.pipe import run_pipeline
+from fastdetector.generation_checkpoint import GenerationCheckpoint
 from fastdetector.utils import apply_filter_conditions, push_shard, shard_config_name, upload_readme
 
 from fastdetector.statistics.filters import is_non_english
@@ -35,6 +36,12 @@ def main() -> None:
     source_dataset = globals_config.resolve_dataset(globals_config.raw_dataset)
     config_name = shard_config_name(args.batch_id)
 
+    checkpoint = None
+    if not filter_config.pipeline.batch:
+        checkpoint = GenerationCheckpoint(
+            filter_config.pipeline.checkpoint_dir, f"filter_shard_{args.batch_id}"
+        )
+
     print("Running filtering generation pipeline...")
     ds, gen_readme = run_pipeline(
         globals_config=globals_config,
@@ -43,6 +50,7 @@ def main() -> None:
         source_column=filter_config.source_column,
         source_dataset_name=source_dataset,
         batch_id=args.batch_id,
+        checkpoint=checkpoint,
     )
         
     originals = ds["original"]
@@ -113,6 +121,8 @@ def main() -> None:
         push_shard(trashed_ds, filtered_dataset, config_name=trashed_name)
 
     upload_readme(dataset_name=filtered_dataset, readme_content=filtered_readme)
+    if checkpoint is not None:
+        checkpoint.retire()
 
 
 if __name__ == "__main__":

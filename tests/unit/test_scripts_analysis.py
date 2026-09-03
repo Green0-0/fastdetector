@@ -424,30 +424,33 @@ def report() -> tuple[str, dict]:
 
 def test_the_report_has_every_fixed_section(report):
     readme, _ = report
-    for heading in ["## Univariate Analysis", "## Correlation Heatmap", "## Histogram, Distances",
-                    "## Histogram, Classification", "## Classifiers Comparison Table",
-                    "## Classifier Thresholds", "## Classifier Report: Score",
-                    "## Manually Specified Full Report"]:
+    for heading in ["## Evaluation Results", "## Statistics of Interest", "## Appendix",
+                    "### Univariate Analysis", "### Correlation Heatmap",
+                    "### Distance Histograms", "### Distance Histograms per Prompt Subset",
+                    "### Distance Histograms per Generator Config Subset",
+                    "### Classifier: Score", "#### Performance:", "#### Thresholding:",
+                    "#### Classification Histograms:"]:
         assert heading in readme
 
 
-def test_the_contents_heading_is_not_the_one_the_hub_strips(report):
-    # A section headed exactly "Table of Contents" is deleted by the Hub's card
-    # renderer, list and all.
+def test_the_appendix_has_a_blockquoted_table_of_contents(report):
     readme, _ = report
-    assert "## Contents" in readme
-    assert "Table of Contents" not in readme
+    assert "> Table of contents" in readme
+    assert "## Table of Contents" not in readme
 
 
 def test_every_contents_entry_links_to_a_heading_that_exists(report):
     readme, _ = report
-    body = readme.split("## Contents", 1)[1].split("\n\n", 1)[1]
-    for entry in build_contents(body):
-        assert entry in readme
+    body = readme.split("## Appendix", 1)[1]
+    for entry in build_contents(body, base_level=3):
+        assert f"> {entry}" in readme
 
 
-def test_the_run_configuration_states_what_was_skipped(report):
-    assert "- Distance Metrics Skipped (not in this dataset): `never_computed`" in report[0]
+def test_the_classifier_header_does_not_dump_implementation_details(report):
+    readme, _ = report
+    header = next(line for line in readme.splitlines() if line.startswith("- Classifiers:"))
+    assert header == "- Classifiers: 1 (Score)"
+    assert "columns `*_score`" not in readme
 
 
 def test_every_chart_the_readme_embeds_was_rendered_and_nothing_else(report):
@@ -457,12 +460,20 @@ def test_every_chart_the_readme_embeds_was_rendered_and_nothing_else(report):
     assert all(files[name].startswith(b"\x89PNG") for name in embedded)
 
 
+def test_statistics_of_interest_only_embeds_available_requested_metrics(report):
+    section = report[0].split("## Statistics of Interest", 1)[1].split("## Appendix", 1)[0]
+    assert "![COSDIST by Prompt Subset](DIST_BY_PROMPT_COSDIST.png)" in section
+    assert "![COSDIST by Generator Config](DIST_BY_MODEL_COSDIST.png)" in section
+    assert "JACCARD_1" not in section
+    assert "never_computed" not in section
+
+
 def test_a_clean_separation_is_reported_as_one(report):
-    auroc = float(re.search(r"scores AUROC ([\d.]+)", report[0]).group(1))
+    auroc = float(re.search(r"with an AUROC of ([\d]+\.[\d]+)", report[0]).group(1))
     assert auroc > 0.95
 
 
-def test_filtering_is_reported_as_loaded_versus_analyzed():
+def test_filtering_is_reflected_in_the_reported_rows():
     ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}", "keep": float(i % 4),
                              "original_score": float(i), "final_response_score": float(i + 10)}
                             for i in range(200)])
@@ -470,9 +481,9 @@ def test_filtering_is_reported_as_loaded_versus_analyzed():
                                filter_conditions=[ConditionConfig(column="keep", operator=">=", value=2)],
                                classifiers=[make_classifier("Score", "_score")])
     readme, _ = run_main(ds, cfg)
-    assert "- Rows Loaded: 200" in readme
-    assert "- Rows Analyzed (after filtering): 100" in readme
+    assert "- Rows: 100" in readme
     assert "- Filter Conditions: `keep >= 2`" in readme
+    assert "- Evaluation / Validation Rows: 90 / 10" in readme
 
 
 def test_a_bare_dataset_says_what_it_could_not_break_down():
@@ -484,7 +495,7 @@ def test_a_bare_dataset_says_what_it_could_not_break_down():
         classifiers=[make_classifier("Score", "_score")]))
     for expected in ["No distance metrics were configured or found.",
                      "No prompt metadata was found, so there are no prompt subsets.",
-                     "No generator model/genconfig metadata was found in this dataset"]:
+                     "No generator model/genconfig metadata was found, so there are no generator subsets."]:
         assert expected in readme
 
 
@@ -494,10 +505,9 @@ def test_manual_thresholds_everywhere_skip_the_validation_split():
                             for i in range(120)])
     readme, files = run_main(ds, make_analysis_config(
         classifiers=[make_classifier("Score", "_score", manual_threshold=0.5)]))
-    assert "Every classifier has a manual threshold, so no validation sweep was run." in readme
+    assert "- Sweeping skipped and fixed at 0.5000." in readme
     assert not any(name.startswith("SWEEP_") for name in files)
     assert "- Evaluation / Validation Rows: 120 / 0" in readme
-    assert "pinned manually at 0.5" in readme
 
 
 def test_only_the_classifiers_without_a_manual_threshold_are_swept():
@@ -513,8 +523,35 @@ def test_only_the_classifiers_without_a_manual_threshold_are_swept():
     readme, files = run_main(ds, cfg)
     assert [n for n in files if n.startswith("SWEEP_")] == ["SWEEP_BUCKET.png"]
     assert "- Evaluation / Validation Rows: 90 / 10" in readme
-    assert "**Score** - columns `*_score`, direction `higher_is_ai` (pinned manually at 0.6)" in readme
-    assert "**Bucket** - columns `*_bucket`, direction `higher_is_ai` (swept for `f1` on the validation split)" in readme
+    assert "- Classifiers: 2 (Score, Bucket)" in readme
+    assert "- Sweeping skipped and fixed at 0.6000." in readme
+    assert "- Swept for `f1` with a found threshold of" in readme
+
+
+def test_classifier_and_averaged_subset_tables_are_sorted_and_cover_every_classifier():
+    prompts = ["a", "b"]
+    ds = Dataset.from_list([{
+        "original": f"h{i}", "final_response": f"a{i}",
+        "prompt": {"metadata": {"PROMPT_TYPE": prompts[i % 2]}},
+        "generator_model": f"org/model-{i % 2}",
+        "generation_params": json.dumps({"temperature": 0.6}),
+        "original_good": i / 100, "final_response_good": 0.6 + i / 100,
+        "original_bad": 0.6 + i / 100, "final_response_bad": i / 100,
+    } for i in range(40)])
+    cfg = make_analysis_config(classifiers=[
+        make_classifier("Bad", "_bad", manual_threshold=0.5),
+        make_classifier("Good", "_good", manual_threshold=0.5),
+    ])
+    readme, files = run_main(ds, cfg)
+
+    comparison = readme.split("| Classifier |", 1)[1].split(
+        "Classifier metrics averaged", 1)[0]
+    assert comparison.index("Good") < comparison.index("Bad")
+    assert "| Subset | Average AUROC | Average TPR | Average FPR | Average Accuracy | Average F1 |" in readme
+    assert "| Prompt: a | 0.5000 | 0.5000 | 0.5000 | 0.5000 | 0.5000 |" in readme
+    assert readme.count("model-0 (Temp: 0.6) |") == 3
+    assert "CLF_HIST_BAD_MODEL_MODEL_0_TEMP_0_6.png" in files
+    assert "CLF_HIST_GOOD_MODEL_MODEL_0_TEMP_0_6.png" in files
 
 
 def test_a_pinned_classifier_does_not_read_the_validation_split():
@@ -543,9 +580,10 @@ def test_a_manual_threshold_of_zero_is_not_read_as_unset():
         classifiers=[make_classifier("Score", "_score", manual_threshold=0.0)])
     readme, files = run_main(ds, cfg)
     assert not any(name.startswith("SWEEP_") for name in files)
-    assert "pinned manually at 0" in readme
+    assert "- Sweeping skipped and fixed at 0.0000." in readme
     # Every AI score is positive and every human score negative, so 0 separates.
-    assert "catching 100.00% of AI rows at 0.00% false positives" in readme
+    overall = re.search(r"\| Overall \|[^\n]+", readme).group(0)
+    assert "| 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 |" in overall
 
 
 def test_a_config_with_no_classes_at_all_is_rejected():

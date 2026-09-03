@@ -23,10 +23,12 @@ def make_provider(pipe_config) -> BatchProvider:
         ValueError: if the engine has no offline-batch transport.
     """
     engine = pipe_config.engine
+    # None rather than "" so an unset variable falls through to the SDK's own
+    # credential lookup, and its "no API key" error instead of a bare 401.
     api_key = (
-        os.environ.get(pipe_config.api_key_env, "")
+        os.environ.get(pipe_config.api_key_env) or None
         if pipe_config.api_key_env
-        else ""
+        else None
     )
 
     if engine == EngineConfig.OAI:

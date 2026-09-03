@@ -357,7 +357,7 @@ def subset_table(run: Run, overall: Subset, subsets: list[Subset], row_header: s
                           mark_key="auroc", skip_marks={overall.name})
 
 
-def build_contents(body: str) -> list[str]:
+def build_contents(body: str, base_level: int = 2) -> list[str]:
     """Build the nested contents list from the headings *body* actually has.
 
     Reading the headings back out of the rendered markdown (rather than listing
@@ -367,23 +367,59 @@ def build_contents(body: str) -> list[str]:
     assign them, in document order.
 
     Args:
-        body: The rendered markdown body, below the introduction.
+        body: The rendered markdown body.
+        base_level: Heading level to number. Its immediate children are
+            indented beneath it.
 
     Returns:
-        Markdown list items: ``##`` headings numbered at the top level, ``###``
-        headings indented beneath them.
+        Markdown list items: headings at *base_level* numbered at the top
+        level, with their immediate child headings indented beneath them.
     """
     seen: dict[str, int] = {}
     entries, number = [], 0
-    for match in re.finditer(r"^(#{2,3})[ \t]+(.+?)[ \t]*$", body, re.M):
+    headings = rf"^({'#' * base_level}|{'#' * (base_level + 1)})[ \t]+(.+?)[ \t]*$"
+    for match in re.finditer(headings, body, re.M):
         title = match[2]
         slug = re.sub(r"[\s_]+", "-", re.sub(r"[^\w\s-]", "", title.lower()).strip())
         seen[slug] = seen.get(slug, 0) + 1
         anchor = slug if seen[slug] == 1 else f"{slug}-{seen[slug] - 1}"
-        number += len(match[1]) == 2
-        entries.append(f"{number}. [{title}](#{anchor})" if len(match[1]) == 2
+        number += len(match[1]) == base_level
+        entries.append(f"{number}. [{title}](#{anchor})" if len(match[1]) == base_level
                        else f"    - [{title}](#{anchor})")
     return entries
+
+
+def sorted_metric_rows(rows: list[dict], key: str = "auroc") -> list[dict]:
+    """Sort table rows by a metric, highest first and missing values last."""
+    def order(row: dict) -> tuple:
+        value = row["values"].get(key)
+        valid = value is not None and value == value
+        return (not valid, -float(value) if valid else 0.0, row["name"])
+
+    return sorted(rows, key=order)
+
+
+def averaged_subset_rows(runs: dict[str, Run], subsets: list[Subset]) -> list[dict]:
+    """Average classifier metrics for each corpus subset."""
+    columns = ("auroc", "tpr", "fpr", "accuracy", "f1")
+    rows = []
+    for subset in subsets:
+        values = {}
+        for column in columns:
+            observed = np.asarray([run.subsets[subset][column] for run in runs.values()], dtype=float)
+            finite = observed[np.isfinite(observed)]
+            values[f"average_{column}"] = float(np.mean(finite)) if finite.size else float("nan")
+        rows.append({"name": subset.name, "values": values})
+    return sorted_metric_rows(rows, key="average_auroc")
+
+
+def performance_table(run: Run, groups: SubsetGroups) -> str:
+    """Render one classifier over the overall, prompt, and generator subsets."""
+    rows = [{"name": groups.overall.name, "values": run.subsets[groups.overall]}]
+    rows += [{"name": sub.name, "values": run.subsets[sub]}
+             for sub in [*groups.prompts, *groups.models]]
+    return plotting.table(rows, ["n", "auroc", "tpr", "fpr", "accuracy", "f1"], "Subset",
+                          mark_key="auroc", skip_marks={groups.overall.name})
 
 
 # --------------------------------------------------------------------------
@@ -407,7 +443,6 @@ def main() -> None:
     dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
     print(f"Loading all shards for dataset {dataset}...")
     ds = load_dataset_all_shards(dataset, split="train")
-    rows_loaded = len(ds)
     if cfg.filter_conditions:
         print("Applying filters...")
         ds = apply_filter_conditions(ds, cfg.filter_conditions, cfg.filter_type)
@@ -447,10 +482,8 @@ def main() -> None:
     test_ai = None if auto is None else test(auto) == cfg.ai_label
     val_ai = None if auto is None or not swept else val(auto) == cfg.ai_label
     runs = {}
-    for index, clf in enumerate(classifiers):
-        # Only the first classifier gets the per-generator breakdown; that is
-        # the hardcoded "full report" slot at the end of the document.
-        subsets = [groups.overall, *groups.prompts, *(groups.models if index == 0 else [])]
+    for clf in classifiers:
+        subsets = [groups.overall, *groups.prompts, *groups.models]
         # A pinned classifier never looks at the validation split, so it does
         # not pay to flatten it - which with every threshold pinned is the whole
         # dataset a second time.
@@ -475,25 +508,22 @@ def main() -> None:
         charts[f"DIST_HIST_{safe_name(name)}.png"] = plotting.histogram([(values, name)], f"Distance: {name}")
     for clf in swept:
         charts[f"SWEEP_{safe_name(clf.name)}.png"] = runs[clf.name].sweep_chart
-    for index, clf in enumerate(classifiers):
+    for clf in classifiers:
         scores = runs[clf.name].scores
         charts[f"CLF_HIST_{safe_name(clf.name)}.png"] = plotting.histogram(scores.series(),
                                                                           f"Classifier: {clf.name}")
-        for sub in [*groups.prompts, *(groups.models if index == 0 else [])]:
+        for sub in [*groups.prompts, *groups.models]:
             charts[f"CLF_HIST_{safe_name(clf.name)}_{sub.safe}.png"] = plotting.histogram(
                 scores.subset(sub.mask).series(), f"{clf.name}: {sub.name}")
-    # Distances split by prompt subset are classifier-independent and stand on
-    # their own under the distances section; the per-generator split is only
-    # read by the lead classifier's hardcoded report, so it needs a classifier.
+    # Distances are properties of the corpus, so each family is rendered once
+    # and shared by the overview and appendix.
     for family, prefix, group in ((groups.prompts, "DIST_BY_PROMPT", "Prompt Subset"),
-                                  (groups.models if classifiers else [], "DIST_BY_MODEL", "Generator Config")):
+                                  (groups.models, "DIST_BY_MODEL", "Generator Config")):
         for name, values in (distances if family else []):
             charts[f"{prefix}_{safe_name(name)}.png"] = plotting.histogram(
                 [(values[sub.mask], sub.name) for sub in family], f"{name} by {group}")
 
     # ---------------------------------------------------------- configuration
-    # Mirrors the parameter dumps gen.py and filter.py write, so a dataset card
-    # always states the settings that produced it.
     if cfg.fixed_classes is not None:
         roles = ", ".join(f"`{col}` ({'AI' if is_ai else 'Human'})"
                           for col, is_ai in zip(cfg.base_columns, cfg.fixed_classes))
@@ -501,68 +531,71 @@ def main() -> None:
         roles = (", ".join(f"`{col}`" for col in cfg.base_columns)
                  + f" (classed by `{cfg.auto_class_column}`, AI label `{cfg.ai_label}`)")
 
-    bullets = []
-    for clf in cfg.classifiers:
-        missing = skipped.get(clf.name)
-        if missing:
-            # Naming the absent columns is the whole point: it says which
-            # statistics stage has not been run for this dataset.
-            bullets.append(f"    - ~~**{clf.name}**~~ - SKIPPED, the dataset has no "
-                           f"`{'`, `'.join(missing)}` column(s)")
-        else:
-            bullets.append(f"    - **{clf.name}** - columns `*{clf.suffix}`, direction "
-                           f"`{clf.direction}` ({threshold_description(clf)})")
-
     conditions = f" {cfg.filter_type} ".join(
         f"`{c.column} {c.operator} {c.value}`" for c in cfg.filter_conditions) or "None"
-    measured = ", ".join(f"`{m}`" for m in distance_metrics) or "None"
-    unmeasured = ", ".join(f"`{m}`" for m in missing_metrics) or "None"
-    classifier_lines = "\n".join(bullets) or "    - None configured"
+    classifier_names = ", ".join(
+        f"{clf.name} [skipped]" if clf.name in skipped else clf.name for clf in cfg.classifiers) or "None"
 
-    configuration = f"""- Dataset: `{dataset}`
+    provenance = f"""- Dataset: `{dataset}`
 - Globals Config: `{args.globals_config}`
 - Analysis Config: `{args.analysis_config}`
-- Rows Loaded: {rows_loaded:,}
-- Filter Conditions: {conditions}
-- Rows Analyzed (after filtering): {rows_analyzed:,}
-- Evaluation / Validation Rows: {len(test_ds):,} / {len(val_ds) if swept else 0:,} (validation_size = {cfg.validation_size})
-- Base Columns: {roles}
-- Distance Metrics: {measured}
-- Distance Metrics Skipped (not in this dataset): {unmeasured}
-- Prompt Subsets: {len(unique_prompts)} ({', '.join(unique_prompts) or 'None'})
+- Rows: {rows_analyzed:,}"""
+
+    evaluation_config = f"""- Prompt Subsets: {len(unique_prompts)} ({', '.join(unique_prompts) or 'None'})
 - Generator Configs: {len(unique_models)} ({', '.join(unique_models) or 'None'})
-- Classifiers:
-{classifier_lines}"""
+- Classifiers: {len(cfg.classifiers)} ({classifier_names})
+- Filter Conditions: {conditions}
+- Evaluation / Validation Rows: {len(test_ds):,} / {len(val_ds) if swept else 0:,} (validation_size = {cfg.validation_size})
+- Base Columns: {roles}"""
 
-    # ------------------------------------------------------- summary paragraph
+    # ----------------------------------------------------- evaluation summary
     overall = {name: run.subsets[groups.overall] for name, run in runs.items()}
-    ranked = sorted(((m["auroc"], name) for name, m in overall.items() if m["auroc"] == m["auroc"]), reverse=True)
-    summary = [f"This readme computes the detection report for `{dataset}`: {rows_analyzed:,} human/AI text pairs from {len(unique_models)} generator configuration(s) and {len(unique_prompts)} prompt type(s), summarised univariately, correlated against each other, and used to score {len(runs)} classifier(s) as AI-text detectors."]
+    classifier_rows = sorted_metric_rows([
+        {"name": name, "values": {**run.subsets[groups.overall], **run.values}}
+        for name, run in runs.items()])
+    subset_rows = averaged_subset_rows(runs, [*groups.prompts, *groups.models]) if runs else []
 
-    if len(ranked) >= 2:
-        best = overall[ranked[0][1]]
-        summary.append(f"Over the whole evaluation split **{ranked[0][1]}** separates the two classes best (AUROC {fmt(ranked[0][0])}, catching {fmt(best['tpr'], '.2%')} of AI rows at {fmt(best['fpr'], '.2%')} false positives), while **{ranked[-1][1]}** is weakest (AUROC {fmt(ranked[-1][0])}).")
-    elif ranked:
-        only = overall[ranked[0][1]]
-        summary.append(f"Over the whole evaluation split **{ranked[0][1]}** scores AUROC {fmt(ranked[0][0])}, catching {fmt(only['tpr'], '.2%')} of AI rows at {fmt(only['fpr'], '.2%')} false positives at its pinned threshold.")
-    if distances:
-        summary.append(f"{len(distances)} pairwise distance metric(s) ({measured}) measure how far each AI response moved from its human original; they are profiled here and correlated against every classifier score.")
+    summary = []
+    ranked_classifiers = [row for row in classifier_rows
+                          if row["values"]["auroc"] == row["values"]["auroc"]]
+    if ranked_classifiers:
+        best = ranked_classifiers[0]
+        summary.append(f"The best classifier was **{best['name']}** with an AUROC of "
+                       f"{fmt(best['values']['auroc'])}.")
 
-    if classifiers:
-        lead = classifiers[0].name
-        auroc = lambda sub: runs[lead].subsets[sub]["auroc"]
-        by_prompt = sorted([(s.label, auroc(s)) for s in groups.prompts if auroc(s) == auroc(s)],
-                           key=lambda pair: pair[1], reverse=True)
+    def hardest(family: list[Subset]) -> Optional[dict]:
+        names = {sub.name for sub in family}
+        candidates = [row for row in subset_rows
+                      if row["name"] in names
+                      and row["values"]["average_tpr"] == row["values"]["average_tpr"]]
+        return min(candidates, key=lambda row: (row["values"]["average_tpr"], row["name"])) if candidates else None
 
-        summary.append(f"Every classifier is then broken down over {len(groups.prompts)} prompt subset(s).")
-        if len(by_prompt) >= 2:
-            summary.append(f"For **{lead}**, the easiest subset is {by_prompt[0][0]} (AUROC {fmt(by_prompt[0][1])}) and the hardest {by_prompt[-1][0]} (AUROC {fmt(by_prompt[-1][1])}).")
-        if groups.models:
-            summary.append(f"The final section reports **{lead}** across the {len(groups.models)} generator configuration(s) that wrote the AI side of the corpus.")
+    hard_prompt, hard_model = hardest(groups.prompts), hardest(groups.models)
+    if hard_prompt and hard_model:
+        summary.append(f"The hardest prompt subset was **{hard_prompt['name'].split(': ', 1)[-1]}** "
+                       f"with a TPR of {fmt(hard_prompt['values']['average_tpr'])}, and the hardest generator "
+                       f"config was **{hard_model['name'].split(': ', 1)[-1]}** with a TPR of "
+                       f"{fmt(hard_model['values']['average_tpr'])}.")
+    elif hard_prompt:
+        summary.append(f"The hardest prompt subset was **{hard_prompt['name'].split(': ', 1)[-1]}** "
+                       f"with a TPR of {fmt(hard_prompt['values']['average_tpr'])}.")
+    elif hard_model:
+        summary.append(f"The hardest generator config was **{hard_model['name'].split(': ', 1)[-1]}** "
+                       f"with a TPR of {fmt(hard_model['values']['average_tpr'])}.")
+
+    comparison = "No classifiers were configured or found."
+    if classifier_rows:
+        comparison = plotting.table(
+            classifier_rows, ["threshold", "auroc", "tpr", "fpr", "accuracy", "f1"],
+            row_header="Classifier", mark_key="auroc")
+
+    subset_comparison = "No prompt or generator subsets were available to compare."
+    if subset_rows:
+        subset_comparison = plotting.table(
+            subset_rows, ["average_auroc", "average_tpr", "average_fpr", "average_accuracy",
+                          "average_f1"], row_header="Subset", mark_key="average_auroc")
 
     # ------------------------------------------------------------- the report
-    # Each block below is one section's prose and body, exactly as it is read;
-    # a section the dataset had nothing to put in says so instead.
     univariate = correlation = "No statistics of interest were found in this dataset."
     if statistics:
         univariate_table = plotting.table(
@@ -575,136 +608,120 @@ def main() -> None:
 
 ![CORRELATIONS](CORRELATIONS.png)"""
 
-    distance_hists = "No distance metrics were configured or found."
-    if distances:
-        embeds = "\n".join(f"![Distance: {name}](DIST_HIST_{safe_name(name)}.png)" for name, _ in distances)
-        distance_hists = f"""Distribution of each pairwise distance between a human original and its AI rewrite, over the whole evaluation split.
+    def distance_embeds(prefix: str, label: str, family: list[Subset]) -> str:
+        if not distances:
+            return "No distance metrics were configured or found."
+        if not family and prefix != "DIST_HIST":
+            return f"No {label.lower()} metadata was found, so there are no subsets."
+        return "\n".join(f"![{name} by {label}]({prefix}_{safe_name(name)}.png)"
+                         if prefix != "DIST_HIST" else
+                         f"![Distance: {name}](DIST_HIST_{safe_name(name)}.png)"
+                         for name, _ in distances)
 
-{embeds}"""
-        if groups.prompts:
-            # These are a property of the corpus, not of any classifier, so they
-            # are reported once here rather than repeated in every classifier
-            # report below.
-            by_prompt = "\n".join(f"![{name} by Prompt Subset](DIST_BY_PROMPT_{safe_name(name)}.png)"
-                                  for name, _ in distances)
-            distance_hists += f"""
-
-### Distance Histograms per Prompt Subset
-The same distances, split by the {len(groups.prompts)} prompt subset(s).
-
-{by_prompt}"""
-
-    classifier_hists = comparison = "No classifiers were configured."
-    if classifiers:
-        embeds = "\n".join(f"![Classifier: {clf.name}](CLF_HIST_{safe_name(clf.name)}.png)" for clf in classifiers)
-        classifier_hists = f"""Human and AI score distributions for each classifier, overlaid, over the whole evaluation split.
-
-{embeds}"""
-        comparison_table = plotting.table(
-            [{"name": name, "values": {**run.subsets[groups.overall], **run.values}} for name, run in runs.items()],
-            ["threshold", "auroc", "tpr", "fpr", "accuracy", "f1"], row_header="Classifier",
-            mark_key="auroc")
-        comparison = f"""AUROC is threshold-free; TPR, FPR, accuracy and F1 are measured at each classifier's own pinned threshold (shown in the first column). Rows a classifier produced no usable score for are excluded from its metrics and counted in the univariate table's `Invalid` column.
-
-{comparison_table}
-
-✔️ marks the best AUROC, ❗ the worst."""
-
-    sweeps = "Every classifier has a manual threshold, so no validation sweep was run."
-    if swept:
-        plots = "\n\n".join(f"**{clf.name}** ({threshold_description(clf)})\n\n"
-                            f"![SWEEP_{safe_name(clf.name)}](SWEEP_{safe_name(clf.name)}.png)" for clf in swept)
-        sweeps = f"""Accuracy against threshold on the {len(val_ds):,}-row validation split, with each candidate threshold type marked. The type named in the run configuration is the one pinned for the tables above.
-
-{plots}
-"""
+    interest = []
+    available_distances = {name.lower(): name for name, _ in distances}
+    for wanted, family, prefix, label in (
+            ("jaccard_1", groups.prompts, "DIST_BY_PROMPT", "Prompt Subset"),
+            ("cosdist", groups.prompts, "DIST_BY_PROMPT", "Prompt Subset"),
+            ("jaccard_1", groups.models, "DIST_BY_MODEL", "Generator Config"),
+            ("cosdist", groups.models, "DIST_BY_MODEL", "Generator Config")):
+        if wanted in available_distances and family:
+            name = available_distances[wanted]
+            interest.append(f"![{name.upper()} by {label}]({prefix}_{safe_name(name)}.png)")
+    statistics_of_interest = "\n".join(interest) or "No JACCARD_1 or COSDIST subset statistics were available."
 
     reports = ""
     for clf in classifiers:
         run, safe = runs[clf.name], safe_name(clf.name)
-        score_hists = ("\n".join(f"![{clf.name}: {sub.name}](CLF_HIST_{safe}_{sub.safe}.png)"
-                                 for sub in groups.prompts)
-                       or "No prompt metadata was found, so there are no prompt subsets.")
-        reports += f"""## Classifier Report: {clf.name}
-Threshold {threshold_description(clf)} = {fmt(run.threshold)}; scores read from `*{clf.suffix}` ({clf.direction}).
+        prompt_hists = ("\n".join(f"![{clf.name}: {sub.name}](CLF_HIST_{safe}_{sub.safe}.png)"
+                                  for sub in groups.prompts)
+                        or "No prompt metadata was found, so there are no prompt subsets.")
+        model_hists = ("\n".join(f"![{clf.name}: {sub.name}](CLF_HIST_{safe}_{sub.safe}.png)"
+                                 for sub in groups.models)
+                       or "No generator model/genconfig metadata was found, so there are no generator subsets.")
+        if clf.manual_threshold is None:
+            thresholding = (f"- Direction: `{clf.direction}`\n"
+                            f"- Swept for `{clf.threshold_type}` with a found threshold of "
+                            f"{fmt(run.threshold)}.\n\n"
+                            f"![Threshold Sweep: {clf.name}](SWEEP_{safe}.png)")
+        else:
+            thresholding = (f"- Direction: `{clf.direction}`\n"
+                            f"- Sweeping skipped and fixed at {fmt(run.threshold)}.")
+        reports += f"""### Classifier: {clf.name}
 
-### {clf.name}: By Prompt Subset
-{subset_table(run, groups.overall, groups.prompts, "Prompt Subset")}
+#### Performance:
 
-### {clf.name}: Score Histograms per Prompt Subset
-{score_hists}
+{performance_table(run, groups)}
+
+#### Thresholding:
+
+{thresholding}
+
+#### Classification Histograms:
+
+![Classifier: {clf.name}](CLF_HIST_{safe}.png)
+
+**Per Prompt Subset**
+
+{prompt_hists}
+
+**Per Generator Config Subset**
+
+{model_hists}
 
 """
 
-    full_report = "No classifiers were configured."
-    if classifiers:
-        lead_clf = classifiers[0]
-        full_report = f"This section is hardcoded: it reports the *first* configured classifier (**{lead_clf.name}**) over the generator model/sampling configurations that produced the AI side of each pair."
-        if not groups.models:
-            full_report += "\n\nNo generator model/genconfig metadata was found in this dataset, so there is nothing to break down here."
-        else:
-            score_hists = "\n".join(
-                f"![{lead_clf.name}: {sub.name}](CLF_HIST_{safe_name(lead_clf.name)}_{sub.safe}.png)"
-                for sub in groups.models)
-            distance_block = ""
-            if distances:
-                embeds = "\n".join(f"![{name} by Generator Config](DIST_BY_MODEL_{safe_name(name)}.png)"
-                                   for name, _ in distances)
-                distance_block = f"""
+    appendix_body = f"""### Univariate Analysis
 
-### Distance Histograms per Generator Config
-{embeds}"""
-            full_report += f"""
-
-{subset_table(runs[lead_clf.name], groups.overall, groups.models, "Generator Config")}
-
-### Score Histograms per Generator Config
-{score_hists}{distance_block}"""
-
-    body = f"""## Univariate Analysis
 {univariate}
 
-## Correlation Heatmap
+### Correlation Heatmap
+
 {correlation}
 
-## Histogram, Distances
-{distance_hists}
+### Distance Histograms
 
-## Histogram, Classification
-{classifier_hists}
+{distance_embeds("DIST_HIST", "Distance", [groups.overall])}
 
-## Classifiers Comparison Table
-{comparison}
+### Distance Histograms per Prompt Subset
 
-## Classifier Thresholds
-{sweeps}
+{distance_embeds("DIST_BY_PROMPT", "Prompt Subset", groups.prompts)}
 
-{reports}## Manually Specified Full Report
-{full_report}
+### Distance Histograms per Generator Config Subset
+
+{distance_embeds("DIST_BY_MODEL", "Generator Config", groups.models)}
+
+{reports if reports else "No classifiers were configured or found."}
 """
-
-    # The contents list is read back out of the body above rather than listed a
-    # second time by hand, so every entry is a working link and a section that
-    # is renamed, added or skipped changes its own entry.
-    #
-    # Its heading must NOT be "Table of Contents": the Hugging Face card
-    # renderer silently strips a section headed exactly that (it is boilerplate
-    # in the Hub's own dataset-card template), heading and list both, so the
-    # readme rendered on the Hub had no contents at all. Verified against the
-    # rendered pages of squad and glue, which lose theirs the same way, while
-    # cards heading the same list "Contents" keep it. Renaming this back will
-    # delete it again.
-    contents = "\n".join(build_contents(body))
+    contents = "\n".join(f"> {line}" if line else ">" for line in
+                         ["Table of contents", "", *build_contents(appendix_body, base_level=3)])
     readme = f"""# Auto-Generated FastDetector Dataset
 
-{configuration}
+{provenance}
 
-{" ".join(summary)}
+## Evaluation Results
 
-## Contents
+{evaluation_config}
+
+{' '.join(summary)}
+
+{comparison}
+
+Classifier metrics averaged within each prompt and generator subset:
+
+{subset_comparison}
+
+✔️ marks the best AUROC, ❗ the worst.
+
+## Statistics of Interest
+
+{statistics_of_interest}
+
+## Appendix
+
 {contents}
 
-{body}"""
+{appendix_body}"""
 
     print("Uploading README and charts to Hub...")
     upload_readme(dataset, files=charts, readme_content=readme)

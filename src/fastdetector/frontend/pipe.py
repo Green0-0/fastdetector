@@ -1,11 +1,14 @@
 import os
 import time
 import json
+import hashlib
+from pathlib import Path
 from transformers import AutoTokenizer
 from datasets import Dataset
 from fastdetector.utils import load_dataset_auto_shard
 from fastdetector.prompting.prompts import PromptSet, load_prompts
 from fastdetector.generator import build_dataset
+from fastdetector.generation_checkpoint import GenerationCheckpoint
 from fastdetector.llm_utils import llm_server_context
 from fastdetector.providers import BatchState, make_provider
 from fastdetector.frontend.toml_config import GlobalsConfig, PipeConfig
@@ -20,6 +23,7 @@ def run_pipeline(
     source_dataset_name: str,
     batch_id: int | None = None,
     num_samples: int | None = None,
+    checkpoint: GenerationCheckpoint | None = None,
 ) -> tuple[Dataset, str]:
     """Run the generation pipeline and return the result dataset.
 
@@ -35,12 +39,17 @@ def run_pipeline(
             processes every row of the shard, which is what the pipeline
             entrypoints do - how much data a run covers is decided once, when
             the source dataset is sharded (scripts/shard_dataset.py).
+        checkpoint: Optional checkpoint owned by the calling entrypoint. It
+            remains locked after this function returns and must be retired
+            only after publication, then closed in a ``finally`` block.
 
     Returns:
         A tuple of (Dataset, readme_content) containing the generated samples and metadata.
     """
     start_time = time.time()
     engine = pipe_config.engine
+    if checkpoint is not None and pipe_config.batch:
+        raise ValueError("online generation checkpoints cannot be used with batch mode")
 
     print("Running generation pipeline...")
     print(f"Using engine: {engine.value}")
@@ -124,6 +133,33 @@ def run_pipeline(
     print(f"Dropped {dropped_count} samples over the length limit ({length_limit}).")
     print(f"Loaded {len(samples)} samples with a total of {tokens_or_words_processed} {unit}.")
 
+    if checkpoint is not None:
+        sample_hasher = hashlib.sha256()
+        for sample in samples:
+            encoded = sample.encode("utf-8")
+            sample_hasher.update(len(encoded).to_bytes(8, "big"))
+            sample_hasher.update(encoded)
+        fingerprint_inputs = {
+            "pipeline": pipe_config.model_dump(
+                mode="json",
+                exclude={
+                    "api_key_env",
+                    "batch_state_dir",
+                    "checkpoint_dir",
+                    "max_generation_failure_rate",
+                },
+            ),
+            "prompt": hashlib.sha256(Path(prompt_file).read_bytes()).hexdigest(),
+            "source": [source_dataset_name, source_column, batch_id, num_samples],
+            "samples_sha256": sample_hasher.hexdigest(),
+        }
+        fingerprint = checkpoint.prepare(fingerprint_inputs)
+        print(
+            f"Using online generation checkpoint {checkpoint.path} "
+            f"(fingerprint {fingerprint[:12]}).",
+            flush=True,
+        )
+
     if engine.is_local_server:
         venv_path = globals_config.vllm_venv_path if engine == EngineConfig.VLLM else globals_config.aphrodite_venv_path
         server_kwargs = {}
@@ -151,6 +187,9 @@ def run_pipeline(
                 api_url=api_url,
                 prompts=prompts,
                 generation_params=generation_params,
+                model_name=pipe_config.model_name,
+                checkpoint=checkpoint,
+                max_failure_rate=pipe_config.max_generation_failure_rate,
             )
     else:
         if pipe_config.api_key_env is not None:
@@ -180,7 +219,12 @@ def run_pipeline(
             provider=provider,
             state=state,
             config=pipe_config if provider is not None else None,
+            checkpoint=checkpoint,
+            max_failure_rate=pipe_config.max_generation_failure_rate,
         )
+
+    if checkpoint is not None:
+        checkpoint.flush()
 
     if result_dict:
         col_lengths = {k: len(v) for k, v in result_dict.items()}

@@ -45,7 +45,8 @@ def test_a_whole_rate_is_still_rendered_as_a_rate():
 @pytest.mark.parametrize(
     ("key", "expected"),
     [("auroc", "AUROC"), ("tpr", "TPR"), ("n", "N"), ("f1", "F1"), ("mean", "Mean"),
-     ("accuracy", "Accuracy"), ("optimal_accuracy", "Optimal Accuracy")],
+     ("accuracy", "Accuracy"), ("optimal_accuracy", "Optimal Accuracy"),
+     ("average_auroc", "Average AUROC"), ("average_tpr", "Average TPR")],
 )
 def test_a_heading_is_derived_from_its_key(key, expected):
     assert header(key) == expected

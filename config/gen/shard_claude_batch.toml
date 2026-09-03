@@ -2,17 +2,17 @@ source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset_test.json"
 
 [pipeline]
-engine = "oai"
-model_name = "gpt-5-6-batch"
+engine = "anthropic"
+model_name = "claude-opus-5"
 parallelization_type = "none"
+
 disable_thinking = true
 
 batch = true
 batch_state_dir = ".batch_state"
 batch_poll_interval_secs = 300
 
-api_url = "https://YOUR-RESOURCE.openai.azure.com/openai/v1/"
-api_key_env = "AZURE_OPENAI_API_KEY"
+api_key_env = "ANTHROPIC_API_KEY"
 
 max_input_len = 15000
-max_output_tokens = 8000
+max_output_tokens = 16000

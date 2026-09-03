@@ -6,6 +6,7 @@ import pytest
 from fastdetector.frontend import pipe as pipe_module
 from fastdetector.frontend.pipe import run_pipeline
 from fastdetector.frontend.toml_config import GlobalsConfig, PipeConfig
+from fastdetector.generation_checkpoint import GenerationCheckpoint
 
 GLOBALS_FIELDS = {
     "dataset_prefix": "user/base-",
@@ -82,7 +83,10 @@ def pipeline_env(monkeypatch, data_dir):
     return env
 
 
-def run(env, *, engine="vllm", num_samples=10, source_column="text", **pipe_fields):
+def run(
+    env, *, engine="vllm", num_samples=10, source_column="text",
+    checkpoint=None, **pipe_fields
+):
     """Invoke run_pipeline with a config built from the given overrides."""
     pipe_config = PipeConfig(engine=engine, model_name="some/model", **pipe_fields)
     return run_pipeline(
@@ -93,6 +97,7 @@ def run(env, *, engine="vllm", num_samples=10, source_column="text", **pipe_fiel
         source_column=source_column,
         source_dataset_name="user/base-filtered",
         batch_id=3,
+        checkpoint=checkpoint,
     )
 
 
@@ -284,6 +289,7 @@ def test_local_engines_launch_a_server_and_use_its_url(pipeline_env):
     # Not configured, so it is not forwarded and the engine picks its own.
     assert "max_num_batched_tokens" not in launch
     assert pipeline_env.calls["build_dataset"]["api_url"] == "http://localhost:9999/v1"
+    assert pipeline_env.calls["build_dataset"]["model_name"] == "some/model"
     assert pipeline_env.calls["server_closed"] is True
 
 
@@ -407,3 +413,43 @@ def test_readme_records_the_run(pipeline_env):
     assert "Total Output Tokens Processed: 222" in readme
     assert "Engine: vllm" in readme
     assert "Total Train Prompts: 2" in readme
+
+
+def test_pipeline_fingerprint_changes_when_filtered_inputs_change(
+    pipeline_env, tmp_path
+):
+    pipeline_env.rows = [{"text": "first input"}]
+    first = GenerationCheckpoint(str(tmp_path), "pipeline")
+    try:
+        run(pipeline_env, checkpoint=first)
+        first_meta = json.loads((first.path / "meta.json").read_text())
+    finally:
+        first.close()
+
+    pipeline_env.rows = [{"text": "changed input"}]
+    second = GenerationCheckpoint(str(tmp_path), "pipeline")
+    try:
+        run(pipeline_env, checkpoint=second)
+        second_meta = json.loads((second.path / "meta.json").read_text())
+        assert first_meta["fingerprint"] != second_meta["fingerprint"]
+        assert len(list(tmp_path.glob("pipeline.stale-*"))) == 1
+    finally:
+        second.close()
+
+
+def test_pipeline_rejects_online_checkpoint_with_offline_batch(
+    pipeline_env, tmp_path
+):
+    checkpoint = GenerationCheckpoint(str(tmp_path), "offline")
+    try:
+        with pytest.raises(ValueError, match="cannot be used with batch mode"):
+            run(
+                pipeline_env,
+                engine="oai",
+                api_url="https://api.example/v1",
+                batch=True,
+                max_output_tokens=100,
+                checkpoint=checkpoint,
+            )
+    finally:
+        checkpoint.close()

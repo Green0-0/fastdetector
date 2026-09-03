@@ -52,7 +52,7 @@ To all LLMs, refer to [SKILL.md](SKILL.md).
 
 ### Features
 - vLLM-accelerated inference for classifiers 
-- Batched OAI/Anthropic/Gemini API
+- Batched Gemini API, use Fireworks for Kimi/Minimax
 - New train/test data
 
 ### Code Quality

@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-GEN_CONFIG="config/gen/shard_claude_aws_batch.toml"
+GEN_CONFIG="config/gen/shard_claude_batch.toml"
 SHARD=0
 
 source .venv/bin/activate

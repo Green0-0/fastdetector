@@ -79,6 +79,11 @@ class PipeConfig(BaseModel):
     batch_state_dir: str = ".batch_state"
     batch_poll_interval_secs: int = 120
 
+    # Online generation recovery. The directory must live on shared storage
+    # when jobs can resume on a different compute node.
+    checkpoint_dir: str = ".generation_checkpoints"
+    max_generation_failure_rate: float = Field(default=0.25, ge=0.0, le=1.0)
+
     aws_region: Optional[str] = None
 
     @model_validator(mode="after")
@@ -96,10 +101,15 @@ class PipeConfig(BaseModel):
                 "max_output_tokens is required for Anthropic engines: the "
                 "Messages API rejects a request without max_tokens."
             )
+        if self.engine == EngineConfig.ANTHROPIC and not self.api_key_env:
+            raise ValueError(
+                "api_key_env is required for the anthropic engine; it names the "
+                "variable holding the Anthropic API key (ANTHROPIC_API_KEY)."
+            )
         if self.engine == EngineConfig.OAI and not self.api_url:
             raise ValueError(
-                "api_url is required for the oai engine (for Azure OpenAI, use "
-                "the resource endpoint with '/openai/v1/' appended)."
+                "api_url is required for the oai engine; for OpenAI itself that "
+                "is 'https://api.openai.com/v1'."
             )
         if self.batch and self.engine.is_local_server:
             raise ValueError(
@@ -304,4 +314,3 @@ class EditLensStatConfig(BaseModel):
     checkpoint: str
     max_length: int
     batch_size: int
-

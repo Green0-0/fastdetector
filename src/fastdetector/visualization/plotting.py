@@ -24,7 +24,8 @@ def header(key: str) -> str:
         The key uppercased if it is an acronym, else title-cased with
         underscores as spaces.
     """
-    return key.upper() if key.lower() in ACRONYMS else key.replace("_", " ").title()
+    return " ".join(part.upper() if part.lower() in ACRONYMS else part.title()
+                    for part in key.split("_"))
 
 
 def cell(value) -> str:

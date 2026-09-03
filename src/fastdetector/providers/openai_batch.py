@@ -6,13 +6,13 @@ from fastdetector.providers.objects import BatchResult
 
 
 class OpenAIBatchProvider:
-    """Submit/poll/fetch against the OpenAI (or Azure OpenAI) Batch API."""
+    """Submit/poll/fetch against the OpenAI Batch API."""
 
-    def __init__(self, api_key: str, base_url: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
         """Build the client for the target endpoint.
 
         Args:
-            api_key: API key for the endpoint.
+            api_key: API key for the endpoint. None defers to OPENAI_API_KEY.
             base_url: Base URL of the chat-completions endpoint.
         """
         from openai import OpenAI
@@ -32,7 +32,7 @@ class OpenAIBatchProvider:
         Args:
             inputs: Conversations in caller order.
             generation_params: Params already filtered to this provider's set.
-            model_name: Model name, or the deployment name on Azure OpenAI.
+            model_name: Model name.
             max_output_tokens: Optional output cap.
 
         Returns:
