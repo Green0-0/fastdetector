@@ -34,7 +34,7 @@ STAGE_CONFIGS = {
 
 def gen_config_paths(repo_root):
     """Every generation config in ``config/gen``."""
-    return sorted((repo_root / "config" / "gen").glob("*.toml"))
+    return sorted((repo_root / "config" / "gen").rglob("shard_*.toml"))
 
 
 def prompt_paths(repo_root):
@@ -52,7 +52,7 @@ def pytest_generate_tests(metafunc):
     """Parameterise over the repo's config and prompt files."""
     if "gen_config_path" in metafunc.fixturenames:
         paths = gen_config_paths(REPO_ROOT)
-        metafunc.parametrize("gen_config_path", paths, ids=[p.name for p in paths])
+        metafunc.parametrize("gen_config_path", paths, ids=[f"{p.parent.name}/{p.name}" for p in paths])
     if "prompt_path" in metafunc.fixturenames:
         paths = prompt_paths(REPO_ROOT)
         metafunc.parametrize("prompt_path", paths, ids=[p.name for p in paths])
@@ -126,6 +126,7 @@ def test_local_engine_configs_only_set_supported_sampling_params(
         "top_p",
         "top_k",
         "presence_penalty",
+        "repetition_penalty",
         "disable_thinking",
         "top_a",
         "xtc_probability",
@@ -457,6 +458,10 @@ def test_gen_configs_reference_an_existing_prompt_file(repo_root, gen_config_pat
     assert (repo_root / config.prompt_file).is_file(), config.prompt_file
 
 
+def test_gen_configs_do_not_declare_huggingface_splits(gen_config_path):
+    assert "split" not in load_toml(str(gen_config_path))
+
+
 def test_filter_config_references_an_existing_prompt_file(repo_root):
     config = FilterConfig(**load_toml(str(repo_root / "config" / "filter.toml")))
     assert (repo_root / config.prompt_file).is_file(), config.prompt_file
@@ -464,16 +469,18 @@ def test_filter_config_references_an_existing_prompt_file(repo_root):
 
 def test_numbered_gen_configs_claim_distinct_shards(repo_root):
     # A shard index is both the source subset a run reads and the config name it
-    # writes, so two configs sharing one index would overwrite each other. Gaps
-    # are fine: the source is split into more shards than there are models, and
-    # the spare ones are held back for models added later.
-    indices = [
-        int(path.stem.split("_")[1])
-        for path in gen_config_paths(repo_root)
-        if path.stem.split("_")[1].isdigit()
-    ]
-    assert len(set(indices)) == len(indices), f"duplicate shard index: {indices}"
-    assert all(index >= 0 for index in indices)
+    # writes. Indices restart in each dataset because each folder targets a
+    # different Hub repository.
+    expected = {"train": list(range(10)), "val": list(range(5)), "test": list(range(2))}
+    actual = {
+        dataset_kind: sorted(
+            int(path.stem.removeprefix("shard_"))
+            for path in gen_config_paths(repo_root)
+            if path.parent.name == dataset_kind
+        )
+        for dataset_kind in expected
+    }
+    assert actual == expected
 
 
 def test_all_numbered_gen_configs_agree_on_the_source_column(repo_root):
@@ -482,6 +489,58 @@ def test_all_numbered_gen_configs_agree_on_the_source_column(repo_root):
         for path in gen_config_paths(repo_root)
     }
     assert len(columns) == 1, f"gen shards disagree on the source column: {columns}"
+
+
+def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
+    expected = {
+        "train": [
+            "ibm-granite/granite-4.2-30b-nvfp4",
+            "ornith-ai/Ornith-1.5-35B-A3B-NVFP4",
+            "nvidia/Llama-3.3-70B-Instruct-NVFP4",
+            "cyankiwi/Qwen3.8-27B-AWQ-INT4",
+            "mistralai/Mistral-Small-4-119B-2603-NVFP4",
+            "cyankiwi/gemma-4-31B-it-AWQ-4bit",
+            "poolside/Laguna-S-2.1-NVFP4",
+            "deepseek-ai/DeepSeek-V4-Flash-0731",
+            "gpt-5.4-mini",
+            "claude-haiku-4-5-20251001",
+        ],
+        "val": [
+            "TheBloke/Mixtral-8x7B-Instruct-v0.1-AWQ",
+            "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+            "RedHatAI/Hy3-NVFP4-FP8",
+            "claude-sonnet-5",
+            "gpt-5.6-luna",
+        ],
+        "test": ["gpt-5.6-sol", "claude-opus-5"],
+    }
+    actual = {dataset_kind: [] for dataset_kind in expected}
+    for path in gen_config_paths(repo_root):
+        config = GenConfig(**load_toml(str(path)))
+        actual[path.parent.name].append(config.pipeline.model_name)
+    assert actual == expected
+
+
+def test_every_generation_config_disables_thinking(gen_config_path):
+    config = GenConfig(**load_toml(str(gen_config_path)))
+    assert config.pipeline.disable_thinking is True
+
+
+def test_proprietary_generation_configs_use_batch_without_sampler_overrides(
+    gen_config_path,
+):
+    config = GenConfig(**load_toml(str(gen_config_path)))
+    pipeline = config.pipeline
+    if pipeline.engine.is_local_server:
+        pytest.skip("local model")
+    assert pipeline.batch is True
+    assert all(
+        getattr(pipeline, name) is None
+        for name in (
+            "temperature", "top_p", "top_k", "presence_penalty",
+            "repetition_penalty", "top_a", "xtc_probability", "nsigma",
+        )
+    )
 
 
 # --------------------------------------------------------------------------

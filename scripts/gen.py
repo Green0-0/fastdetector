@@ -1,5 +1,6 @@
 import argparse
 import re
+from pathlib import Path
 
 from fastdetector.frontend.toml_config import GenConfig
 from fastdetector.frontend.toml_loader import load_config_pair
@@ -71,7 +72,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(description="Run the LLM Generation pipeline.")
     parser.add_argument("--globals-config", type=str, default="config/globals.toml", help="Path to globals.toml")
-    parser.add_argument("--gen-config", type=str, required=True, help="Path to gen TOML (e.g. config/gen/shard_0.toml)")
+    parser.add_argument("--gen-config", type=str, required=True, help="Path to gen TOML (e.g. config/gen/train/shard_0.toml)")
     parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
 
     args = parser.parse_args()
@@ -80,9 +81,16 @@ def main() -> None:
         args.globals_config, args.gen_config, GenConfig
     )
 
+    dataset_kind = Path(args.gen_config).parent.name
+    if dataset_kind not in {"train", "val", "test"}:
+        raise ValueError(
+            "Generation configs must be inside config/gen/train, "
+            "config/gen/val, or config/gen/test."
+        )
+
     source_dataset = globals_config.resolve_dataset(globals_config.post_filter_dataset)
-    target_dataset = globals_config.resolve_dataset(globals_config.gen_dataset)
-    stat_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
+    target_dataset = f"{globals_config.resolve_dataset(globals_config.gen_dataset)}-{dataset_kind}"
+    stat_dataset = f"{globals_config.resolve_dataset(globals_config.stat_dataset)}-{dataset_kind}"
 
     print("Running generation pipeline...")
     print(f"Source Dataset: {source_dataset}")
@@ -92,7 +100,8 @@ def main() -> None:
     checkpoint = None
     if not task_config.pipeline.batch:
         checkpoint = GenerationCheckpoint(
-            task_config.pipeline.checkpoint_dir, f"gen_shard_{args.batch_id}"
+            task_config.pipeline.checkpoint_dir,
+            f"gen_{dataset_kind}_shard_{args.batch_id}",
         )
 
     result_ds, readme_content = run_pipeline(

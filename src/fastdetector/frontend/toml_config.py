@@ -48,6 +48,8 @@ class PipeConfig(BaseModel):
     top_k: Optional[int] = None
     disable_thinking: Optional[bool] = None
     presence_penalty: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+    chat_template_kwargs: dict[str, Any] = Field(default_factory=dict)
 
     # Aphrodite-specific sampling parameters
     top_a: Optional[float] = None
@@ -69,6 +71,7 @@ class PipeConfig(BaseModel):
     config_format: Optional[str] = None
     load_format: Optional[str] = None
     gpu_memory_utilization: Optional[float] = None
+    server_args: List[str] = Field(default_factory=list)
 
     # API settings
     api_url: Optional[str] = None

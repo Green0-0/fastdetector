@@ -92,6 +92,7 @@ def launch_engine_server(
     kv_cache_dtype: str | None = None,
     config_format: str | None = None,
     load_format: str | None = None,
+    server_args: list[str] | None = None,
 ) -> subprocess.Popen:
     """Launch the LLM server with data-parallel size = GPU count.
 
@@ -116,6 +117,7 @@ def launch_engine_server(
         config_format: Checkpoint config layout (e.g. "mistral"), for
             checkpoints that ship no HuggingFace ``config.json``.
         load_format: Checkpoint weight layout (e.g. "mistral").
+        server_args: Additional checkpoint-specific engine arguments.
 
     Returns:
         The subprocess.Popen handle once the server is healthy.
@@ -159,6 +161,8 @@ def launch_engine_server(
     for flag, value in optional_flags.items():
         if value is not None:
             cmd += [flag, str(value)]
+    if server_args:
+        cmd += server_args
 
     dist_port = port
     while dist_port == port:

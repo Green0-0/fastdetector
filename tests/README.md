@@ -109,7 +109,7 @@ shard `FASTDETECTOR_TEST_PREFLIGHT_SHARD` (default 0) and runs those. It skips
 when the variable is unset, so it costs nothing by default.
 
 `tests/smoke/test_pipeline_smoke.py` is the equivalent for generation: it boots
-the real engine from `config/gen/shard_0.toml` and runs documents through
+the real engine from `config/gen/train/shard_0.toml` and runs documents through
 `run_pipeline` end to end.
 
 ## Environment variables
@@ -123,7 +123,7 @@ the real engine from `config/gen/shard_0.toml` and runs documents through
 | `FASTDETECTOR_TEST_HF_DATASET` | *(unset - tests skip)* | Hub dataset read tests |
 | `FASTDETECTOR_TEST_HF_WRITE_DATASET` | *(unset - tests skip)* | Hub shard round-trip; **writes real data** |
 | `FASTDETECTOR_TEST_EDITLENS` | *(unset - test skips)* | download the real ~1.4GB EditLens checkpoint |
-| `FASTDETECTOR_TEST_GEN_CONFIG` | `config/gen/shard_0.toml` | which gen config the pipeline smoke test boots |
+| `FASTDETECTOR_TEST_GEN_CONFIG` | `config/gen/train/shard_0.toml` | which gen config the pipeline smoke test boots |
 | `FASTDETECTOR_TEST_FILTER_ENGINE` | *(unset - test skips)* | also boot the filter model |
 | `FASTDETECTOR_TEST_VRAM_BUDGET` | `0.9` | allowed fraction of VRAM in the preflight |
 | `FASTDETECTOR_TEST_PREFLIGHT_DATASET` | *(unset - test skips)* | real dataset whose longest rows the preflight samples |

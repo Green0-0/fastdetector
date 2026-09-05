@@ -60,14 +60,12 @@ def test_shard_config_name(index, expected):
 def test_shard_config_name_is_the_single_source_of_truth(repo_root):
     # The numbered gen configs are named after the shard they produce; if the
     # two ever disagree, a run reads one shard and writes another.
-    names = [
-        p.stem
-        for p in (repo_root / "config" / "gen").glob("shard_*.toml")
-        if p.stem.split("_")[1].isdigit()
-    ]
-    assert names
-    for index, name in enumerate(sorted(names, key=lambda n: int(n.split("_")[1]))):
-        assert name == shard_config_name(index)
+    expected_counts = {"train": 10, "val": 5, "test": 2}
+    for dataset_kind, count in expected_counts.items():
+        names = [p.stem for p in (repo_root / "config" / "gen" / dataset_kind).glob("shard_*.toml")]
+        assert sorted(names, key=lambda n: int(n.split("_")[1])) == [
+            shard_config_name(index) for index in range(count)
+        ]
 
 
 # --------------------------------------------------------------------------

@@ -1,13 +1,12 @@
 source_column = "collected_subset"
-prompt_file = "prompts/combined_dataset_test.json"
+prompt_file = "prompts/combined_dataset_train.json"
 
 [pipeline]
 engine = "vllm"
-model_name = "nvidia/Gemma-4-31B-IT-NVFP4"
+model_name = "ibm-granite/granite-4.2-30b-nvfp4"
 parallelization_type = "pipeline"
 temperature = 1.0
 top_p = 0.95
-top_k = 64
 disable_thinking = true
 max_model_len = 32000
 max_input_len = 15000

@@ -1,14 +1,12 @@
 source_column = "collected_subset"
-prompt_file = "prompts/combined_dataset_test.json"
+prompt_file = "prompts/combined_dataset_train.json"
 
 [pipeline]
 engine = "vllm"
-model_name = "nvidia/Qwen3.6-27B-NVFP4"
+model_name = "nvidia/Llama-3.3-70B-Instruct-NVFP4"
 parallelization_type = "pipeline"
-temperature = 0.7
-top_p = 0.8
-top_k = 20
+temperature = 0.6
+top_p = 0.9
 disable_thinking = true
-presence_penalty = 1.5
 max_model_len = 32000
 max_input_len = 15000

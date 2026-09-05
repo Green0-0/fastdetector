@@ -57,6 +57,7 @@ def run_pipeline(
 
     generation_params = {}
     extra_body = {}
+    chat_template_kwargs = dict(pipe_config.chat_template_kwargs)
     for param in engine.valid_sampling_params:
         val = getattr(pipe_config, param, None)
         if val is None:
@@ -68,15 +69,16 @@ def run_pipeline(
                 elif engine.provider == "anthropic":
                     generation_params["thinking"] = {"type": "disabled"}
                 else:
-                    extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+                    chat_template_kwargs.setdefault("enable_thinking", False)
         elif param in {"temperature", "top_p", "presence_penalty"}:
             generation_params[param] = val
         else:
             extra_body[param] = val
 
     ALL_SAMPLING_PARAMS = [
-        "temperature", "top_p", "top_k", "presence_penalty", "disable_thinking",
-        "top_a", "xtc_probability", "nsigma",
+        "temperature", "top_p", "top_k", "presence_penalty",
+        "repetition_penalty", "disable_thinking", "top_a",
+        "xtc_probability", "nsigma",
     ]
     ignored_params = {
         p: getattr(pipe_config, p)
@@ -90,6 +92,8 @@ def run_pipeline(
             f"IGNORED: {ignored_params}"
         )
 
+    if chat_template_kwargs and engine.is_local_server:
+        extra_body["chat_template_kwargs"] = chat_template_kwargs
     if extra_body:
         generation_params["extra_body"] = extra_body
 
@@ -179,6 +183,7 @@ def run_pipeline(
             venv_path=venv_path,
             parallelization_type=pipe_config.parallelization_type,
             port=None,
+            server_args=pipe_config.server_args,
             **server_kwargs,
         ) as api_url:
             print(f"Using API endpoint: {api_url}")

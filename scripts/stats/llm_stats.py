@@ -5,7 +5,11 @@ import numpy as np
 
 from fastdetector.frontend.toml_config import LLMStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
+from fastdetector.utils import (
+    load_dataset_auto_shard,
+    push_shard,
+    shard_config_name,
+)
 from fastdetector.statistics.llm_scoring import score_columns
 from fastdetector.statistics import statistics_llm
 
@@ -35,13 +39,14 @@ def main() -> None:
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--llm-config", type=str, default="config/llm_stats.toml")
     parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
+    parser.add_argument("--dataset-kind", choices=("train", "val", "test"), default="train")
     args = parser.parse_args()
 
     globals_config, config = load_config_pair(args.globals_config, args.llm_config, LLMStatConfig)
 
-    target_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
+    target_dataset = f"{globals_config.resolve_dataset(globals_config.stat_dataset)}-{args.dataset_kind}"
     print(f"Loading {target_dataset} (subset index {args.batch_id})...")
-    ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
+    ds = load_dataset_auto_shard(target_dataset, subset_index=args.batch_id)
 
     missing_cols = [c for c in config.columns_to_score if c not in ds.column_names]
     if missing_cols:

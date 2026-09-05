@@ -118,6 +118,8 @@ def main() -> None:
                 f"Pass --dataset to name a repo directly."
             )
         target = globals_config.resolve_dataset(name)
+        if args.dataset_field in {"gen_dataset", "stat_dataset"}:
+            target = f"{target}-val"
 
     strip_dataset_info(target)
 

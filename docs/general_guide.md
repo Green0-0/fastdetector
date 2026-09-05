@@ -18,7 +18,7 @@ These five stages (ignoring prompts) correspond to the following python scripts 
 
 **#2:** filter.py and filter.toml
 
-**#3:** gen.py and gen/shard_N.toml
+**#3:** gen.py and gen/{train,val,test}/shard_N.toml
 
 **#4:** stats/distance_stats.py and distance_stats.toml, stats/editlens_stats.py and editlens_stats.toml, stats/llm_stats.py and llm_stats.toml
 
@@ -28,7 +28,13 @@ There is also a globals.toml which specifies traditional dataset paths and an op
 
 Stages #2 to #4 take a `--batch-id`: each one processes the shard with that index and writes its results back under the same shard name, so scaling out is one batch-id per machine (and stage #5 reads every shard back). Nothing else decides how much data a run covers — no config file carries a sample count, and each stage processes every row of the shard it is handed, so `--num-samples` at stage #1 is the single place that is set.
 
-`slurm/` holds a job script per stage, with the sharded ones submitted as array jobs (their `--array` range and your `--num-shards` have to agree). If you need to start over, `scripts/delete_datasets.py` iterates over non-raw datasets in your config and prompts for deletion.
+`slurm/` holds the job scripts. Generation is divided between `gen.sbatch`
+(ordinary local checkpoints), `gen_large.sbatch` (the four-GPU DeepSeek V4
+checkpoint), and `gen_api.sbatch` (GPT/Claude Batch APIs). The filter and stats
+jobs use `DATASET_KIND=train`, `val`, or `test`; shard numbers are local to
+each config folder. If you need to start over,
+`scripts/delete_datasets.py` iterates over non-raw datasets in your config and
+prompts for deletion.
 
 Online filtering and generation are resumable. Each successful response is written to an append-only per-turn log under `checkpoint_dir` (default `.generation_checkpoints`) and is restored by stable shard-row index after a restart. Put that directory on shared storage when a resumed Slurm job may land on another node. A fingerprint covers the model, sampling and pipeline settings, prompt contents, source identity, and ordered filtered inputs; incompatible state is archived as `*.stale-*` instead of being mixed into a new run. Checkpoints are removed only after all dataset and README uploads complete. Offline provider batches continue to use `batch_state_dir` instead. `max_generation_failure_rate` (default `0.25`) aborts a turn when failures exceed that fraction of its active rows, preventing a dead engine from publishing an empty shard without making nearly completed resumes overly sensitive.
 

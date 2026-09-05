@@ -19,8 +19,12 @@ def resolve_non_raw_datasets(globals_config: GlobalsConfig) -> list[str]:
     targets = []
     for field in NON_RAW_DATASET_FIELDS:
         name = globals_config.resolve_dataset(getattr(globals_config, field))
-        if name and name not in targets:
-            targets.append(name)
+        names = (
+            [f"{name}-{kind}" for kind in ("train", "val", "test")]
+            if field in {"gen_dataset", "stat_dataset"}
+            else [name]
+        )
+        targets.extend(candidate for candidate in names if candidate and candidate not in targets)
     return targets
 
 

@@ -1,15 +1,15 @@
 source_column = "collected_subset"
-prompt_file = "prompts/combined_dataset_test.json"
+prompt_file = "prompts/combined_dataset_train.json"
 
 [pipeline]
 engine = "vllm"
 model_name = "mistralai/Mistral-Small-4-119B-2603-NVFP4"
-parallelization_type = "pipeline"
+parallelization_type = "tensor"
 temperature = 0.7
-disable_thinking = false
+disable_thinking = true
+chat_template_kwargs = { reasoning_effort = "none" }
 max_model_len = 32000
 max_input_len = 15000
-
 tokenizer_mode = "mistral"
 config_format = "mistral"
 load_format = "mistral"

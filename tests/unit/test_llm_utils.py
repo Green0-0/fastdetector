@@ -242,6 +242,7 @@ def test_launch_passes_the_configured_engine_flags(stub_engine, free_port):
         max_model_len=4096,
         max_num_seqs=32,
         max_num_batched_tokens=1024,
+        server_args=["--trust-remote-code", "--block-size", "256"],
     )
     try:
         argv = stub_engine.recorded()["argv"]
@@ -264,6 +265,8 @@ def test_launch_passes_the_configured_engine_flags(stub_engine, free_port):
     assert pairs["--gpu-memory-utilization"] == "0.75"
     assert pairs["--port"] == str(free_port)
     assert "--disable-uvicorn-access-log" in argv
+    assert "--trust-remote-code" in argv
+    assert argv[argv.index("--block-size") + 1] == "256"
 
 
 def test_launch_passes_the_optional_engine_flags(stub_engine, free_port):

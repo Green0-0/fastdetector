@@ -1,18 +1,24 @@
 #!/bin/bash
 #SBATCH --partition=compsci
 #SBATCH --job-name=fd_gen_api
-#SBATCH --output=slurm/logs/%x_%j.out
-#SBATCH --error=slurm/logs/%x_%j.err
+#SBATCH --output=slurm/logs/%x_%A_%a.out
+#SBATCH --error=slurm/logs/%x_%A_%a.err
 #SBATCH --time=3-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
+#SBATCH --array=8-9
 
 set -euo pipefail
 
-GEN_CONFIG="config/gen/shard_claude_batch.toml"
-SHARD=0
+DATASET_KIND="${DATASET_KIND:-train}"
+SHARD="${SLURM_ARRAY_TASK_ID:-8}"
+case "${DATASET_KIND}" in
+  train|val|test) ;;
+  *) echo "DATASET_KIND must be train, val, or test." >&2; exit 1 ;;
+esac
+GEN_CONFIG="config/gen/${DATASET_KIND}/shard_${SHARD}.toml"
 
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
@@ -49,7 +55,7 @@ if [[ "${ENGINE}" == "anthropic_aws" ]]; then
   : "${ANTHROPIC_AWS_WORKSPACE_ID:?must be set for Claude Platform on AWS}"
 fi
 
-echo "Generating shard ${SHARD} from ${GEN_CONFIG} via ${ENGINE}..."
+echo "Generating ${DATASET_KIND} shard ${SHARD} from ${GEN_CONFIG} via ${ENGINE}..."
 python scripts/gen.py \
     --globals-config config/globals.toml \
     --gen-config "${GEN_CONFIG}" \

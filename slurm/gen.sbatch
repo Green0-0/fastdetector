@@ -12,7 +12,7 @@
 #SBATCH --requeue
 #SBATCH --open-mode=append
 #SBATCH --gres=gpu:rtx_pro_6000:2
-#SBATCH --array=0-8
+#SBATCH --array=0-6
 
 set -euo pipefail
 
@@ -43,7 +43,13 @@ mkdir -p "${TRITON_CACHE_DIR}" "${TORCHINDUCTOR_CACHE_DIR}" "${VLLM_CACHE_ROOT}"
 trap 'rm -rf "${FD_CACHE_ROOT}"' EXIT
 source slurm/resume_job.sh
 
-GEN_CONFIG="config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml"
+DATASET_KIND="${DATASET_KIND:-train}"
+SHARD="${SLURM_ARRAY_TASK_ID:-0}"
+case "${DATASET_KIND}" in
+  train|val|test) ;;
+  *) echo "DATASET_KIND must be train, val, or test." >&2; exit 1 ;;
+esac
+GEN_CONFIG="config/gen/${DATASET_KIND}/shard_${SHARD}.toml"
 
 if [[ ! -f "${GEN_CONFIG}" ]]; then
   echo "No gen config at ${GEN_CONFIG}." >&2
@@ -66,12 +72,12 @@ case "${ENGINE}" in
 esac
 
 export FD_ENGINE_HF_OFFLINE=1
-sleep $(( ${SLURM_ARRAY_TASK_ID:-0} * 60 ))
+sleep $(( SHARD * 60 ))
 
-echo "Generating shard ${SLURM_ARRAY_TASK_ID:-0}..."
+echo "Generating ${DATASET_KIND} shard ${SHARD}..."
 fd_run_requeueable python scripts/gen.py \
     --globals-config config/globals.toml \
-    --gen-config "config/gen/shard_${SLURM_ARRAY_TASK_ID:-0}.toml" \
-    --batch-id "${SLURM_ARRAY_TASK_ID:-0}"
+    --gen-config "${GEN_CONFIG}" \
+    --batch-id "${SHARD}"
 
-echo "Generation complete for shard ${SLURM_ARRAY_TASK_ID:-0}."
+echo "Generation complete for ${DATASET_KIND} shard ${SHARD}."

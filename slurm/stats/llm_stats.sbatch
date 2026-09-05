@@ -9,13 +9,18 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:a5000:2
-#SBATCH --array=0-7
+#SBATCH --array=0-9
 
 set -euo pipefail
 
 source .venv/bin/activate
 export PYTHONUNBUFFERED=1
 export HF_HOME="${HF_HOME:-/usr/project/xtmp/fastdetector_hf_cache}"
+DATASET_KIND="${DATASET_KIND:-train}"
+case "${DATASET_KIND}" in
+  train|val|test) ;;
+  *) echo "DATASET_KIND must be train, val, or test." >&2; exit 1 ;;
+esac
 
 # ---- CUDA setup ----
 export CUDA_HOME=/usr/local/cuda-13.0/
@@ -32,10 +37,11 @@ export TORCHINDUCTOR_CACHE_DIR="${FD_CACHE_ROOT}/inductor"
 mkdir -p "${TRITON_CACHE_DIR}" "${TORCHINDUCTOR_CACHE_DIR}"
 trap 'rm -rf "${FD_CACHE_ROOT}"' EXIT
 
-echo "Computing LLM stats for shard ${SLURM_ARRAY_TASK_ID:-0}..."
+echo "Computing LLM stats for ${DATASET_KIND} shard ${SLURM_ARRAY_TASK_ID:-0}..."
 python scripts/stats/llm_stats.py \
     --globals-config config/globals.toml \
     --llm-config config/llm_stats.toml \
+    --dataset-kind "${DATASET_KIND}" \
     --batch-id "${SLURM_ARRAY_TASK_ID:-0}"
 
 echo "LLM stats complete for shard ${SLURM_ARRAY_TASK_ID:-0}."

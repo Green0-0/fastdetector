@@ -2,7 +2,11 @@ import argparse
 
 from fastdetector.frontend.toml_config import DistanceStatConfig
 from fastdetector.frontend.toml_loader import load_config_pair
-from fastdetector.utils import load_dataset_auto_shard, push_shard, shard_config_name
+from fastdetector.utils import (
+    load_dataset_auto_shard,
+    push_shard,
+    shard_config_name,
+)
 
 from fastdetector.statistics.embeddings_api import batch_cross_encoder, batch_gen_embeddings, batch_soft_ngram_scores, generate_token_embeddings_pairs
 from fastdetector.statistics.statistics_basic import pairwise_jaccards, pairwise_levenshteins
@@ -19,13 +23,14 @@ def main() -> None:
     parser.add_argument("--globals-config", type=str, default="config/globals.toml")
     parser.add_argument("--distance-config", type=str, default="config/distance_stats.toml")
     parser.add_argument("--batch-id", type=int, default=0, help="Batch ID to automatically pick a subset of the dataset.")
+    parser.add_argument("--dataset-kind", choices=("train", "val", "test"), default="train")
     args = parser.parse_args()
 
     globals_config, config = load_config_pair(args.globals_config, args.distance_config, DistanceStatConfig)
 
-    target_dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
+    target_dataset = f"{globals_config.resolve_dataset(globals_config.stat_dataset)}-{args.dataset_kind}"
     print(f"Loading {target_dataset} (subset index {args.batch_id})...")
-    ds = load_dataset_auto_shard(target_dataset, split="train", subset_index=args.batch_id)
+    ds = load_dataset_auto_shard(target_dataset, subset_index=args.batch_id)
 
     col_a = config.human_column
     col_b = config.ai_column

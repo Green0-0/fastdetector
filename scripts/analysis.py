@@ -440,8 +440,8 @@ def main() -> None:
     if not named <= known:
         raise ValueError(f"Unknown threshold type(s) {sorted(named - known)}; pick from {sorted(known)}")
 
-    dataset = globals_config.resolve_dataset(globals_config.stat_dataset)
-    print(f"Loading all shards for dataset {dataset}...")
+    dataset = f"{globals_config.resolve_dataset(globals_config.stat_dataset)}-val"
+    print(f"Loading all shards for validation dataset {dataset}...")
     ds = load_dataset_all_shards(dataset, split="train")
     if cfg.filter_conditions:
         print("Applying filters...")
@@ -462,8 +462,8 @@ def main() -> None:
     for name, columns in skipped.items():
         print(f"Notice: classifier '{name}' needs missing columns {columns}; skipping it.")
 
-    # The validation split exists only to sweep thresholds on, so it is skipped
-    # entirely when every classifier already has a manual threshold.
+    # Subsplit the validation dataset for threshold sweeping. This is skipped
+    # when every classifier already has a manual threshold.
     swept = [clf for clf in classifiers if clf.manual_threshold is None]
     test_ds, val_ds = ds, ds
     if swept and cfg.validation_size > 0:

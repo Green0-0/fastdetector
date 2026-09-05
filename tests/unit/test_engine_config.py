@@ -55,6 +55,7 @@ def test_vllm_sampling_params():
         "top_p",
         "top_k",
         "presence_penalty",
+        "repetition_penalty",
         "disable_thinking",
     ]
 

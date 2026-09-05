@@ -31,7 +31,7 @@ def globals_config(repo_root) -> GlobalsConfig:
 @pytest.fixture(scope="module")
 def gen_config(repo_root) -> GenConfig:
     """The generation config under test (default: shard 0)."""
-    name = os.environ.get("FASTDETECTOR_TEST_GEN_CONFIG", "config/gen/shard_0.toml")
+    name = os.environ.get("FASTDETECTOR_TEST_GEN_CONFIG", "config/gen/train/shard_0.toml")
     path = repo_root / name
     if not path.is_file():
         pytest.skip(f"{name} does not exist")

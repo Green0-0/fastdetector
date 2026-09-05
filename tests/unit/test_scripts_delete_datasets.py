@@ -17,8 +17,12 @@ def test_resolve_non_raw_datasets_returns_all_non_raw_datasets():
     config = GlobalsConfig(**FIELDS)
     assert resolve_non_raw_datasets(config) == [
         "user/corpus-filtered",
-        "user/corpus-rewritten",
-        "user/corpus-stat",
+        "user/corpus-rewritten-train",
+        "user/corpus-rewritten-val",
+        "user/corpus-rewritten-test",
+        "user/corpus-stat-train",
+        "user/corpus-stat-val",
+        "user/corpus-stat-test",
         "user/corpus-eval",
     ]
 

@@ -48,7 +48,10 @@ class EngineConfig(str, Enum):
         Returns:
             List of supported parameter names.
         """
-        base_params = ["temperature", "top_p", "top_k", "presence_penalty", "disable_thinking"]
+        base_params = [
+            "temperature", "top_p", "top_k", "presence_penalty",
+            "repetition_penalty", "disable_thinking",
+        ]
 
         if self == EngineConfig.VLLM:
             return base_params

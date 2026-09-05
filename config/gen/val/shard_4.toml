@@ -1,0 +1,15 @@
+source_column = "collected_subset"
+prompt_file = "prompts/combined_dataset_test.json"
+
+[pipeline]
+engine = "oai"
+model_name = "gpt-5.6-luna"
+parallelization_type = "none"
+disable_thinking = true
+batch = true
+batch_state_dir = ".batch_state"
+batch_poll_interval_secs = 300
+api_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+max_input_len = 15000
+max_output_tokens = 16000

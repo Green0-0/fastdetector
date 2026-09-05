@@ -141,6 +141,26 @@ def test_disable_thinking_becomes_a_chat_template_kwarg_for_local_engines(pipeli
     assert params["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
 
 
+def test_model_specific_chat_template_kwargs_are_merged(pipeline_env):
+    run(
+        pipeline_env,
+        engine="vllm",
+        disable_thinking=True,
+        chat_template_kwargs={"thinking_mode": "chat"},
+    )
+    params = pipeline_env.calls["build_dataset"]["generation_params"]
+    assert params["extra_body"]["chat_template_kwargs"] == {
+        "thinking_mode": "chat",
+        "enable_thinking": False,
+    }
+
+
+def test_repetition_penalty_reaches_local_server_extra_body(pipeline_env):
+    run(pipeline_env, engine="vllm", repetition_penalty=1.1)
+    params = pipeline_env.calls["build_dataset"]["generation_params"]
+    assert params["extra_body"] == {"repetition_penalty": 1.1}
+
+
 def test_disable_thinking_false_sends_nothing(pipeline_env):
     run(pipeline_env, engine="vllm", disable_thinking=False)
     assert pipeline_env.calls["build_dataset"]["generation_params"] == {}
