@@ -34,7 +34,11 @@ STAGE_CONFIGS = {
 
 def gen_config_paths(repo_root):
     """Every generation config in ``config/gen``."""
-    return sorted((repo_root / "config" / "gen").rglob("shard_*.toml"))
+    order = {"train": 0, "val": 1, "test": 2}
+    return sorted(
+        (repo_root / "config" / "gen").rglob("shard_*.toml"),
+        key=lambda path: (order[path.parent.name], int(path.stem.removeprefix("shard_"))),
+    )
 
 
 def prompt_paths(repo_root):
@@ -471,7 +475,7 @@ def test_numbered_gen_configs_claim_distinct_shards(repo_root):
     # A shard index is both the source subset a run reads and the config name it
     # writes. Indices restart in each dataset because each folder targets a
     # different Hub repository.
-    expected = {"train": list(range(10)), "val": list(range(5)), "test": list(range(2))}
+    expected = {"train": list(range(14)), "val": list(range(6)), "test": list(range(2))}
     actual = {
         dataset_kind: sorted(
             int(path.stem.removeprefix("shard_"))
@@ -504,6 +508,10 @@ def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
             "deepseek-ai/DeepSeek-V4-Flash-0731",
             "gpt-5.4-mini",
             "claude-haiku-4-5-20251001",
+            "cyankiwi/Qwen3.8-27B-AWQ-INT4",
+            "cyankiwi/gemma-4-31B-it-AWQ-4bit",
+            "nvidia/Llama-3.3-70B-Instruct-NVFP4",
+            "mistralai/Mistral-Small-4-119B-2603-NVFP4",
         ],
         "val": [
             "TheBloke/Mixtral-8x7B-Instruct-v0.1-AWQ",
@@ -511,6 +519,7 @@ def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
             "RedHatAI/Hy3-NVFP4-FP8",
             "claude-sonnet-5",
             "gpt-5.6-luna",
+            "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
         ],
         "test": ["gpt-5.6-sol", "claude-opus-5"],
     }
@@ -519,6 +528,23 @@ def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
         config = GenConfig(**load_toml(str(path)))
         actual[path.parent.name].append(config.pipeline.model_name)
     assert actual == expected
+
+
+def test_special_sampler_variants_match_the_legacy_aphrodite_stack(repo_root):
+    paths = [
+        repo_root / "config/gen/train" / f"shard_{index}.toml"
+        for index in range(10, 14)
+    ] + [repo_root / "config/gen/val/shard_5.toml"]
+    for path in paths:
+        pipeline = GenConfig(**load_toml(str(path))).pipeline
+        assert pipeline.engine is EngineConfig.APHRODITE
+        assert pipeline.temperature == 1.25
+        assert pipeline.top_p == 1.0
+        assert pipeline.top_k == -1
+        assert pipeline.top_a == 0.1
+        assert pipeline.xtc_probability == 0.3
+        assert pipeline.nsigma == 1.5
+        assert pipeline.disable_thinking is True
 
 
 def test_every_generation_config_disables_thinking(gen_config_path):

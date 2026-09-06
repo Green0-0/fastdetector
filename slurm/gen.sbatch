@@ -12,7 +12,7 @@
 #SBATCH --requeue
 #SBATCH --open-mode=append
 #SBATCH --gres=gpu:rtx_pro_6000:2
-#SBATCH --array=0-6
+#SBATCH --array=0-6,10-13
 
 set -euo pipefail
 
