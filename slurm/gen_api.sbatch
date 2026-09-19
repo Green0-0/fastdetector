@@ -35,7 +35,7 @@ read_key() {
 
 ENGINE=$(read_key engine)
 case "${ENGINE}" in
-  oai|anthropic|anthropic_aws) ;;
+  oai|anthropic|anthropic_aws|gemini) ;;
   vllm|aphrodite)
     echo "${GEN_CONFIG} uses the ${ENGINE} engine; submit it with gen.sbatch (needs a GPU)." >&2
     exit 1

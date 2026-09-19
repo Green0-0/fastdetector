@@ -4,8 +4,30 @@ The folder is the dataset: `train/shard_N.toml` writes to `${gen_dataset}-train`
 and `${stat_dataset}-train`, with the same rule for `val` and `test`. `N` selects the
 corresponding shard from the shared `filtered` dataset. There is no Hugging
 Face split setting in these configs. Thinking is disabled in every config.
-Hosted GPT and Claude models use their provider's Batch API and do not set
+Hosted GPT, Claude, and Gemini models use their provider's Batch API and do not set
 sampling overrides.
+
+Gemini uses the Gemini Developer API's asynchronous Batch API as well. A minimal
+pipeline block is:
+
+```toml
+[pipeline]
+engine = "gemini"
+model_name = "gemini-3.8-flash"
+batch = true
+api_key_env = "GEMINI_API_KEY"
+disable_thinking = true
+batch_state_dir = ".batch_state"
+batch_poll_interval_secs = 300
+max_output_tokens = 16000
+```
+
+Export the named API-key variable before running `scripts/gen.py`. Gemini batch
+requests use keyed JSONL files so results remain aligned with their source rows;
+`api_url` is not used because the Google SDK selects the Gemini endpoint. As
+with the other hosted providers, sampling overrides are intentionally ignored
+so the model's standard sampler is used; `disable_thinking = true` sends
+Gemini's explicit zero thinking budget.
 
 | Shard | Dataset | Model | Local sampling | Source |
 |---:|:---:|---|---|---|

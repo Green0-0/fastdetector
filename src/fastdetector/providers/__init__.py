@@ -49,4 +49,9 @@ def make_provider(pipe_config) -> BatchProvider:
             aws_region=pipe_config.aws_region or os.environ.get("AWS_REGION"),
         )
 
+    if engine == EngineConfig.GEMINI:
+        from fastdetector.providers.gemini_batch import GeminiBatchProvider
+
+        return GeminiBatchProvider(api_key=api_key)
+
     raise ValueError(f"Engine {engine.value!r} has no offline-batch transport.")

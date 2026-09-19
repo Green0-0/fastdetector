@@ -13,6 +13,7 @@ dependencies = [
     "huggingface-hub>=1.14.0",
     "openai>=1.30.0",
     "anthropic[aws]>=0.90.0",
+    "google-genai>=2.24.0,<3",
     "levenshtein>=0.25.0",
     "sentence-transformers>=3.0.0",
     "transformers>=5.0.0",

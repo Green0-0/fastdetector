@@ -74,6 +74,8 @@ def run_pipeline(
                     generation_params["reasoning_effort"] = "none"
                 elif engine.provider == "anthropic":
                     generation_params["thinking"] = {"type": "disabled"}
+                elif engine.provider == "gemini":
+                    generation_params["thinking_config"] = {"thinking_budget": 0}
                 else:
                     chat_template_kwargs.setdefault("enable_thinking", False)
         elif param in {"temperature", "top_p", "presence_penalty"}:

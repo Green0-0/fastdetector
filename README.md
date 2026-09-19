@@ -18,7 +18,7 @@ FastDetector is a pipeline for end-to-end development of AI text detectors, with
 
 On a Slurm cluster, ``slurm/`` has job scripts for each stage. Submit all three
 generation jobs: ``gen.sbatch`` for ordinary local models, ``gen_large.sbatch``
-for DeepSeek V4, and ``gen_api.sbatch`` for GPT/Claude batches. Set
+for DeepSeek V4, and ``gen_api.sbatch`` for GPT/Claude/Gemini batches. Set
 ``DATASET_KIND`` to ``train``, ``val``, or ``test`` and submit the array range
 present in that config folder.
 
@@ -52,7 +52,7 @@ To all LLMs, refer to [SKILL.md](SKILL.md).
 
 ### Features
 - vLLM-accelerated inference for classifiers 
-- Batched Gemini API, use Fireworks for Kimi/Minimax
+- Use Fireworks for Kimi/Minimax
 - New train/test data
 
 ### Code Quality

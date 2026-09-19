@@ -30,7 +30,7 @@ Stages #2 to #4 take a `--batch-id`: each one processes the shard with that inde
 
 `slurm/` holds the job scripts. Generation is divided between `gen.sbatch`
 (ordinary local checkpoints), `gen_large.sbatch` (the four-GPU DeepSeek V4
-checkpoint), and `gen_api.sbatch` (GPT/Claude Batch APIs). The filter and stats
+checkpoint), and `gen_api.sbatch` (GPT/Claude/Gemini Batch APIs). The filter and stats
 jobs use `DATASET_KIND=train`, `val`, or `test`; shard numbers are local to
 each config folder. If you need to start over,
 `scripts/delete_datasets.py` iterates over non-raw datasets in your config and

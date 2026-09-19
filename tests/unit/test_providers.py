@@ -5,8 +5,10 @@ import pytest
 
 from fastdetector.frontend.engine_config import EngineConfig
 from fastdetector.frontend.toml_config import PipeConfig
-from fastdetector.providers import BatchState
+from fastdetector.providers import BatchState, make_provider
+from fastdetector.providers import gemini_batch as gemini_module
 from fastdetector.providers.anthropic_batch import AnthropicBatchProvider
+from fastdetector.providers.gemini_batch import GeminiBatchProvider
 from fastdetector.providers.openai_batch import OpenAIBatchProvider
 
 
@@ -59,6 +61,32 @@ def anthropic_requests(inputs, generation_params, model_name="claude-opus-5",
     return captured["requests"]
 
 
+def gemini_records(inputs, generation_params, model_name="gemini-2.5-flash",
+                   max_output_tokens=4096):
+    """Capture the JSONL records GeminiBatchProvider.submit uploads."""
+    captured = {}
+    provider = object.__new__(GeminiBatchProvider)
+    provider.name = "gemini"
+
+    def upload(file, config):
+        with open(file, encoding="utf-8") as handle:
+            captured["records"] = [json.loads(line) for line in handle]
+        captured["upload_config"] = config
+        return SimpleNamespace(name="files/f1")
+
+    def create(**kwargs):
+        captured["batch"] = kwargs
+        return SimpleNamespace(name="batches/b1")
+
+    provider.client = SimpleNamespace(
+        files=SimpleNamespace(upload=upload),
+        batches=SimpleNamespace(create=create),
+    )
+    job_id = provider.submit(inputs, generation_params, model_name, max_output_tokens)
+    captured["job_id"] = job_id
+    return captured
+
+
 def test_openai_body_carries_messages_and_params():
     body = openai_bodies([msgs("hi")], {"temperature": 0.7})[0]["body"]
     assert body["model"] == "gpt-5-6"
@@ -96,6 +124,67 @@ def test_anthropic_body_keeps_thinking_config():
 def test_anthropic_model_id_is_not_bedrock_prefixed():
     params = anthropic_requests([msgs("hi")], {})[0]["params"]
     assert not params["model"].startswith("anthropic.")
+
+
+def test_gemini_uses_keyed_file_batch_requests_and_translates_roles():
+    captured = gemini_records([msgs("question", "answer", "follow-up")], {})
+    assert captured["job_id"] == json.dumps(["batches/b1"])
+    assert captured["batch"]["model"] == "gemini-2.5-flash"
+    assert captured["batch"]["src"] == "files/f1"
+    assert captured["upload_config"]["mime_type"] == "jsonl"
+    assert captured["records"] == [{
+        "key": "req-0",
+        "request": {
+            "contents": [
+                {"role": "user", "parts": [{"text": "question"}]},
+                {"role": "model", "parts": [{"text": "answer"}]},
+                {"role": "user", "parts": [{"text": "follow-up"}]},
+            ],
+            "generation_config": {"max_output_tokens": 4096},
+        },
+    }]
+
+
+def test_gemini_generation_config_carries_thinking_and_output_cap():
+    request = gemini_records(
+        [msgs("hi")],
+        {"thinking_config": {"thinking_budget": 0}},
+    )["records"][0]["request"]
+    assert request["generation_config"] == {
+        "thinking_config": {"thinking_budget": 0},
+        "max_output_tokens": 4096,
+    }
+
+
+def test_gemini_system_messages_become_system_instruction():
+    captured = gemini_records(
+        [[{"role": "system", "content": "be terse"},
+          {"role": "user", "content": "hello"}]],
+        {},
+    )
+    request = captured["records"][0]["request"]
+    assert request["system_instruction"] == {"parts": [{"text": "be terse"}]}
+    assert request["contents"] == [
+        {"role": "user", "parts": [{"text": "hello"}]}
+    ]
+
+
+def test_gemini_poll_waits_for_every_chunk_to_reach_a_terminal_state():
+    provider = object.__new__(GeminiBatchProvider)
+    provider.name = "gemini"
+    states = {
+        "batches/one": "JOB_STATE_SUCCEEDED",
+        "batches/two": "JOB_STATE_RUNNING",
+    }
+    provider.client = SimpleNamespace(batches=SimpleNamespace(
+        get=lambda name: SimpleNamespace(state=SimpleNamespace(name=states[name]))
+    ))
+    job_id = json.dumps(["batches/one", "batches/two"])
+    assert provider.poll(job_id) == (
+        False, "JOB_STATE_SUCCEEDED, JOB_STATE_RUNNING"
+    )
+    states["batches/two"] = "JOB_STATE_PARTIALLY_SUCCEEDED"
+    assert provider.poll(job_id)[0] is True
 
 
 # --------------------------------------------------------------------------
@@ -148,6 +237,7 @@ def test_state_write_is_atomic(tmp_path):
         (EngineConfig.OAI, "openai"),
         (EngineConfig.ANTHROPIC, "anthropic"),
         (EngineConfig.ANTHROPIC_AWS, "anthropic"),
+        (EngineConfig.GEMINI, "gemini"),
         (EngineConfig.VLLM, None),
     ],
 )
@@ -171,6 +261,47 @@ def test_anthropic_config_requires_batch():
         PipeConfig(
             engine="anthropic_aws", model_name="claude-opus-5", max_output_tokens=4096
         )
+
+
+def test_gemini_config_requires_batch_and_key_variable():
+    with pytest.raises(ValueError, match="api_key_env is required"):
+        PipeConfig(engine="gemini", model_name="gemini-2.5-flash", batch=True)
+    with pytest.raises(ValueError, match="requires batch = true"):
+        PipeConfig(
+            engine="gemini",
+            model_name="gemini-2.5-flash",
+            api_key_env="GEMINI_API_KEY",
+        )
+
+
+def test_valid_gemini_batch_config_loads_without_api_url():
+    config = PipeConfig(
+        engine="gemini",
+        model_name="gemini-2.5-flash",
+        api_key_env="GEMINI_API_KEY",
+        batch=True,
+    )
+    assert config.engine.provider == "gemini"
+    assert config.api_url is None
+
+
+def test_provider_factory_passes_the_configured_key_to_gemini(monkeypatch):
+    captured = {}
+
+    def fake_provider(api_key=None):
+        captured["api_key"] = api_key
+        return SimpleNamespace(name="gemini")
+
+    monkeypatch.setenv("MY_GEMINI_KEY", "secret-key")
+    monkeypatch.setattr(gemini_module, "GeminiBatchProvider", fake_provider)
+    provider = make_provider(PipeConfig(
+        engine="gemini",
+        model_name="gemini-2.5-flash",
+        api_key_env="MY_GEMINI_KEY",
+        batch=True,
+    ))
+    assert provider.name == "gemini"
+    assert captured["api_key"] == "secret-key"
 
 
 def test_local_engine_cannot_use_batch():

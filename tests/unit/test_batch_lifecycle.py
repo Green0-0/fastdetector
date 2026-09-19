@@ -8,6 +8,7 @@ from fastdetector.frontend.toml_config import PipeConfig
 from fastdetector.generator import build_dataset
 from fastdetector.prompting.prompts import Prompt, PromptSet
 from fastdetector.providers.anthropic_batch import AnthropicBatchProvider
+from fastdetector.providers.gemini_batch import GeminiBatchProvider
 from fastdetector.providers import BatchResult, BatchState
 from fastdetector.providers.openai_batch import OpenAIBatchProvider
 
@@ -298,6 +299,24 @@ def anthropic_fetch(entries, n_requests=1):
     return provider.fetch(json.dumps(["b1"]), n_requests)
 
 
+def gemini_fetch(lines, n_requests=1, state="JOB_STATE_SUCCEEDED"):
+    """Run GeminiBatchProvider.fetch over canned output-file lines."""
+    provider = object.__new__(GeminiBatchProvider)
+    provider.name = "gemini"
+    job = SimpleNamespace(
+        state=SimpleNamespace(name=state),
+        dest=SimpleNamespace(file_name="files/result"),
+        error=None,
+    )
+    provider.client = SimpleNamespace(
+        batches=SimpleNamespace(get=lambda name: job),
+        files=SimpleNamespace(
+            download=lambda file: "\n".join(lines).encode("utf-8")
+        ),
+    )
+    return provider.fetch(json.dumps(["batches/b1"]), n_requests)
+
+
 def succeeded(custom_id, blocks, stop_reason="end_turn", **message_fields):
     """Build a succeeded batch result entry."""
     return SimpleNamespace(
@@ -415,3 +434,63 @@ def test_anthropic_errored_result_reports_the_nested_error_type():
     )])[0]
     assert result.failed
     assert result.error == "rate_limit_error"
+
+
+def _gemini_line(key, text, *, prompt_tokens=11, output_tokens=22,
+                 thought_tokens=3):
+    """Build a successful Gemini output-file line."""
+    return json.dumps({
+        "key": key,
+        "response": {
+            "candidates": [{
+                "content": {"parts": [{"text": text}]},
+                "finishReason": "STOP",
+            }],
+            "usageMetadata": {
+                "promptTokenCount": prompt_tokens,
+                "candidatesTokenCount": output_tokens,
+                "thoughtsTokenCount": thought_tokens,
+            },
+        },
+    })
+
+
+def test_gemini_output_is_key_aligned_and_counts_thinking_tokens():
+    results = gemini_fetch(
+        [_gemini_line("req-1", "second"), _gemini_line("req-0", "first")],
+        n_requests=2,
+    )
+    assert [result.text for result in results] == ["first", "second"]
+    assert (results[0].prompt_tokens, results[0].completion_tokens) == (11, 25)
+
+
+def test_gemini_omits_thought_parts_from_the_returned_text():
+    line = json.dumps({
+        "key": "req-0",
+        "response": {
+            "candidates": [{"content": {"parts": [
+                {"text": "private reasoning", "thought": True},
+                {"text": "final answer"},
+            ]}}],
+        },
+    })
+    assert gemini_fetch([line])[0].text == "final answer"
+
+
+@pytest.mark.parametrize(
+    "record,reason",
+    [
+        ({"key": "req-0", "error": {"message": "quota exhausted"}}, "quota"),
+        ({"key": "req-0", "status": {"message": "server unavailable"}}, "server"),
+        ({"key": "req-0", "response": {
+            "promptFeedback": {"blockReason": "SAFETY"}, "candidates": []
+        }}, "SAFETY"),
+        ({"key": "req-0", "response": {
+            "candidates": [{"content": {"parts": []}, "finishReason": "SAFETY"}]
+        }}, "SAFETY"),
+    ],
+)
+def test_gemini_failures_are_reported_with_a_reason(record, reason):
+    result = gemini_fetch([json.dumps(record)])[0]
+    assert result.failed
+    assert reason in result.error

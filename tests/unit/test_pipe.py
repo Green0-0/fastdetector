@@ -183,6 +183,30 @@ def test_disable_thinking_becomes_reasoning_effort_for_proprietary_engines(
     assert "extra_body" not in params
 
 
+def test_gemini_uses_default_sampler_and_disables_thinking(
+    pipeline_env, monkeypatch, tmp_path
+):
+    provider = types.SimpleNamespace(name="gemini")
+    monkeypatch.setattr(pipe_module, "make_provider", lambda config: provider)
+    run(
+        pipeline_env,
+        engine="gemini",
+        batch=True,
+        api_key_env="GEMINI_API_KEY",
+        batch_state_dir=str(tmp_path),
+        temperature=0.4,
+        top_p=0.8,
+        top_k=20,
+        disable_thinking=True,
+    )
+    call = pipeline_env.calls["build_dataset"]
+    assert call["generation_params"] == {
+        "thinking_config": {"thinking_budget": 0},
+    }
+    assert call["provider"] is provider
+    assert call["api_url"] == ""
+
+
 def test_aphrodite_only_params_reach_extra_body(pipeline_env):
     run(
         pipeline_env,

@@ -9,6 +9,7 @@ class EngineConfig(str, Enum):
     OAI = "oai"
     ANTHROPIC = "anthropic"
     ANTHROPIC_AWS = "anthropic_aws"
+    GEMINI = "gemini"
 
     @property
     def is_local_server(self) -> bool:
@@ -33,12 +34,14 @@ class EngineConfig(str, Enum):
         """Which request-payload dialect this engine speaks.
 
         Returns:
-            "openai", "anthropic", or None for local-server engines.
+            "openai", "anthropic", "gemini", or None for local-server engines.
         """
         if self == EngineConfig.OAI:
             return "openai"
         if self in (EngineConfig.ANTHROPIC, EngineConfig.ANTHROPIC_AWS):
             return "anthropic"
+        if self == EngineConfig.GEMINI:
+            return "gemini"
         return None
 
     @property

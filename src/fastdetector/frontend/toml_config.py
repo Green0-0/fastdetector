@@ -109,6 +109,11 @@ class PipeConfig(BaseModel):
                 "api_key_env is required for the anthropic engine; it names the "
                 "variable holding the Anthropic API key (ANTHROPIC_API_KEY)."
             )
+        if self.engine == EngineConfig.GEMINI and not self.api_key_env:
+            raise ValueError(
+                "api_key_env is required for the gemini engine; it names the "
+                "variable holding the Gemini API key (GEMINI_API_KEY)."
+            )
         if self.engine == EngineConfig.OAI and not self.api_url:
             raise ValueError(
                 "api_url is required for the oai engine; for OpenAI itself that "
@@ -119,10 +124,10 @@ class PipeConfig(BaseModel):
                 f"batch = true is not available for the {self.engine.value} engine; "
                 f"offline batching is a hosted-API feature."
             )
-        if self.engine.provider == "anthropic" and not self.batch:
+        if self.engine.provider in {"anthropic", "gemini"} and not self.batch:
             raise ValueError(
                 f"The {self.engine.value} engine currently requires batch = true; "
-                f"there is no synchronous Anthropic transport in this pipeline."
+                f"there is no synchronous {self.engine.value} transport in this pipeline."
             )
         return self
 

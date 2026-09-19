@@ -8,6 +8,7 @@ def test_engine_values_are_the_strings_used_in_toml():
     assert EngineConfig("vllm") is EngineConfig.VLLM
     assert EngineConfig("aphrodite") is EngineConfig.APHRODITE
     assert EngineConfig("oai") is EngineConfig.OAI
+    assert EngineConfig("gemini") is EngineConfig.GEMINI
 
 
 def test_engine_is_a_str_enum_so_it_formats_as_its_value():
@@ -28,6 +29,7 @@ def test_unknown_engine_rejected():
         (EngineConfig.VLLM, True),
         (EngineConfig.APHRODITE, True),
         (EngineConfig.OAI, False),
+        (EngineConfig.GEMINI, False),
     ],
 )
 def test_is_local_server(engine, expected):
@@ -41,6 +43,7 @@ def test_is_local_server(engine, expected):
         (EngineConfig.VLLM, False),
         (EngineConfig.APHRODITE, False),
         (EngineConfig.OAI, True),
+        (EngineConfig.GEMINI, True),
     ],
 )
 def test_is_proprietary(engine, expected):
@@ -72,8 +75,12 @@ def test_oai_only_accepts_disable_thinking():
     assert EngineConfig.OAI.valid_sampling_params == ["disable_thinking"]
 
 
+def test_gemini_only_accepts_the_thinking_switch():
+    assert EngineConfig.GEMINI.valid_sampling_params == ["disable_thinking"]
+
+
 def test_aphrodite_only_params_are_not_valid_for_other_engines():
     """Test that Aphrodite-specific parameters are excluded from other engines."""
-    for engine in (EngineConfig.VLLM, EngineConfig.OAI):
+    for engine in (EngineConfig.VLLM, EngineConfig.OAI, EngineConfig.GEMINI):
         assert "top_a" not in engine.valid_sampling_params
         assert "nsigma" not in engine.valid_sampling_params
