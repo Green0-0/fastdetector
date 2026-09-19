@@ -79,7 +79,11 @@ def test_upload_readme_preserves_the_dataset_yaml_header(
         skip_if_unreachable(exc, f"{write_dataset_id} (write)")
 
     marker = uuid.uuid4().hex[:8]
-    upload_readme(dataset_name=write_dataset_id, readme_content=f"# Test {marker}\n")
+    upload_readme(
+        dataset_name=write_dataset_id,
+        filename="README.md",
+        readme_content=f"# Test {marker}\n",
+    )
 
     from huggingface_hub import hf_hub_download
 

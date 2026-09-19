@@ -51,6 +51,7 @@ def main() -> None:
         source_dataset_name=source_dataset,
         batch_id=args.batch_id,
         checkpoint=checkpoint,
+        save_columns=["topic", "format"],
     )
         
     originals = ds["original"]
@@ -120,7 +121,11 @@ def main() -> None:
         print(f"Uploading {len(trashed_ds)} trashed rows to {filtered_dataset} (config '{trashed_name}')...")
         push_shard(trashed_ds, filtered_dataset, config_name=trashed_name)
 
-    upload_readme(dataset_name=filtered_dataset, readme_content=filtered_readme)
+    upload_readme(
+        dataset_name=filtered_dataset,
+        filename=f"readme_{config_name}.md",
+        readme_content=filtered_readme,
+    )
     if checkpoint is not None:
         checkpoint.retire()
 

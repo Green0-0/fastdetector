@@ -111,6 +111,7 @@ def test_run_pipeline_produces_a_dataset(monkeypatch, repo_root, globals_config,
         source_column=source_column,
         source_dataset_name="in-memory-smoke-test",
         batch_id=0,
+        prompt_offset=gen_config.prompt_offset,
     )
 
     assert len(dataset) == len(rows)

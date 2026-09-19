@@ -58,10 +58,16 @@ def pipeline_env(monkeypatch, data_dir):
         env.calls["build_dataset"] = {
             "samples": list(samples),
             "api_url": api_url,
+            "prompts": prompts,
             "generation_params": generation_params,
             **kwargs,
         }
-        return env.result
+        columns, prompt_tokens, completion_tokens, failed = env.result
+        columns = dict(columns)
+        metadata = kwargs.get("metadata") or []
+        for name in dict.fromkeys(key for row in metadata for key in row):
+            columns[name] = [row.get(name) for row in metadata]
+        return columns, prompt_tokens, completion_tokens, failed
 
     class FakeServerContext:
         """Context manager stub simulating llm_server_context."""
@@ -85,7 +91,7 @@ def pipeline_env(monkeypatch, data_dir):
 
 def run(
     env, *, engine="vllm", num_samples=10, source_column="text",
-    checkpoint=None, **pipe_fields
+    checkpoint=None, save_columns=None, prompt_offset=0, **pipe_fields
 ):
     """Invoke run_pipeline with a config built from the given overrides."""
     pipe_config = PipeConfig(engine=engine, model_name="some/model", **pipe_fields)
@@ -98,6 +104,8 @@ def run(
         source_dataset_name="user/base-filtered",
         batch_id=3,
         checkpoint=checkpoint,
+        save_columns=save_columns,
+        prompt_offset=prompt_offset,
     )
 
 
@@ -283,6 +291,51 @@ def test_null_cells_become_empty_strings(pipeline_env):
     assert pipeline_env.calls["build_dataset"]["samples"] == ["", "42"]
 
 
+def test_requested_source_columns_are_saved_with_filtered_row_alignment(pipeline_env):
+    pipeline_env.rows = [
+        {"text": "too many words to retain", "topic": "drop", "format": "essay"},
+        {"text": "short", "topic": "keep", "format": "article"},
+    ]
+    pipeline_env.result = (
+        {"original": ["short"], "final_response": ["generated"]},
+        1,
+        1,
+        0,
+    )
+
+    dataset, _ = run(
+        pipeline_env,
+        max_input_len=2,
+        save_columns=["topic", "format"],
+    )
+
+    assert pipeline_env.calls["build_dataset"]["metadata"] == [
+        {"topic": "keep", "format": "article"}
+    ]
+    assert dataset["topic"] == ["keep"]
+    assert dataset["format"] == ["article"]
+
+
+def test_a_missing_requested_source_column_is_rejected(pipeline_env):
+    pipeline_env.rows = [{"text": "sample", "topic": "science"}]
+    with pytest.raises(KeyError, match="format"):
+        run(pipeline_env, save_columns=["topic", "format"])
+
+
+def test_a_null_requested_source_column_is_rejected(pipeline_env):
+    pipeline_env.rows = [
+        {"text": "sample", "topic": None, "format": "article"}
+    ]
+    with pytest.raises(ValueError, match=r"null requested.*topic"):
+        run(pipeline_env, save_columns=["topic", "format"])
+
+
+def test_prompt_offset_is_applied_before_generation(pipeline_env):
+    run(pipeline_env, prompt_offset=1)
+    prompts = pipeline_env.calls["build_dataset"]["prompts"]
+    assert prompts.next_train(1)[0].chat_turns[0].startswith("Summarise this document:")
+
+
 def test_proprietary_engines_measure_length_in_words_not_tokens(pipeline_env):
     # There is no local tokenizer for an API model, so the limit is applied to
     # the word count and the readme has to say so.
@@ -433,6 +486,7 @@ def test_readme_records_the_run(pipeline_env):
     assert "Total Output Tokens Processed: 222" in readme
     assert "Engine: vllm" in readme
     assert "Total Train Prompts: 2" in readme
+    assert "Prompt Offset: 0" in readme
 
 
 def test_pipeline_fingerprint_changes_when_filtered_inputs_change(

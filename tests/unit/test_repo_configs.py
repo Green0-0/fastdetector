@@ -1,6 +1,8 @@
 import json
 import re
 import tomllib
+from collections import Counter
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -47,9 +49,14 @@ def prompt_paths(repo_root):
 
 
 def generation_prompt_paths(repo_root):
-    """The prompt sets built by build_prompts.py, excluding the filter stage's
-    own hand-written prompt, which follows a different scheme."""
-    return sorted((repo_root / "prompts").glob("*_dataset_*.json"))
+    """The single prompt set built by build_prompts.py."""
+    return [repo_root / "prompts" / "combined_dataset.json"]
+
+
+@lru_cache(maxsize=None)
+def loaded_prompts(path: Path):
+    """Load each large committed prompt file at most once per test process."""
+    return load_prompts([str(path)])
 
 
 def pytest_generate_tests(metafunc):
@@ -405,12 +412,12 @@ def test_llm_classifier_directions_follow_the_detectors(repo_root):
 
 
 def test_prompt_file_loads(prompt_path):
-    prompts = load_prompts([str(prompt_path)])
+    prompts = loaded_prompts(prompt_path)
     assert prompts
 
 
 def test_prompt_turns_are_non_empty(prompt_path):
-    for index, prompt in enumerate(load_prompts([str(prompt_path)])):
+    for index, prompt in enumerate(loaded_prompts(prompt_path)):
         assert prompt.chat_turns, f"prompt {index} has no turns"
         assert all(turn.strip() for turn in prompt.chat_turns)
 
@@ -418,7 +425,7 @@ def test_prompt_turns_are_non_empty(prompt_path):
 def test_first_turn_references_the_document(prompt_path):
     # {{DOC}} is substituted by PromptSet.map; without it the sample text never
     # reaches the model.
-    for index, prompt in enumerate(load_prompts([str(prompt_path)])):
+    for index, prompt in enumerate(loaded_prompts(prompt_path)):
         assert "{{DOC}}" in prompt.chat_turns[0], f"prompt {index} ignores the document"
 
 
@@ -426,7 +433,7 @@ def test_response_placeholders_reference_earlier_turns(prompt_path):
     # {{RESP_n}} is only substituted for n < the current turn index; a forward
     # reference would be sent to the model verbatim.
     pattern = re.compile(r"\{\{RESP_(\d+)\}\}")
-    for index, prompt in enumerate(load_prompts([str(prompt_path)])):
+    for index, prompt in enumerate(loaded_prompts(prompt_path)):
         for turn_index, turn in enumerate(prompt.chat_turns):
             for match in pattern.finditer(turn):
                 assert int(match.group(1)) < turn_index, (
@@ -436,12 +443,12 @@ def test_response_placeholders_reference_earlier_turns(prompt_path):
 
 def test_prompt_metadata_declares_a_type(prompt_path):
     # analysis.py groups its per-prompt breakdown by PROMPT_TYPE.
-    for prompt in load_prompts([str(prompt_path)]):
+    for prompt in loaded_prompts(prompt_path):
         assert prompt.metadata.get("PROMPT_TYPE")
 
 
 def test_prompt_examples_are_user_assistant_pairs(prompt_path):
-    for prompt in load_prompts([str(prompt_path)]):
+    for prompt in loaded_prompts(prompt_path):
         for example in prompt.examples:
             assert len(example) == 2
             assert all(isinstance(part, str) for part in example)
@@ -460,6 +467,24 @@ def test_prompt_files_are_valid_json_lists(prompt_path):
 def test_gen_configs_reference_an_existing_prompt_file(repo_root, gen_config_path):
     config = GenConfig(**load_toml(str(gen_config_path)))
     assert (repo_root / config.prompt_file).is_file(), config.prompt_file
+
+
+def test_all_gen_shards_use_the_combined_prompt_set(repo_root):
+    prompt_files = {
+        GenConfig(**load_toml(str(path))).prompt_file
+        for path in gen_config_paths(repo_root)
+    }
+    assert prompt_files == {"prompts/combined_dataset.json"}
+
+
+def test_all_gen_shards_have_distinct_explicit_prompt_offsets(repo_root):
+    paths = gen_config_paths(repo_root)
+    raw_configs = [load_toml(str(path)) for path in paths]
+    assert all("prompt_offset" in config for config in raw_configs)
+
+    offsets = [config["prompt_offset"] for config in raw_configs]
+    assert len(set(offsets)) == len(paths)
+    assert all(0 <= offset < 150_000 for offset in offsets)
 
 
 def test_gen_configs_do_not_declare_huggingface_splits(gen_config_path):
@@ -577,13 +602,13 @@ def test_proprietary_generation_configs_use_batch_without_sampler_overrides(
 def test_the_document_is_delimited(generation_prompt_path):
     # An undelimited document lets the model read the trailing instruction as
     # part of the text and quote it back.
-    for index, prompt in enumerate(load_prompts([str(generation_prompt_path)])):
+    for index, prompt in enumerate(loaded_prompts(generation_prompt_path)):
         assert "<document>\n{{DOC}}\n</document>" in prompt.chat_turns[0], \
             f"prompt {index} in {generation_prompt_path.name} does not delimit the document"
 
 
 def test_every_prompt_suppresses_a_task_title(generation_prompt_path):
-    for index, prompt in enumerate(load_prompts([str(generation_prompt_path)])):
+    for index, prompt in enumerate(loaded_prompts(generation_prompt_path)):
         assert any("Do not add a title" in turn for turn in prompt.chat_turns), \
             f"prompt {index} in {generation_prompt_path.name} may be answered with a task label"
 
@@ -591,31 +616,55 @@ def test_every_prompt_suppresses_a_task_title(generation_prompt_path):
 def test_placeholders_are_doubly_braced(prompt_path):
     # An f-string in the builder silently halves the braces, which turns
     # {{DOC}} into an inert literal.
-    for index, prompt in enumerate(load_prompts([str(prompt_path)])):
+    for index, prompt in enumerate(loaded_prompts(prompt_path)):
         for turn in prompt.chat_turns:
             bare = re.sub(r"\{\{(?:DOC|TEXT|RESP_\d+)\}\}", "", turn)
             assert not re.search(r"\{(?:DOC|TEXT|RESP_\d+)\}", bare), \
                 f"prompt {index} in {prompt_path.name} has a single-braced placeholder"
 
 
-def test_no_instruction_variant_appears_in_both_prompt_splits(repo_root):
-    # The train and test prompt sets must not share a variant, or the corpora
-    # built from them overlap by construction.
-    variants = {v.strip() for path in (repo_root / "sample_prompts").glob("*/*.json")
-                for v in json.loads(path.read_text())}
-    blobs = {}
-    for split in ("train", "test"):
-        path = repo_root / "prompts" / f"combined_dataset_{split}.json"
-        blobs[split] = json.dumps(json.loads(path.read_text()))
-    both = [v for v in variants if json.dumps(v)[1:-1] in blobs["train"]
-            and json.dumps(v)[1:-1] in blobs["test"]]
-    assert not both, f"{len(both)} variant(s) in both splits, e.g. {both[:1]}"
+def test_combined_prompt_set_has_the_configured_size_and_family_distribution(repo_root):
+    prompts = loaded_prompts(repo_root / "prompts" / "combined_dataset.json")
+    assert len(prompts) == 150_000
+    assert Counter(prompt.metadata["PROMPT_TYPE"] for prompt in prompts) == {
+        "direct_reference": 37_500,
+        "revise": 37_500,
+        "rewrite": 37_500,
+        "indirect_reference": 37_500,
+    }
 
 
-def test_every_sample_variant_reaches_a_prompt_split(repo_root):
+def test_metadata_instruction_variants_are_uniform_and_only_on_the_last_turn(repo_root):
+    prompts = loaded_prompts(repo_root / "prompts" / "combined_dataset.json")
+    instructions = [
+        "The final text must have the topic <<topic>>.",
+        "The final text must have the format <<format>>.",
+        "The final text must have the format <<format>> and topic <<topic>>.",
+    ]
+    counts = Counter()
+    for prompt in prompts:
+        assert not any(
+            instruction in turn
+            for turn in prompt.chat_turns[:-1]
+            for instruction in instructions
+        )
+        selected = next(
+            (instruction for instruction in instructions
+             if prompt.chat_turns[-1].endswith(instruction)),
+            None,
+        )
+        counts[selected] += 1
+
+    # Four independent, equally likely choices should remain close to 25%.
+    assert all(36_000 <= count <= 39_000 for count in counts.values())
+    assert set(counts) == {None, *instructions}
+
+
+def test_every_sample_variant_reaches_the_combined_prompt_set(repo_root):
     variants = {v.strip() for path in (repo_root / "sample_prompts").glob("*/*.json")
                 for v in json.loads(path.read_text())}
-    built = "".join(json.dumps(json.loads((repo_root / "prompts" / f"combined_dataset_{s}.json").read_text()))
-                    for s in ("train", "test"))
+    built = json.dumps(json.loads(
+        (repo_root / "prompts" / "combined_dataset.json").read_text()
+    ))
     missing = [v for v in variants if json.dumps(v)[1:-1] not in built]
     assert not missing, f"{len(missing)} sample variant(s) unused, e.g. {missing[:1]}"

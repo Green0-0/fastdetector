@@ -4,6 +4,7 @@ import pytest
 
 from fastdetector.prompting.prompt_builder import (
     add_example,
+    add_final_instruction_variants,
     add_metadata,
     apply_recursive_format,
     force_reformat,
@@ -410,6 +411,33 @@ def test_add_metadata_keeps_prompt_dicts_independent():
     assert "only_first" not in prompts[1].metadata
 
 
+def test_final_instruction_variants_only_modify_the_last_turn():
+    prompts = generate_dataset([["first", "last"] for _ in range(200)])
+    instructions = [None, "topic", "format", "topic and format"]
+
+    add_final_instruction_variants(prompts, instructions, seed=42)
+
+    assert all(prompt.chat_turns[0] == "first" for prompt in prompts)
+    suffixes = {
+        prompt.chat_turns[-1].removeprefix("last").removeprefix("\n")
+        for prompt in prompts
+    }
+    assert suffixes == {"", "topic", "format", "topic and format"}
+
+
+def test_final_instruction_variant_assignment_is_seeded():
+    first = generate_dataset([["last"] for _ in range(20)])
+    second = generate_dataset([["last"] for _ in range(20)])
+    variants = [None, "a", "b", "c"]
+
+    add_final_instruction_variants(first, variants, seed=7)
+    add_final_instruction_variants(second, variants, seed=7)
+
+    assert [prompt.chat_turns for prompt in first] == [
+        prompt.chat_turns for prompt in second
+    ]
+
+
 def test_add_example_appends_to_every_prompt():
     """Test add_example appends example tuple to every Prompt object."""
     prompts = add_example(generate_dataset([["a"], ["b"]]), ("user", "assistant"))
@@ -468,9 +496,9 @@ def test_save_dataset_rejects_an_empty_dataset(tmp_path):
         save_dataset([], "set", path=str(tmp_path))
 
 
-def test_save_dataset_output_is_pretty_printed_json(tmp_path):
-    """Test save_dataset formats JSON with pretty-printed indentation."""
+def test_save_dataset_output_is_compact_json(tmp_path):
+    """Test save_dataset does not inflate large prompt sets with indentation."""
     save_dataset(generate_dataset([["a"]]), "set", path=str(tmp_path))
     raw = (tmp_path / "set.json").read_text(encoding="utf-8")
-    assert "\n    " in raw
+    assert "\n    " not in raw
     assert json.loads(raw)[0]["use_multiturn"] is True

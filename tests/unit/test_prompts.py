@@ -165,6 +165,92 @@ def test_map_does_not_mutate_the_template():
     assert templates[0].examples == []
 
 
+def test_map_substitutes_aligned_source_metadata_in_each_prompt():
+    prompt_set = PromptSet([
+        Prompt(
+            chat_turns=[
+                "Write about <<topic>> as a <<format>>: {{DOC}}",
+                "Keep the <<format>> format for <<topic>>.",
+            ],
+            use_multiturn=True,
+            metadata={"PROMPT_TYPE": "rewrite"},
+        )
+    ])
+    source_metadata = [
+        {"topic": "science", "format": "article"},
+    ]
+
+    mapped, labels = prompt_set.map(["source"], metadata=source_metadata)
+
+    assert mapped[0].chat_turns == [
+        "Write about science as a article: source",
+        "Keep the article format for science.",
+    ]
+    # Source fields are inputs to the template, not prompt provenance.
+    assert mapped[0].metadata == {"PROMPT_TYPE": "rewrite"}
+    assert labels[0]["metadata"] == {"PROMPT_TYPE": "rewrite"}
+    assert prompt_set.get_train()[0].chat_turns[0].startswith("Write about <<topic>>")
+
+
+def test_map_does_not_interpret_placeholders_inside_the_source_document():
+    prompt_set = PromptSet([
+        Prompt(
+            chat_turns=["Topic: <<topic>>\nDocument: {{DOC}}"],
+            use_multiturn=False,
+        )
+    ])
+
+    mapped, _ = prompt_set.map(
+        ["literal <<topic>> and <<unk>> text"],
+        metadata=[{"topic": "cats"}],
+    )
+
+    assert mapped[0].chat_turns == [
+        "Topic: cats\nDocument: literal <<topic>> and <<unk>> text"
+    ]
+
+
+def test_map_requires_one_metadata_dict_per_sample():
+    prompt_set = PromptSet(make_prompts(1))
+    with pytest.raises(ValueError, match="one dict per sample"):
+        prompt_set.map(["s0", "s1"], metadata=[{"topic": "science"}])
+
+
+def test_map_rejects_a_placeholder_when_metadata_is_missing():
+    prompt_set = PromptSet([
+        Prompt(
+            chat_turns=["Known: <<topic>>; unknown: <<unk>>."],
+            use_multiturn=False,
+        )
+    ])
+
+    with pytest.raises(KeyError, match=r"sample 0.*unk"):
+        prompt_set.map(["source"], metadata=[{"topic": "cats"}])
+
+
+def test_map_rejects_null_metadata_for_a_requested_placeholder():
+    prompt_set = PromptSet([
+        Prompt(chat_turns=["Topic: <<topic>>"], use_multiturn=False)
+    ])
+
+    with pytest.raises(ValueError, match=r"sample 0.*null metadata.*topic"):
+        prompt_set.map(["source"], metadata=[{"topic": None}])
+
+
+def test_train_offset_sets_and_wraps_the_initial_cursor():
+    prompt_set = PromptSet(make_prompts(3), train_offset=4)
+    assert prompt_set.next_train(3) == [
+        prompt_set.get_train()[1],
+        prompt_set.get_train()[2],
+        prompt_set.get_train()[0],
+    ]
+
+
+def test_train_offset_must_be_non_negative():
+    with pytest.raises(ValueError, match="non-negative"):
+        PromptSet(make_prompts(1), train_offset=-1)
+
+
 def test_map_labels_keep_the_unsubstituted_template():
     # The label column records which template produced the row, so it must keep
     # the placeholder rather than the expanded document.

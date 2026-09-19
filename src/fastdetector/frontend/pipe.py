@@ -24,6 +24,8 @@ def run_pipeline(
     batch_id: int | None = None,
     num_samples: int | None = None,
     checkpoint: GenerationCheckpoint | None = None,
+    save_columns: list[str] | None = None,
+    prompt_offset: int = 0,
 ) -> tuple[Dataset, str]:
     """Run the generation pipeline and return the result dataset.
 
@@ -42,6 +44,10 @@ def run_pipeline(
         checkpoint: Optional checkpoint owned by the calling entrypoint. It
             remains locked after this function returns and must be retired
             only after publication, then closed in a ``finally`` block.
+        save_columns: Source dataset columns to copy into the generated
+            dataset, preserving their values and row alignment.
+        prompt_offset: Zero-based starting position in the prompt set. Values
+            beyond the end of the set wrap around.
 
     Returns:
         A tuple of (Dataset, readme_content) containing the generated samples and metadata.
@@ -99,13 +105,16 @@ def run_pipeline(
 
     print(f"Loading prompts from file: {os.path.basename(prompt_file)}")
     prompt_list = load_prompts([prompt_file])
-    prompts = PromptSet(prompt_list)
+    prompts = PromptSet(prompt_list, train_offset=prompt_offset)
+    print(f"Starting prompt cursor at offset {prompt_offset}.")
 
     sample_target = "all" if num_samples is None else num_samples
     print(f"Streaming {sample_target} samples from {source_dataset_name} (subset index {batch_id})...")
     ds = load_dataset_auto_shard(source_dataset_name, split="train", subset_index=batch_id)
 
     samples = []
+    metadata: list[dict[str, object]] = []
+    save_columns = list(dict.fromkeys(save_columns or []))
     tokens_or_words_processed = 0
     dropped_count = 0
 
@@ -129,7 +138,20 @@ def run_pipeline(
             dropped_count += 1
             continue
 
+        missing = [column for column in save_columns if column not in row]
+        if missing:
+            raise KeyError(
+                "source dataset row is missing requested saved column(s): "
+                f"{missing}"
+            )
+        null_columns = [column for column in save_columns if row[column] is None]
+        if null_columns:
+            raise ValueError(
+                "source dataset row has null requested saved column(s): "
+                f"{null_columns}"
+            )
         samples.append(text)
+        metadata.append({column: row[column] for column in save_columns})
         tokens_or_words_processed += count
         if num_samples is not None and len(samples) >= num_samples:
             break
@@ -154,8 +176,13 @@ def run_pipeline(
                 },
             ),
             "prompt": hashlib.sha256(Path(prompt_file).read_bytes()).hexdigest(),
+            "prompt_offset": prompt_offset,
             "source": [source_dataset_name, source_column, batch_id, num_samples],
             "samples_sha256": sample_hasher.hexdigest(),
+            "save_columns": save_columns,
+            "metadata_sha256": hashlib.sha256(
+                json.dumps(metadata, sort_keys=True, default=str).encode("utf-8")
+            ).hexdigest(),
         }
         fingerprint = checkpoint.prepare(fingerprint_inputs)
         print(
@@ -195,6 +222,7 @@ def run_pipeline(
                 model_name=pipe_config.model_name,
                 checkpoint=checkpoint,
                 max_failure_rate=pipe_config.max_generation_failure_rate,
+                metadata=metadata,
             )
     else:
         if pipe_config.api_key_env is not None:
@@ -226,10 +254,17 @@ def run_pipeline(
             config=pipe_config if provider is not None else None,
             checkpoint=checkpoint,
             max_failure_rate=pipe_config.max_generation_failure_rate,
+            metadata=metadata,
         )
 
     if checkpoint is not None:
         checkpoint.flush()
+
+    # There are no metadata dict keys for build_dataset to discover in an
+    # empty shard, so retain the requested empty schema here.
+    if not metadata:
+        for column in save_columns:
+            result_dict.setdefault(column, [])
 
     if result_dict:
         col_lengths = {k: len(v) for k, v in result_dict.items()}
@@ -255,9 +290,11 @@ def run_pipeline(
 
 - Prompt File: {prompt_file}
 - Total Train Prompts: {len(prompts.get_train())}
+- Prompt Offset: {prompt_offset}
 
 - Source Dataset: {source_dataset_name}
 - Source Column: {source_column}
+- Saved Source Columns: {json.dumps(save_columns)}
 - Target Num Samples: {sample_target}
 - Dropped Samples (over length limit {length_limit} {unit}): {dropped_count}
 - Failed API Requests: {failed_requests}

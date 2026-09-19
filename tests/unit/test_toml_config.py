@@ -127,10 +127,22 @@ def test_gen_config_roundtrip():
     config = GenConfig(
         source_column="text",
         prompt_file="prompts/p.json",
+        prompt_offset=123,
         pipeline=PIPELINE_FIELDS,
     )
     assert config.pipeline.engine is EngineConfig.VLLM
     assert config.source_column == "text"
+    assert config.prompt_offset == 123
+
+
+def test_gen_config_rejects_a_negative_prompt_offset():
+    with pytest.raises(ValidationError, match="prompt_offset"):
+        GenConfig(
+            source_column="text",
+            prompt_file="prompts/p.json",
+            prompt_offset=-1,
+            pipeline=PIPELINE_FIELDS,
+        )
 
 
 def test_filter_config_defaults():

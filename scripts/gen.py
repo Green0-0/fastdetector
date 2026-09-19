@@ -112,6 +112,8 @@ def main() -> None:
         source_dataset_name=source_dataset,
         batch_id=args.batch_id,
         checkpoint=checkpoint,
+        save_columns=["topic", "format"],
+        prompt_offset=task_config.prompt_offset,
     )
 
     print("Running post-processing...")
@@ -147,12 +149,21 @@ def main() -> None:
     if len(trashed_ds):
         print(f"Pushing {len(trashed_ds)} trashed rows to '{target_dataset}' (config '{trashed_name}')...")
         push_shard(trashed_ds, target_dataset, config_name=trashed_name)
-    upload_readme(dataset_name=target_dataset, readme_content=readme_content)
+    report_filename = f"readme_{config_name}.md"
+    upload_readme(
+        dataset_name=target_dataset,
+        filename=report_filename,
+        readme_content=readme_content,
+    )
 
     print(f"Pushing cloned dataset to '{stat_dataset}' (config '{config_name}') with a stub readme...")
     push_shard(result_ds, stat_dataset, config_name=config_name)
     stub_readme = "# WIP Fastdetector dataset\nWaiting for statistics to finish generating...\n"
-    upload_readme(dataset_name=stat_dataset, readme_content=stub_readme)
+    upload_readme(
+        dataset_name=stat_dataset,
+        filename=report_filename,
+        readme_content=stub_readme,
+    )
     if checkpoint is not None:
         checkpoint.retire()
 

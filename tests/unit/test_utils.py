@@ -110,16 +110,18 @@ def test_a_single_config_does_not_satisfy_a_non_zero_shard(fake_hub):
         load_dataset_auto_shard("user/ds", subset_index=1)
 
 
-def test_auto_shard_falls_back_to_the_default_config_when_listing_fails(fake_hub):
+def test_auto_shard_raises_when_config_listing_fails(fake_hub):
     fake_hub.configs_error = ConnectionError("hub unreachable")
-    load_dataset_auto_shard("user/ds", subset_index=0)
-    assert fake_hub.loads == [("user/ds", None, "train")]
+    with pytest.raises(RuntimeError, match=r"Could not list configs.*shard_0"):
+        load_dataset_auto_shard("user/ds", subset_index=0)
+    assert fake_hub.loads == []
 
 
-def test_auto_shard_with_no_configs_loads_the_default(fake_hub):
+def test_auto_shard_with_no_configs_raises(fake_hub):
     fake_hub.configs = []
-    load_dataset_auto_shard("user/ds", subset_index=2)
-    assert fake_hub.loads == [("user/ds", None, "train")]
+    with pytest.raises(ValueError, match=r"returned no configs.*shard_2"):
+        load_dataset_auto_shard("user/ds", subset_index=2)
+    assert fake_hub.loads == []
 
 
 def test_auto_shard_with_a_none_index_skips_resolution_entirely(fake_hub):
@@ -149,16 +151,18 @@ def test_all_shards_with_one_config_returns_it_directly(fake_hub):
     assert load_dataset_all_shards("user/ds")["id"] == [5]
 
 
-def test_all_shards_falls_back_to_the_default_config(fake_hub):
+def test_all_shards_with_no_configs_raises(fake_hub):
     fake_hub.configs = []
-    load_dataset_all_shards("user/ds")
-    assert fake_hub.loads == [("user/ds", None, "train")]
+    with pytest.raises(ValueError, match="returned no configs"):
+        load_dataset_all_shards("user/ds")
+    assert fake_hub.loads == []
 
 
-def test_all_shards_survives_a_config_listing_failure(fake_hub):
+def test_all_shards_raises_on_a_config_listing_failure(fake_hub):
     fake_hub.configs_error = ConnectionError("hub unreachable")
-    load_dataset_all_shards("user/ds")
-    assert fake_hub.loads == [("user/ds", None, "train")]
+    with pytest.raises(RuntimeError, match="Could not list configs"):
+        load_dataset_all_shards("user/ds")
+    assert fake_hub.loads == []
 
 
 # --------------------------------------------------------------------------
@@ -181,6 +185,7 @@ def fake_api(monkeypatch, tmp_path):
 
         uploads: dict[str, bytes] = {}
         remote: dict[str, str] = {}
+        downloads: list[tuple[str, str]] = []
         commits = 0
         fail_upload = False
 
@@ -192,6 +197,7 @@ def fake_api(monkeypatch, tmp_path):
     api = Api()
     api.uploads = {}
     api.remote = {}
+    api.downloads = []
 
     class FakeHfApi:
         """Mock HfApi client recording the operations of each commit."""
@@ -204,6 +210,7 @@ def fake_api(monkeypatch, tmp_path):
                 api.uploads[operation.path_in_repo] = operation.path_or_fileobj
 
     def fake_download(repo_id, filename, repo_type):
+        api.downloads.append((repo_id, filename))
         if repo_id not in api.remote:
             raise FileNotFoundError(f"{repo_id} has no {filename}")
         path = tmp_path / f"{repo_id.replace('/', '_')}_{filename}"
@@ -216,15 +223,28 @@ def fake_api(monkeypatch, tmp_path):
 
 
 def test_upload_readme_writes_the_content(fake_api):
-    upload_readme("user/ds", readme_content="# Title\nbody\n")
+    upload_readme("user/ds", filename="README.md", readme_content="# Title\nbody\n")
     assert fake_api.readme == "# Title\nbody\n"
+
+
+def test_upload_shard_report_does_not_read_or_write_the_dataset_card(fake_api):
+    fake_api.remote["user/ds"] = "---\nconfigs: []\n---\n\ncanonical body\n"
+
+    upload_readme(
+        "user/ds",
+        filename="readme_shard_7.md",
+        readme_content="# Shard 7\n",
+    )
+
+    assert fake_api.uploads == {"readme_shard_7.md": b"# Shard 7\n"}
+    assert fake_api.downloads == []
 
 
 def test_upload_readme_preserves_the_existing_yaml_header(fake_api):
     # The YAML block carries the dataset's config/split declarations; dropping
     # it un-registers every shard on the Hub.
     fake_api.remote["user/ds"] = "---\nconfigs:\n- config_name: shard_0\n---\n\nold body\n"
-    upload_readme("user/ds", readme_content="# New\n")
+    upload_readme("user/ds", filename="README.md", readme_content="# New\n")
     uploaded = fake_api.readme
     assert uploaded.startswith("---\nconfigs:\n- config_name: shard_0\n---\n")
     assert uploaded.endswith("# New\n")
@@ -232,14 +252,15 @@ def test_upload_readme_preserves_the_existing_yaml_header(fake_api):
 
 
 def test_upload_readme_without_an_existing_readme(fake_api):
-    upload_readme("user/ds", readme_content="# New\n")
+    upload_readme("user/ds", filename="README.md", readme_content="# New\n")
     assert fake_api.readme == "# New\n"
 
 
 def test_upload_readme_appends_a_previous_readme_body(fake_api):
     fake_api.remote["user/previous"] = "---\nkey: value\n---\n\n## Previous\ntext"
     upload_readme(
-        "user/ds", readme_content="## New\n", append_readme_source="user/previous"
+        "user/ds", filename="README.md", readme_content="## New\n",
+        append_readme_source="user/previous"
     )
     uploaded = fake_api.readme
     assert "## Previous" in uploaded
@@ -251,14 +272,16 @@ def test_upload_readme_appends_a_previous_readme_body(fake_api):
 def test_upload_readme_separates_the_appended_sections(fake_api):
     fake_api.remote["user/previous"] = "## Previous\ntext"
     upload_readme(
-        "user/ds", readme_content="## New\n", append_readme_source="user/previous"
+        "user/ds", filename="README.md", readme_content="## New\n",
+        append_readme_source="user/previous"
     )
     assert "text\n\n## New" in fake_api.readme
 
 
 def test_upload_readme_survives_a_missing_append_source(fake_api):
     upload_readme(
-        "user/ds", readme_content="## New\n", append_readme_source="user/missing"
+        "user/ds", filename="README.md", readme_content="## New\n",
+        append_readme_source="user/missing"
     )
     assert fake_api.readme == "## New\n"
 
@@ -266,6 +289,7 @@ def test_upload_readme_survives_a_missing_append_source(fake_api):
 def test_upload_readme_uploads_extra_files(fake_api):
     upload_readme(
         "user/ds",
+        filename="README.md",
         readme_content="# T\n",
         files={"chart.png": b"\x89PNG", "summary.json": b"{}"},
     )
@@ -277,7 +301,7 @@ def test_upload_readme_uses_one_commit_regardless_of_file_count(fake_api):
     # (128), aborting an analysis run partway and leaving the README pointing
     # at charts that never uploaded.
     files = {f"chart_{i}.png": b"\x89PNG" for i in range(200)}
-    upload_readme("user/ds", readme_content="# T\n", files=files)
+    upload_readme("user/ds", filename="README.md", readme_content="# T\n", files=files)
     assert fake_api.commits == 1
     assert len(fake_api.uploads) == len(files) + 1
 
@@ -285,14 +309,29 @@ def test_upload_readme_uses_one_commit_regardless_of_file_count(fake_api):
 def test_upload_readme_raises_when_the_upload_fails(fake_api):
     # A printed warning plus exit code 0 made lost READMEs look like success.
     fake_api.fail_upload = True
-    with pytest.raises(RuntimeError, match="Failed to upload README"):
-        upload_readme("user/ds", readme_content="# T\n")
+    with pytest.raises(RuntimeError, match="Failed to upload README.md"):
+        upload_readme("user/ds", filename="README.md", readme_content="# T\n")
 
 
 def test_upload_readme_handles_a_yaml_header_with_no_closing_marker(fake_api):
     fake_api.remote["user/ds"] = "---\nunterminated header\n"
-    upload_readme("user/ds", readme_content="# New\n")
+    upload_readme("user/ds", filename="README.md", readme_content="# New\n")
     assert fake_api.readme == "# New\n"
+
+
+def test_upload_readme_rejects_a_non_markdown_destination(fake_api):
+    with pytest.raises(ValueError, match="must end in '.md'"):
+        upload_readme("user/ds", filename="report.txt", readme_content="text")
+
+
+def test_upload_readme_rejects_a_duplicate_associated_file(fake_api):
+    with pytest.raises(ValueError, match="must not contain"):
+        upload_readme(
+            "user/ds",
+            filename="report.md",
+            readme_content="text",
+            files={"report.md": b"duplicate"},
+        )
 
 
 # --------------------------------------------------------------------------

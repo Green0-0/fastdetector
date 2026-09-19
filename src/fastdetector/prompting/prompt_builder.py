@@ -267,6 +267,35 @@ def add_metadata(prompts: List[Prompt], key: str, value: Any) -> List[Prompt]:
         prompt.metadata[key] = value
     return prompts
 
+
+def add_final_instruction_variants(
+    prompts: List[Prompt],
+    instructions: list[str | None],
+    seed: int = 42,
+) -> List[Prompt]:
+    """Append one uniformly sampled instruction variant to each prompt's last turn.
+
+    ``None`` represents the no-modification variant. Prompts are modified
+    in-place, consistent with :func:`add_metadata` and :func:`add_example`.
+
+    Args:
+        prompts: Prompt objects whose final chat turn may be extended.
+        instructions: Equally weighted instruction variants. Use ``None`` for
+            a variant that leaves the prompt unchanged.
+        seed: Random seed used to make variant assignment reproducible.
+
+    Returns:
+        The modified list of prompts.
+    """
+    assert instructions, "instructions cannot be empty"
+    rng = random.Random(seed)
+    for prompt in prompts:
+        assert prompt.chat_turns, "Prompt chat turns cannot be empty."
+        instruction = rng.choice(instructions)
+        if instruction is not None:
+            prompt.chat_turns[-1] = f"{prompt.chat_turns[-1]}\n{instruction}"
+    return prompts
+
 def add_example(prompts: List[Prompt], example: tuple[str, str]) -> List[Prompt]:
     """Add a user-assistant example tuple to the examples list of each Prompt in a list.
 
@@ -312,4 +341,4 @@ def save_dataset(dataset: list[Prompt], name: str, path: str = "prompts/") -> No
         serialized_data.append(entry)
     
     with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(serialized_data, f, indent=4)
+        json.dump(serialized_data, f, ensure_ascii=False, separators=(",", ":"))

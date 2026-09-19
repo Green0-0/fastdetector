@@ -724,7 +724,7 @@ Classifier metrics averaged within each prompt and generator subset:
 {appendix_body}"""
 
     print("Uploading README and charts to Hub...")
-    upload_readme(dataset, files=charts, readme_content=readme)
+    upload_readme(dataset, filename="README.md", files=charts, readme_content=readme)
     print("Done!")
 
 

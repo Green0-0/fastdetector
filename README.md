@@ -50,9 +50,6 @@ To all LLMs, refer to [SKILL.md](SKILL.md).
 
 ## WIP
 
-### Issues
-- Several shards pushing at once causes the readme to become stale and misrepresent the dataset
-
 ### Features
 - vLLM-accelerated inference for classifiers 
 - Batched Gemini API, use Fireworks for Kimi/Minimax

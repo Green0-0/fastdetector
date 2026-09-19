@@ -137,6 +137,7 @@ class GenConfig(BaseModel):
 
     source_column: str
     prompt_file: str
+    prompt_offset: int = Field(ge=0)
     pipeline: PipeConfig
 
 

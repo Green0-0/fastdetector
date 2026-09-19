@@ -337,6 +337,7 @@ def build_dataset(
     config: PipeConfig | None = None,
     checkpoint: GenerationCheckpoint | None = None,
     max_failure_rate: float | None = None,
+    metadata: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, list[Any]], int, int, int]:
     """Iteratively build a dataset dict by batching across the prompt dimension.
 
@@ -355,6 +356,7 @@ def build_dataset(
 
     Special tokens replaced in prompts:
     - {{DOC}} is replaced with the sample text (done in PromptSet.map).
+    - <<COLUMN_NAME>> is replaced with source metadata (done in PromptSet.map).
     - {{RESP_N}} is replaced with the Nth response.
 
     Args:
@@ -372,6 +374,8 @@ def build_dataset(
             offline batch provider.
         max_failure_rate: Abort when failures exceed this fraction of the
             active rows in any online turn. ``None`` disables the guard.
+        metadata: Optional source-row metadata aligned with ``samples``. Each
+            key becomes a same-named column in the returned dataset dict.
 
     Returns:
         A tuple of (dataset_columns_dict, total_prompt_tokens, total_completion_tokens, total_failed_requests).
@@ -391,16 +395,57 @@ def build_dataset(
         raise ValueError("online generation checkpoints cannot be combined with an offline provider")
     if max_failure_rate is not None and not 0.0 <= max_failure_rate <= 1.0:
         raise ValueError("max_failure_rate must be between 0 and 1")
+    if metadata is None:
+        metadata = [{} for _ in samples]
+    if len(metadata) != len(samples):
+        raise ValueError(
+            "metadata must contain exactly one dict per sample "
+            f"({len(metadata)} metadata rows for {len(samples)} samples)"
+        )
+    if any(not isinstance(row, dict) for row in metadata):
+        raise TypeError("every metadata entry must be a dict")
+
+    metadata_columns = list(dict.fromkeys(
+        key for row in metadata for key in row
+    ))
+    reserved_columns = {
+        "original", "prompt", "final_response", "generator_model",
+        "generation_params",
+    }
+    collisions = [
+        name for name in metadata_columns
+        if name in reserved_columns
+        or (name.startswith("response_") and name[9:].isdigit())
+    ]
+    if collisions:
+        raise ValueError(
+            "metadata column names collide with generated dataset columns: "
+            f"{collisions}"
+        )
+
     print(f"Processing {len(samples)} samples...")
 
     if not samples:
         print("No samples to process; returning an empty dataset.")
-        return {"original": [], "prompt": [], "final_response": []}, 0, 0, 0
+        empty_columns = {name: [] for name in metadata_columns}
+        return {
+            "original": [],
+            "prompt": [],
+            **empty_columns,
+            "final_response": [],
+        }, 0, 0, 0
 
-    mapped_prompts, prompt_labels = prompts.map(samples)
+    mapped_prompts, prompt_labels = prompts.map(samples, metadata=metadata)
     max_turns = max(len(p.chat_turns) for p in mapped_prompts)
     responses_grouped: list[list[str]] = [[] for _ in samples]
-    dataset_columns: dict[str, list] = {"original": samples, "prompt": prompt_labels}
+    dataset_columns: dict[str, list] = {
+        "original": samples,
+        "prompt": prompt_labels,
+        **{
+            name: [row.get(name) for row in metadata]
+            for name in metadata_columns
+        },
+    }
     total_prompt_tokens = 0
     total_completion_tokens = 0
     total_failed_requests = 0

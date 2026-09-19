@@ -1,7 +1,11 @@
 import json
 import random
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+
+_METADATA_PLACEHOLDER = re.compile(r"<<([^<>]+)>>")
 
 
 @dataclass
@@ -11,6 +15,8 @@ class Prompt:
     Attributes:
         chat_turns: Ordered list of user-message templates. ``{{DOC}}`` is
             substituted with the sample text by :meth:`PromptSet.map`;
+            ``<<COLUMN_NAME>>`` is substituted with aligned source-row
+            metadata passed to :meth:`PromptSet.map`;
             ``{{RESP_N}}`` is substituted with the model response from turn
             N by :mod:`fastdetector.generator`.
         use_multiturn: If True, all turns are sent as a single multi-turn
@@ -34,15 +40,22 @@ class PromptSet:
     around when the cursor reaches the end of the list.
     """
 
-    def __init__(self, prompts: list[Prompt]) -> None:
+    def __init__(self, prompts: list[Prompt], train_offset: int = 0) -> None:
         """Initialize PromptSet with a list of Prompt templates.
 
         Args:
             prompts: List of Prompt instances to populate the training set.
+            train_offset: Initial training cursor position. Values larger than
+                the prompt set wrap around its length.
+
+        Raises:
+            ValueError: If ``train_offset`` is negative.
         """
+        if train_offset < 0:
+            raise ValueError("train_offset must be non-negative")
         self._train = list(prompts)
         self._test: list[Prompt] = []
-        self._train_cursor = 0
+        self._train_cursor = train_offset % len(self._train) if self._train else 0
         self._test_cursor = 0
 
     def generate_test_split(self, test_fraction: float) -> None:
@@ -90,7 +103,12 @@ class PromptSet:
         self._train_cursor = 0
         self._test_cursor = 0
 
-    def map(self, samples: list[str], use_test: bool = False) -> tuple[list[Prompt], list[dict[str, Any]]]:
+    def map(
+        self,
+        samples: list[str],
+        metadata: list[dict[str, Any]] | None = None,
+        use_test: bool = False,
+    ) -> tuple[list[Prompt], list[dict[str, Any]]]:
         """Map one prompt to each sample, substituting ``{{DOC}}``.
 
         Pulls prompts from the training or testing set via the internal cursor
@@ -100,6 +118,10 @@ class PromptSet:
 
         Args:
             samples: List of sample texts to map prompts onto.
+            metadata: Optional source-row metadata aligned one-to-one with
+                ``samples``. Each dict maps a source dataset column name to
+                its value. Occurrences of ``<<COLUMN_NAME>>`` in chat turns
+                are replaced with the corresponding value.
             use_test: If True, pull prompts from the test set instead of the
                 train set.
 
@@ -109,13 +131,63 @@ class PromptSet:
                 one per sample.
               - A list of dicts containing the complete metadata of the
                 original template prompt (before substitution).
+
+        Raises:
+            ValueError: If ``metadata`` does not contain one dict per sample.
+            TypeError: If a metadata entry is not a dict.
+            KeyError: If a chat turn references a metadata column that is not
+                present in the corresponding metadata dict.
+            ValueError: If a referenced metadata column has a null value.
         """
+        if metadata is None:
+            metadata = [{} for _ in samples]
+        if len(metadata) != len(samples):
+            raise ValueError(
+                "metadata must contain exactly one dict per sample "
+                f"({len(metadata)} metadata rows for {len(samples)} samples)"
+            )
+        if any(not isinstance(row, dict) for row in metadata):
+            raise TypeError("every metadata entry must be a dict")
+
         templates = self.next_test(len(samples)) if use_test else self.next_train(len(samples))
         mapped: list[Prompt] = []
         prompt_labels: list[dict[str, Any]] = []
-        for sample, template in zip(samples, templates):
+        for sample_index, (sample, sample_metadata, template) in enumerate(
+            zip(samples, metadata, templates)
+        ):
+            requested_columns = {
+                match.group(1)
+                for turn in template.chat_turns
+                for match in _METADATA_PLACEHOLDER.finditer(turn)
+            }
+            missing_columns = sorted(requested_columns - sample_metadata.keys())
+            if missing_columns:
+                raise KeyError(
+                    f"prompt for sample {sample_index} references missing metadata "
+                    f"column(s): {missing_columns}"
+                )
+            null_columns = sorted(
+                column for column in requested_columns
+                if sample_metadata[column] is None
+            )
+            if null_columns:
+                raise ValueError(
+                    f"prompt for sample {sample_index} references null metadata "
+                    f"column(s): {null_columns}"
+                )
+
+            def replace_metadata(match: re.Match[str]) -> str:
+                column = match.group(1)
+                return str(sample_metadata[column])
+
+            chat_turns = []
+            for turn in template.chat_turns:
+                mapped_turn = _METADATA_PLACEHOLDER.sub(replace_metadata, turn)
+                mapped_turn = mapped_turn.replace("{{DOC}}", sample)
+                chat_turns.append(mapped_turn)
+
             mapped.append(Prompt(
-                chat_turns=[turn.replace("{{DOC}}", sample) for turn in template.chat_turns],
+                chat_turns=chat_turns,
                 use_multiturn=template.use_multiturn,
                 examples=list(template.examples),
                 metadata=dict(template.metadata),

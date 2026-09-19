@@ -306,6 +306,60 @@ def test_build_dataset_records_the_prompt_template_per_row(recording_batch_gener
     assert columns["prompt"][0]["chat_turns"] == ["rewrite {{DOC}}"]
 
 
+def test_build_dataset_preserves_source_metadata_as_named_columns(
+    recording_batch_generate,
+):
+    prompts = PromptSet([
+        prompt(["rewrite {{DOC}} about <<topic>> as a <<format>>"])
+    ])
+    metadata = [
+        {"topic": "science", "format": "article"},
+        {"topic": "history", "format": "essay"},
+    ]
+
+    columns, *_ = build_dataset(
+        ["s0", "s1"], "http://x/v1", prompts, {}, metadata=metadata
+    )
+
+    assert columns["topic"] == ["science", "history"]
+    assert columns["format"] == ["article", "essay"]
+    assert columns["response_0"] == [
+        "reply0:rewrite s0 about science as a article",
+        "reply0:rewrite s1 about history as a essay",
+    ]
+
+
+def test_build_dataset_rejects_metadata_column_name_collisions(
+    recording_batch_generate,
+):
+    prompts = PromptSet([prompt(["rewrite {{DOC}}"])])
+    with pytest.raises(ValueError, match="collide"):
+        build_dataset(
+            ["s0"],
+            "http://x/v1",
+            prompts,
+            {},
+            metadata=[{"final_response": "source value"}],
+        )
+
+
+def test_build_dataset_fails_before_generation_for_missing_prompt_metadata(
+    recording_batch_generate,
+):
+    prompts = PromptSet([prompt(["rewrite {{DOC}} as <<unk>>"])])
+
+    with pytest.raises(KeyError, match="unk"):
+        build_dataset(
+            ["s0"],
+            "http://x/v1",
+            prompts,
+            {},
+            metadata=[{"topic": "science"}],
+        )
+
+    assert recording_batch_generate == []
+
+
 # --------------------------------------------------------------------------
 # batch_generate against a live localhost endpoint
 # --------------------------------------------------------------------------

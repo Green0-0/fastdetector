@@ -92,14 +92,16 @@ def load_dataset_auto_shard(
         try:
             configs = get_dataset_config_names(dataset_name)
         except Exception as e:
-            print(
-                f"Warning: could not list configs for '{dataset_name}': "
-                f"{type(e).__name__}: {e}. Loading the default config."
-            )
-            configs = []
+            raise RuntimeError(
+                f"Could not list configs for '{dataset_name}' while resolving "
+                f"requested shard '{wanted}': {type(e).__name__}: {e}"
+            ) from e
 
         if not configs:
-            pass
+            raise ValueError(
+                f"Dataset '{dataset_name}' returned no configs while resolving "
+                f"requested shard '{wanted}'; refusing to load a default config."
+            )
         elif wanted in configs:
             config_name = wanted
             print(f"Resolved shard {subset_index} to config '{config_name}' for dataset {dataset_name}")
@@ -140,8 +142,10 @@ def load_dataset_all_shards(
     try:
         configs = get_dataset_config_names(dataset_name)
     except Exception as e:
-        print(f"Notice: Could not list configs for '{dataset_name}': {e}. Loading default config.")
-        configs = []
+        raise RuntimeError(
+            f"Could not list configs for '{dataset_name}' while loading all "
+            f"shards: {type(e).__name__}: {e}"
+        ) from e
 
     if configs:
         print(f"Loading all {len(configs)} configs ({configs}) for dataset '{dataset_name}'...")
@@ -151,33 +155,48 @@ def load_dataset_all_shards(
         if len(shards) == 1:
             return shards[0]
         return concatenate_datasets(shards)
-    else:
-        print(f"Loading default config for dataset '{dataset_name}'...")
-        return load_dataset(dataset_name, split=split)
+    raise ValueError(
+        f"Dataset '{dataset_name}' returned no configs; refusing to load a "
+        "default config when all shards were requested."
+    )
 
 
 def upload_readme(
     dataset_name: str,
+    filename: str,
     files: Optional[Dict[str, bytes]] = None,
     readme_content: str = "",
     append_readme_source: Optional[str] = None,
+    max_attempts: int = 8,
+    base_delay: float = 15.0,
+    max_delay: float = 300.0,
 ) -> None:
-    """Upload a README and associated files to the Hugging Face Hub.
+    """Upload a Markdown report and associated files to the Hugging Face Hub.
+
+    Only an explicit ``filename="README.md"`` updates the canonical dataset
+    card and preserves its YAML front matter. Other filenames are uploaded as
+    ordinary Markdown files and never read or rewrite the dataset card.
 
     Args:
         dataset_name: The name of the dataset to upload to.
+        filename: Destination Markdown path in the dataset repository.
         files: Additional files to upload (filename -> bytes), such as charts.
         readme_content: The content of the readme.
         append_readme_source: If set, download the README from this dataset
             and prepend it to *readme_content*.
+        max_attempts: Total commit attempts when the repository is contended.
+        base_delay: Seconds before the first contention retry.
+        max_delay: Maximum pre-jitter retry delay.
 
     Returns:
         None.
 
     Raises:
-        RuntimeError: if uploading the README or any associated file fails.
-            (Failing to *download* an existing README/YAML header is still
-            non-fatal; the upload proceeds without it.)
+        ValueError: If ``filename`` is not a Markdown path or is duplicated in
+            ``files``.
+        RuntimeError: If uploading the report or an associated file fails.
+            Failing to download existing canonical README content remains
+            non-fatal.
     """
     def _extract_yaml(text: str) -> tuple[str, str]:
         """Extract YAML frontmatter from a markdown string.
@@ -195,15 +214,26 @@ def upload_readme(
                 return text[:idx] + "\n", text[idx:].lstrip()
         return "", text
 
+    if not filename.lower().endswith(".md"):
+        raise ValueError(f"Markdown report filename must end in '.md': {filename!r}")
+
+    if files is None:
+        files = {}
+    if filename in files:
+        raise ValueError(f"files must not contain the report destination {filename!r}")
+
     dataset_yaml = ""
-    try:
-        print(f"Checking for existing YAML config on '{dataset_name}'...")
-        curr_readme_path = hf_hub_download(repo_id=dataset_name, filename="README.md", repo_type="dataset")
-        with open(curr_readme_path, "r", encoding="utf-8") as f:
-            curr_text = f.read()
-            dataset_yaml, _ = _extract_yaml(curr_text)
-    except Exception as e:
-        print(f"Notice: No existing README or YAML config found on '{dataset_name}' ({e}).")
+    if filename == "README.md":
+        try:
+            print(f"Checking for existing YAML config on '{dataset_name}'...")
+            curr_readme_path = hf_hub_download(
+                repo_id=dataset_name, filename="README.md", repo_type="dataset"
+            )
+            with open(curr_readme_path, "r", encoding="utf-8") as f:
+                curr_text = f.read()
+                dataset_yaml, _ = _extract_yaml(curr_text)
+        except Exception as e:
+            print(f"Notice: No existing README or YAML config found on '{dataset_name}' ({e}).")
 
     prev_readme = ""
     if append_readme_source:
@@ -228,39 +258,52 @@ def upload_readme(
     else:
         combined_readme = dataset_yaml + readme_content
 
-    if files is None:
-        files = {}
-
     api = HfApi()
 
     operations = [
         CommitOperationAdd(
-            path_in_repo="README.md",
+            path_in_repo=filename,
             path_or_fileobj=combined_readme.encode("utf-8"),
         ),
         *(
-            CommitOperationAdd(path_in_repo=filename, path_or_fileobj=data)
-            for filename, data in files.items()
+            CommitOperationAdd(path_in_repo=associated_filename, path_or_fileobj=data)
+            for associated_filename, data in files.items()
         ),
     ]
 
-    try:
-        print(
-            f"Uploading README.md and {len(files)} file(s) to '{dataset_name}' "
-            f"in a single commit..."
-        )
-        api.create_commit(
-            repo_id=dataset_name,
-            repo_type="dataset",
-            operations=operations,
-            commit_message=f"Update README and {len(files)} associated file(s)",
-        )
-        print("README and files uploaded successfully.")
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to upload README/files to HuggingFace Hub dataset "
-            f"'{dataset_name}': {e}"
-        ) from e
+    print(
+        f"Uploading {filename} and {len(files)} file(s) to '{dataset_name}' "
+        f"in a single commit..."
+    )
+    for attempt in range(1, max_attempts + 1):
+        try:
+            api.create_commit(
+                repo_id=dataset_name,
+                repo_type="dataset",
+                operations=operations,
+                commit_message=f"Update {filename} and {len(files)} associated file(s)",
+            )
+            print(f"{filename} and files uploaded successfully.")
+            return
+        except HfHubHTTPError as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status not in frozenset({409, 412}) or attempt == max_attempts:
+                raise RuntimeError(
+                    f"Failed to upload {filename}/files to HuggingFace Hub "
+                    f"dataset '{dataset_name}': {e}"
+                ) from e
+            delay = min(base_delay * 2 ** (attempt - 1), max_delay) * (0.5 + random.random())
+            print(
+                f"Upload of {filename} to '{dataset_name}' hit HTTP {status}. "
+                f"Retrying in {delay:.1f}s (attempt {attempt}/{max_attempts})...",
+                flush=True,
+            )
+            time.sleep(delay)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to upload {filename}/files to HuggingFace Hub dataset "
+                f"'{dataset_name}': {e}"
+            ) from e
 
 
 def apply_filter_conditions(
