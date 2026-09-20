@@ -477,14 +477,29 @@ def test_all_gen_shards_use_the_combined_prompt_set(repo_root):
     assert prompt_files == {"prompts/combined_dataset.json"}
 
 
-def test_all_gen_shards_have_distinct_explicit_prompt_offsets(repo_root):
-    paths = gen_config_paths(repo_root)
-    raw_configs = [load_toml(str(path)) for path in paths]
-    assert all("prompt_offset" in config for config in raw_configs)
+def test_prompt_offsets_follow_original_shard_sizes_in_test_val_train_order(repo_root):
+    ordered_sizes = {
+        "test": [2_000] * 10,
+        "val": [2_000] * 7,
+        "train": [30_000] * 7 + [5_000] * 4 + [30_000] * 4,
+    }
 
-    offsets = [config["prompt_offset"] for config in raw_configs]
-    assert len(set(offsets)) == len(paths)
-    assert all(0 <= offset < 150_000 for offset in offsets)
+    next_offset = 0
+    offsets = []
+    for dataset_kind, sizes in ordered_sizes.items():
+        for shard_index, shard_size in enumerate(sizes):
+            path = (
+                repo_root / "config" / "gen" / dataset_kind
+                / f"shard_{shard_index}.toml"
+            )
+            raw_config = load_toml(str(path))
+            assert raw_config["prompt_offset"] == next_offset
+            offsets.append(next_offset)
+            next_offset += shard_size
+
+    assert next_offset == 384_000
+    assert len(set(offsets)) == len(offsets)
+    assert len({offset % 150_000 for offset in offsets}) < len(offsets)
 
 
 def test_gen_configs_do_not_declare_huggingface_splits(gen_config_path):
@@ -500,7 +515,7 @@ def test_numbered_gen_configs_claim_distinct_shards(repo_root):
     # A shard index is both the source subset a run reads and the config name it
     # writes. Indices restart in each dataset because each folder targets a
     # different Hub repository.
-    expected = {"train": list(range(14)), "val": list(range(6)), "test": list(range(2))}
+    expected = {"train": list(range(15)), "val": list(range(7)), "test": list(range(10))}
     actual = {
         dataset_kind: sorted(
             int(path.stem.removeprefix("shard_"))
@@ -527,11 +542,12 @@ def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
             "ornith-ai/Ornith-1.5-35B-A3B-NVFP4",
             "nvidia/Llama-3.3-70B-Instruct-NVFP4",
             "cyankiwi/Qwen3.8-27B-AWQ-INT4",
-            "mistralai/Mistral-Small-4-119B-2603-NVFP4",
             "cyankiwi/gemma-4-31B-it-AWQ-4bit",
+            "mistralai/Mistral-Small-4-119B-2603-NVFP4",
             "poolside/Laguna-S-2.1-NVFP4",
-            "deepseek-ai/DeepSeek-V4-Flash-0731",
-            "gpt-5.4-mini",
+            "deepseek/deepseek-v4.1-flash",
+            "gpt-5.6-luna",
+            "gpt-4.1-mini",
             "claude-haiku-4-5-20251001",
             "cyankiwi/Qwen3.8-27B-AWQ-INT4",
             "cyankiwi/gemma-4-31B-it-AWQ-4bit",
@@ -541,12 +557,24 @@ def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
         "val": [
             "TheBloke/Mixtral-8x7B-Instruct-v0.1-AWQ",
             "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
-            "RedHatAI/Hy3-NVFP4-FP8",
+            "tencent/hy3",
             "claude-sonnet-5",
-            "gpt-5.6-luna",
-            "nvidia/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+            "claude-sonnet-4-5-20250929",
+            "gpt-4o",
+            "gpt-3.5-turbo",
         ],
-        "test": ["gpt-5.6-sol", "claude-opus-5"],
+        "test": [
+            "gpt-5.6-sol",
+            "gpt-5.4",
+            "claude-opus-5",
+            "claude-opus-4-5-20251101",
+            "gemini-3.8-flash",
+            "gemini-3.1-pro-preview",
+            "moonshotai/kimi-k3",
+            "minimax/minimax-m3",
+            "qwen/qwen3.7-max",
+            "x-ai/grok-4.3",
+        ],
     }
     actual = {dataset_kind: [] for dataset_kind in expected}
     for path in gen_config_paths(repo_root):
@@ -558,8 +586,8 @@ def test_generation_models_are_partitioned_by_dataset_folder(repo_root):
 def test_special_sampler_variants_match_the_legacy_aphrodite_stack(repo_root):
     paths = [
         repo_root / "config/gen/train" / f"shard_{index}.toml"
-        for index in range(10, 14)
-    ] + [repo_root / "config/gen/val/shard_5.toml"]
+        for index in range(11, 15)
+    ]
     for path in paths:
         pipeline = GenConfig(**load_toml(str(path))).pipeline
         assert pipeline.engine is EngineConfig.APHRODITE
@@ -570,6 +598,20 @@ def test_special_sampler_variants_match_the_legacy_aphrodite_stack(repo_root):
         assert pipeline.xtc_probability == 0.3
         assert pipeline.nsigma == 1.5
         assert pipeline.disable_thinking is True
+
+
+def test_only_training_api_shards_are_capped_at_5000_samples(repo_root):
+    capped_paths = {
+        repo_root / "config" / "gen" / "train" / f"shard_{index}.toml"
+        for index in range(7, 11)
+    }
+
+    for path in gen_config_paths(repo_root):
+        config = GenConfig(**load_toml(str(path)))
+        expected = 5_000 if path in capped_paths else None
+        assert config.num_samples == expected
+        if path in capped_paths:
+            assert config.pipeline.engine.is_proprietary
 
 
 def test_every_generation_config_disables_thinking(gen_config_path):
@@ -584,7 +626,10 @@ def test_proprietary_generation_configs_use_batch_without_sampler_overrides(
     pipeline = config.pipeline
     if pipeline.engine.is_local_server:
         pytest.skip("local model")
-    assert pipeline.batch is True
+    if pipeline.api_url == "https://openrouter.ai/api/v1":
+        assert pipeline.batch is False
+    else:
+        assert pipeline.batch is True
     assert all(
         getattr(pipeline, name) is None
         for name in (
@@ -592,6 +637,28 @@ def test_proprietary_generation_configs_use_batch_without_sampler_overrides(
             "repetition_penalty", "top_a", "xtc_probability", "nsigma",
         )
     )
+
+
+def test_gpt_35_limits_leave_room_inside_its_context_window(repo_root):
+    path = repo_root / "config" / "gen" / "val" / "shard_6.toml"
+    pipeline = GenConfig(**load_toml(str(path))).pipeline
+
+    assert pipeline.model_name == "gpt-3.5-turbo"
+    # Hosted max_input_len is a word-count proxy, so stay well below the
+    # 12,289-token theoretical input ceiling after reserving 4,096 output tokens.
+    assert pipeline.max_input_len == 8_000
+    assert pipeline.max_output_tokens == 4_096
+
+
+def test_generator_models_do_not_leak_between_dataset_pools(repo_root):
+    by_pool = {dataset_kind: set() for dataset_kind in ("train", "val", "test")}
+    for path in gen_config_paths(repo_root):
+        model = GenConfig(**load_toml(str(path))).pipeline.model_name
+        by_pool[path.parent.name].add(model)
+
+    assert by_pool["train"].isdisjoint(by_pool["val"])
+    assert by_pool["train"].isdisjoint(by_pool["test"])
+    assert by_pool["val"].isdisjoint(by_pool["test"])
 
 
 # --------------------------------------------------------------------------

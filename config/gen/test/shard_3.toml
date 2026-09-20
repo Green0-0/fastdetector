@@ -1,10 +1,10 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 26000
+prompt_offset = 6000
 
 [pipeline]
 engine = "anthropic"
-model_name = "claude-sonnet-5"
+model_name = "claude-opus-4-5-20251101"
 parallelization_type = "none"
 disable_thinking = true
 batch = true

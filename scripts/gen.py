@@ -111,6 +111,7 @@ def main() -> None:
         source_column=task_config.source_column,
         source_dataset_name=source_dataset,
         batch_id=args.batch_id,
+        num_samples=task_config.num_samples,
         checkpoint=checkpoint,
         save_columns=["topic", "format"],
         prompt_offset=task_config.prompt_offset,

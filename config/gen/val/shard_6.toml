@@ -1,11 +1,10 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 254000
-num_samples = 5000
+prompt_offset = 32000
 
 [pipeline]
 engine = "oai"
-model_name = "gpt-4.1-mini"
+model_name = "gpt-3.5-turbo"
 parallelization_type = "none"
 disable_thinking = true
 batch = true
@@ -13,5 +12,7 @@ batch_state_dir = ".batch_state"
 batch_poll_interval_secs = 300
 api_url = "https://api.openai.com/v1"
 api_key_env = "OPENAI_API_KEY"
-max_input_len = 15000
-max_output_tokens = 16000
+# Hosted input limits are measured in words. Keep enough token headroom for
+# prompt instructions inside GPT-3.5 Turbo's 16,385-token context window.
+max_input_len = 8000
+max_output_tokens = 4096

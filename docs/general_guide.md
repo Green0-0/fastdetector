@@ -26,7 +26,7 @@ These five stages (ignoring prompts) correspond to the following python scripts 
 
 There is also a globals.toml which specifies traditional dataset paths and an optional username prefix for huggingface datasets; **you should modify it with your dataset paths (and optional prefix); you also need the source dataset under your account**.
 
-Stages #2 to #4 take a `--batch-id`: each one processes the shard with that index and writes its results back under the same shard name, so scaling out is one batch-id per machine (and stage #5 reads every shard back). Nothing else decides how much data a run covers — no config file carries a sample count, and each stage processes every row of the shard it is handed, so `--num-samples` at stage #1 is the single place that is set.
+Stages #2 to #4 take a `--batch-id`: each one processes the shard with that index and writes its results back under the same shard name, so scaling out is one batch-id per machine (and stage #5 reads every shard back). Stage #1's `--num-samples` sets the source corpus size and therefore the normal shard size. A generation TOML may additionally set top-level `num_samples` to cap that model's run after a smaller number of accepted rows; omitting it processes the complete source shard. Later statistics stages process every generated row they receive.
 
 `slurm/` holds the job scripts. Generation is divided between `gen.sbatch`
 (ordinary local checkpoints), `gen_large.sbatch` (the four-GPU DeepSeek V4

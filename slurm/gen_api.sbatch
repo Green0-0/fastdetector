@@ -8,12 +8,12 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16G
-#SBATCH --array=8-9
+#SBATCH --array=7-10
 
 set -euo pipefail
 
 DATASET_KIND="${DATASET_KIND:-train}"
-SHARD="${SLURM_ARRAY_TASK_ID:-8}"
+SHARD="${SLURM_ARRAY_TASK_ID:-7}"
 case "${DATASET_KIND}" in
   train|val|test) ;;
   *) echo "DATASET_KIND must be train, val, or test." >&2; exit 1 ;;

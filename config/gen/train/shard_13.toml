@@ -1,11 +1,11 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 88636
+prompt_offset = 324000
 
 [pipeline]
 engine = "aphrodite"
-model_name = "mistralai/Mistral-Small-4-119B-2603-NVFP4"
-parallelization_type = "tensor"
+model_name = "nvidia/Llama-3.3-70B-Instruct-NVFP4"
+parallelization_type = "pipeline"
 temperature = 1.25
 top_p = 1.0
 top_k = -1
@@ -13,9 +13,5 @@ top_a = 0.1
 xtc_probability = 0.3
 nsigma = 1.5
 disable_thinking = true
-chat_template_kwargs = { reasoning_effort = "none" }
 max_model_len = 32000
 max_input_len = 15000
-tokenizer_mode = "mistral"
-config_format = "mistral"
-load_format = "mistral"

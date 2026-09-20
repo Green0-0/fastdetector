@@ -50,6 +50,7 @@ class PipeConfig(BaseModel):
     presence_penalty: Optional[float] = None
     repetition_penalty: Optional[float] = None
     chat_template_kwargs: dict[str, Any] = Field(default_factory=dict)
+    thinking_level: Optional[str] = None
 
     # Aphrodite-specific sampling parameters
     top_a: Optional[float] = None
@@ -135,14 +136,15 @@ class PipeConfig(BaseModel):
 class GenConfig(BaseModel):
     """Configuration for the generation script (gen.py).
 
-    How many rows a run covers is a property of the shard it reads, decided
-    when the source dataset is sharded (scripts/shard_dataset.py), so there is
-    no sample count here.
+    A generation config normally consumes its whole source shard. ``num_samples``
+    optionally caps accepted source rows for intentionally smaller runs, such as
+    the hosted training models.
     """
 
     source_column: str
     prompt_file: str
     prompt_offset: int = Field(ge=0)
+    num_samples: Optional[int] = Field(default=None, ge=1)
     pipeline: PipeConfig
 
 

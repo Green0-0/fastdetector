@@ -38,9 +38,8 @@ def run_pipeline(
         batch_id: Optional shard index (used for both the source subset_index
             and the target config_name).
         num_samples: Number of samples to process. ``None`` (the default)
-            processes every row of the shard, which is what the pipeline
-            entrypoints do - how much data a run covers is decided once, when
-            the source dataset is sharded (scripts/shard_dataset.py).
+            processes every row of the shard. Generation configs may set an
+            explicit cap for a deliberately smaller model-specific run.
         checkpoint: Optional checkpoint owned by the calling entrypoint. It
             remains locked after this function returns and must be retired
             only after publication, then closed in a ``finally`` block.
@@ -71,11 +70,23 @@ def run_pipeline(
         if param == "disable_thinking":
             if val:
                 if engine.provider == "openai":
-                    generation_params["reasoning_effort"] = "none"
+                    if pipe_config.api_url and "openrouter.ai" in pipe_config.api_url:
+                        extra_body["reasoning"] = {"enabled": False}
+                    elif pipe_config.model_name.startswith(
+                        ("gpt-3.5", "gpt-4.1", "gpt-4o")
+                    ):
+                        pass
+                    else:
+                        generation_params["reasoning_effort"] = "none"
                 elif engine.provider == "anthropic":
                     generation_params["thinking"] = {"type": "disabled"}
                 elif engine.provider == "gemini":
-                    generation_params["thinking_config"] = {"thinking_budget": 0}
+                    if pipe_config.thinking_level is None:
+                        generation_params["thinking_config"] = {"thinking_budget": 0}
+                    else:
+                        generation_params["thinking_config"] = {
+                            "thinking_level": pipe_config.thinking_level
+                        }
                 else:
                     chat_template_kwargs.setdefault("enable_thinking", False)
         elif param in {"temperature", "top_p", "presence_penalty"}:

@@ -1,6 +1,6 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 20454
+prompt_offset = 124000
 
 [pipeline]
 engine = "aphrodite"

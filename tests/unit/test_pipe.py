@@ -94,7 +94,8 @@ def run(
     checkpoint=None, save_columns=None, prompt_offset=0, **pipe_fields
 ):
     """Invoke run_pipeline with a config built from the given overrides."""
-    pipe_config = PipeConfig(engine=engine, model_name="some/model", **pipe_fields)
+    model_name = pipe_fields.pop("model_name", "some/model")
+    pipe_config = PipeConfig(engine=engine, model_name=model_name, **pipe_fields)
     return run_pipeline(
         globals_config=GlobalsConfig(**GLOBALS_FIELDS),
         pipe_config=pipe_config,
@@ -183,6 +184,33 @@ def test_disable_thinking_becomes_reasoning_effort_for_proprietary_engines(
     assert "extra_body" not in params
 
 
+def test_openrouter_disable_thinking_uses_cross_provider_reasoning_switch(
+    pipeline_env,
+):
+    run(
+        pipeline_env,
+        engine="oai",
+        disable_thinking=True,
+        api_url="https://openrouter.ai/api/v1",
+    )
+    params = pipeline_env.calls["build_dataset"]["generation_params"]
+    assert params == {"extra_body": {"reasoning": {"enabled": False}}}
+
+
+@pytest.mark.parametrize("model_name", ["gpt-3.5-turbo", "gpt-4.1-mini", "gpt-4o"])
+def test_non_reasoning_gpt_models_do_not_receive_reasoning_effort(
+    pipeline_env, model_name
+):
+    run(
+        pipeline_env,
+        engine="oai",
+        model_name=model_name,
+        disable_thinking=True,
+        api_url="https://api.openai.com/v1",
+    )
+    assert pipeline_env.calls["build_dataset"]["generation_params"] == {}
+
+
 def test_gemini_uses_default_sampler_and_disables_thinking(
     pipeline_env, monkeypatch, tmp_path
 ):
@@ -205,6 +233,24 @@ def test_gemini_uses_default_sampler_and_disables_thinking(
     }
     assert call["provider"] is provider
     assert call["api_url"] == ""
+
+
+def test_gemini_can_use_its_lowest_supported_thinking_level(
+    pipeline_env, monkeypatch, tmp_path
+):
+    provider = types.SimpleNamespace(name="gemini")
+    monkeypatch.setattr(pipe_module, "make_provider", lambda config: provider)
+    run(
+        pipeline_env,
+        engine="gemini",
+        batch=True,
+        api_key_env="GEMINI_API_KEY",
+        batch_state_dir=str(tmp_path),
+        disable_thinking=True,
+        thinking_level="low",
+    )
+    params = pipeline_env.calls["build_dataset"]["generation_params"]
+    assert params == {"thinking_config": {"thinking_level": "low"}}
 
 
 def test_aphrodite_only_params_reach_extra_body(pipeline_env):

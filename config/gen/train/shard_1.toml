@@ -1,6 +1,6 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 6818
+prompt_offset = 64000
 
 [pipeline]
 engine = "vllm"

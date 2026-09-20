@@ -1,10 +1,10 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 81818
+prompt_offset = 294000
 
 [pipeline]
 engine = "aphrodite"
-model_name = "nvidia/Llama-3.3-70B-Instruct-NVFP4"
+model_name = "cyankiwi/gemma-4-31B-it-AWQ-4bit"
 parallelization_type = "pipeline"
 temperature = 1.25
 top_p = 1.0

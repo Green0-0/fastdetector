@@ -1,24 +1,14 @@
 source_column = "collected_subset"
 prompt_file = "prompts/combined_dataset.json"
-prompt_offset = 47727
+prompt_offset = 244000
+num_samples = 5000
 
 [pipeline]
-engine = "vllm"
-model_name = "deepseek-ai/DeepSeek-V4-Flash-0731"
-parallelization_type = "data"
-temperature = 1.0
-top_p = 1.0
+engine = "oai"
+model_name = "deepseek/deepseek-v4.1-flash"
+parallelization_type = "none"
 disable_thinking = true
-chat_template_kwargs = { thinking_mode = "chat" }
-gpu_memory_utilization = 0.97
-max_model_len = 16384
-max_input_len = 7000
-tokenizer_mode = "deepseek_v4"
-kv_cache_dtype = "fp8"
-server_args = [
-  "--trust-remote-code",
-  "--block-size", "256",
-  "--enable-expert-parallel",
-  "--moe-backend", "deep_gemm_mega_moe",
-  "--attention-config", '{"use_fp4_indexer_cache": true}',
-]
+api_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+max_input_len = 15000
+max_output_tokens = 16000

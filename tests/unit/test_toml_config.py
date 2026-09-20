@@ -128,11 +128,13 @@ def test_gen_config_roundtrip():
         source_column="text",
         prompt_file="prompts/p.json",
         prompt_offset=123,
+        num_samples=5_000,
         pipeline=PIPELINE_FIELDS,
     )
     assert config.pipeline.engine is EngineConfig.VLLM
     assert config.source_column == "text"
     assert config.prompt_offset == 123
+    assert config.num_samples == 5_000
 
 
 def test_gen_config_rejects_a_negative_prompt_offset():
@@ -141,6 +143,17 @@ def test_gen_config_rejects_a_negative_prompt_offset():
             source_column="text",
             prompt_file="prompts/p.json",
             prompt_offset=-1,
+            pipeline=PIPELINE_FIELDS,
+        )
+
+
+def test_gen_config_rejects_a_nonpositive_sample_cap():
+    with pytest.raises(ValidationError, match="num_samples"):
+        GenConfig(
+            source_column="text",
+            prompt_file="prompts/p.json",
+            prompt_offset=0,
+            num_samples=0,
             pipeline=PIPELINE_FIELDS,
         )
 
