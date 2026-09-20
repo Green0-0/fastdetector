@@ -59,7 +59,7 @@ def test_the_output_stays_aligned_with_the_input():
 
 REASONS = {"empty or too short", "refusal", "filler output",
            "unfilled placeholder", "task meta-commentary", "echoed instruction",
-           "identical to source"}
+           "near-verbatim source", "identical to source"}
 
 
 def rejected(reasons):
@@ -102,10 +102,22 @@ def test_reasons_may_overlap_on_one_row():
     assert [n for n, f in reasons.items() if f[0]] == ["empty or too short", "refusal"]
 
 
-def test_similarity_is_not_a_rejection_reason():
-    # Over-similar pairs are the analysis stage's job, not this one.
-    # Only an exact copy is rejected here, so keep the two sides distinct.
-    reasons = rejection_reasons([BODY], [f"{BODY} word120"], [""])
+def test_near_verbatim_rewrite_is_a_generation_rejection_reason():
+    original_words = BODY.split()
+    response_words = original_words.copy()
+    response_words[60] = "replacement"
+    reasons = rejection_reasons([BODY], [" ".join(response_words)], [""])
+
+    assert reasons["near-verbatim source"] == [True]
+    assert reasons["identical to source"] == [False]
+    assert rejected(reasons) == [True]
+
+
+def test_a_sufficiently_changed_response_is_not_rejected_for_similarity():
+    additions = " ".join(f"new{i}" for i in range(10))
+    reasons = rejection_reasons([BODY], [f"{BODY} {additions}"], [""])
+
+    assert reasons["near-verbatim source"] == [False]
     assert reasons["identical to source"] == [False]
     assert rejected(reasons) == [False]
 

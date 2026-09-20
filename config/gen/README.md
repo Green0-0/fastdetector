@@ -25,6 +25,12 @@ rather than reduced modulo the prompt count: the schedule runs from 0 through
 overlap is intentional and the unreduced values make the allocation boundaries
 visible.
 
+Generation post-processing also rejects a response as `near-verbatim source`
+when both its unigram Jaccard distance is at most 0.025 and its bigram Jaccard
+distance is at most 0.05. A response is retained by this check when either
+distance exceeds its threshold. The calculation uses the same word n-gram
+Jaccard implementation as the distance-statistics stage.
+
 Gemini uses the Gemini Developer API's asynchronous Batch API as well. A minimal
 pipeline block is:
 

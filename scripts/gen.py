@@ -9,6 +9,7 @@ from fastdetector.generation_checkpoint import GenerationCheckpoint
 from fastdetector.statistics.filters import (
     fix_encoding,
     has_filler_output,
+    has_insufficient_jaccard_distance,
     has_meta_commentary,
     has_placeholder,
     has_prompt_echo,
@@ -60,6 +61,12 @@ def rejection_reasons(originals: list[str], responses: list[str],
         "unfilled placeholder": has_placeholder(responses, originals),
         "task meta-commentary": has_meta_commentary(responses, originals),
         "echoed instruction": has_prompt_echo(responses, instructions),
+        "near-verbatim source": has_insufficient_jaccard_distance(
+            originals,
+            responses,
+            unigram_threshold=0.025,
+            bigram_threshold=0.05,
+        ),
         "identical to source": is_unchanged(responses, originals),
     }
 

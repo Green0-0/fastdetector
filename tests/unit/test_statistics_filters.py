@@ -4,6 +4,7 @@ from fastdetector.statistics.filters import (
     fix_encoding,
     has_encoding_damage,
     has_filler_output,
+    has_insufficient_jaccard_distance,
     has_instruction_vocabulary,
     has_length_anomaly,
     has_meta_commentary,
@@ -394,6 +395,30 @@ def test_identical_and_near_identical_pairs_are_flagged():
 def test_the_similarity_threshold_is_configurable():
     assert is_near_duplicate(["a b c d"], ["a b c e"], threshold=0.9) == [False]
     assert is_near_duplicate(["a b c d"], ["a b c e"], threshold=0.5) == [True]
+
+
+def test_joint_jaccard_filter_flags_a_near_verbatim_rewrite():
+    original_words = [f"word{i}" for i in range(100)]
+    response_words = original_words.copy()
+    response_words[50] = "replacement"
+
+    assert has_insufficient_jaccard_distance(
+        [" ".join(original_words)], [" ".join(response_words)]
+    ) == [True]
+
+
+def test_joint_jaccard_filter_keeps_a_reordered_rewrite():
+    original = "one two three four five six"
+    # Unigram distance is zero, but the bigram distance is high. Passing either
+    # threshold is sufficient to retain the response.
+    response = "six five four three two one"
+    assert has_insufficient_jaccard_distance([original], [response]) == [False]
+
+
+def test_joint_jaccard_filter_keeps_a_clearly_changed_rewrite():
+    assert has_insufficient_jaccard_distance(
+        ["one two three four"], ["five six seven eight"]
+    ) == [False]
 
 
 def test_length_ratio_outliers_are_flagged_at_both_tails():

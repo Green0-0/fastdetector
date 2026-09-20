@@ -343,6 +343,36 @@ def is_near_duplicate(originals: list[str], texts: list[str], threshold: float =
     return [1.0 - distance >= threshold for distance in pairwise_jaccards(originals, texts, n)]
 
 
+def has_insufficient_jaccard_distance(
+    originals: list[str],
+    texts: list[str],
+    unigram_threshold: float = 0.025,
+    bigram_threshold: float = 0.05,
+) -> list[bool]:
+    """Flag rewrites that remain too close to their source at both n-gram levels.
+
+    A row is acceptable when either its unigram Jaccard distance exceeds
+    ``unigram_threshold`` or its bigram distance exceeds ``bigram_threshold``.
+    Consequently, a row is flagged only when both distances are at or below
+    their respective thresholds.
+
+    Args:
+        originals: Source texts.
+        texts: Model responses aligned with ``originals``.
+        unigram_threshold: Minimum acceptable unigram Jaccard distance.
+        bigram_threshold: Minimum acceptable bigram Jaccard distance.
+
+    Returns:
+        List of booleans, ``True`` where the row should be removed.
+    """
+    unigram_distances = pairwise_jaccards(originals, texts, n=1)
+    bigram_distances = pairwise_jaccards(originals, texts, n=2)
+    return [
+        unigram <= unigram_threshold and bigram <= bigram_threshold
+        for unigram, bigram in zip(unigram_distances, bigram_distances)
+    ]
+
+
 def has_length_anomaly(
     originals: list[str],
     texts: list[str],
