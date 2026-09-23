@@ -1,6 +1,7 @@
 import json
 import sys
 import re
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -11,7 +12,6 @@ from analysis import (
     Scores,
     Subset,
     SubsetGroups,
-    build_contents,
     evaluate,
     extract_model_genconfig,
     extract_prompt_types,
@@ -19,13 +19,10 @@ from analysis import (
     read_scores,
     safe_name,
     select_available,
-    subset_table,
-    threshold_description,
 )
 from fastdetector.frontend.toml_config import (
     AnalysisConfig,
     ClassifierConfig,
-    ConditionConfig,
     GlobalsConfig,
 )
 
@@ -37,14 +34,13 @@ def make_analysis_config(**overrides) -> AnalysisConfig:
         "fixed_classes": [False, True],
         "prompt_metadata_column": "prompt",
         "model_metadata_column": "generator_model",
-        "validation_size": 0.1,
     }
     return AnalysisConfig(**{**base, **overrides})
 
 
 def make_classifier(name: str, suffix: str, **overrides) -> ClassifierConfig:
-    """Build a ClassifierConfig with the required threshold criterion filled in."""
-    return ClassifierConfig(name=name, suffix=suffix, **{"threshold_type": "accuracy", **overrides})
+    """Build a classifier config."""
+    return ClassifierConfig(name=name, suffix=suffix, **overrides)
 
 
 def reader(ds: Dataset):
@@ -190,6 +186,19 @@ def test_subset_groups_default_to_an_overall_only_breakdown():
     assert (groups.prompts, groups.models) == ([], [])
 
 
+def test_hardest_subset_is_ranked_by_its_best_detector_not_the_mean():
+    first, second = Subset("Prompt", "first"), Subset("Prompt", "second")
+    runs = {
+        "a": SimpleNamespace(subsets={
+            first: {"tpr_at_fpr_1pct": 0.10}, second: {"tpr_at_fpr_1pct": 0.30}}),
+        "b": SimpleNamespace(subsets={
+            first: {"tpr_at_fpr_1pct": 0.90}, second: {"tpr_at_fpr_1pct": 0.40}}),
+    }
+    subset, value = analysis._subset_difficulty(runs, [first, second])
+    # Means would call `first` harder; max TPR correctly calls `second` harder.
+    assert (subset, value) == (second, 0.40)
+
+
 # --------------------------------------------------------------------------
 # read_scores
 # --------------------------------------------------------------------------
@@ -220,10 +229,11 @@ def test_a_score_a_classifier_failed_on_is_dropped(scored_dataset):
     assert np.isfinite(scores.values).all()
 
 
-def test_human_columns_come_first_so_the_legends_line_up(scored_dataset):
+def test_human_scores_are_flattened_before_ai_scores(scored_dataset):
     cfg = make_analysis_config(base_columns=["final_response", "original"], fixed_classes=[True, False])
     scores = read_scores(reader(scored_dataset), cfg, "_score")
-    assert scores.sources == [(False, "original_score"), (True, "final_response_score")]
+    assert scores.is_ai.tolist() == [False] * 4 + [True] * 3
+    assert scores.values[:4].tolist() == scored_dataset["original_score"]
 
 
 def test_a_subset_keeps_only_the_rows_its_mask_selects(scored_dataset):
@@ -238,20 +248,12 @@ def test_a_subset_of_no_mask_is_the_whole_split(scored_dataset):
     assert scores.subset(None) is scores
 
 
-def test_histogram_series_are_labelled_human_and_ai(scored_dataset):
-    scores = read_scores(reader(scored_dataset), make_analysis_config(), "_score")
-    assert [label for _, label in scores.series()] == [
-        "Human (original_score)", "AI (final_response_score)"]
-
-
 def test_an_auto_classed_column_contributes_both_sides(scored_dataset):
     cfg = make_analysis_config(base_columns=["text"], fixed_classes=None,
                                auto_class_column="label", ai_label="AI")
     read = reader(scored_dataset)
     scores = read_scores(read, cfg, "_score", auto_ai=read("label") == "AI")
-    assert scores.sources == [(False, "text_score (Human)"), (True, "text_score (AI)")]
-    # The class already appears in the column name, so it is not repeated.
-    assert [label for _, label in scores.series()] == ["text_score (Human)", "text_score (AI)"]
+    assert scores.is_ai.tolist() == [False, False, True, True]
     assert scores.values.size == 4
 
 
@@ -264,58 +266,37 @@ def separable_scores(size: int = 40) -> Scores:
     """Scores where the AI side sits cleanly above the human side."""
     values = np.concatenate([np.linspace(0.0, 0.4, size), np.linspace(0.6, 1.0, size)])
     return Scores(values, np.concatenate([np.zeros(size, bool), np.ones(size, bool)]),
-                  np.concatenate([np.arange(size)] * 2),
-                  np.concatenate([np.zeros(size, int), np.ones(size, int)]),
-                  [(False, "human_score"), (True, "ai_score")])
+                  np.concatenate([np.arange(size)] * 2))
 
 
 def test_a_swept_classifier_pins_a_threshold_and_renders_its_sweep():
     scores, overall = separable_scores(), Subset("", "Overall")
-    run = evaluate(make_classifier("S", "_score"), scores, scores, [overall])
+    run = evaluate(make_classifier("S", "_score"), scores, [overall])
     # Pinned on the scores themselves, so it lands on the start of the perfect
     # plateau (the top human score) rather than somewhere inside the gap.
-    assert 0.4 <= run.threshold < 0.6
-    assert run.subsets[overall]["accuracy"] == 1.0
+    assert run.subsets[overall]["tpr_at_fpr_1pct"] == 1.0
     assert run.sweep_chart.startswith(b"\x89PNG")
-    assert set(run.values) == {"threshold", "optimal_accuracy"}
-
-
-def test_a_manual_threshold_skips_the_sweep_entirely():
-    scores = separable_scores()
-    run = evaluate(make_classifier("S", "_score", manual_threshold=0.5),
-                   scores, None, [Subset("", "Overall")])
-    assert run.threshold == 0.5
-    assert run.sweep_chart is None
-    assert run.values == {"threshold": 0.5}
+    assert set(run.points) == {"fpr_1pct", "fpr_0_1pct"}
 
 
 def overlapping_scores(size: int = 100) -> Scores:
     """Scores whose classes overlap, so the threshold criteria disagree."""
     values = np.concatenate([np.linspace(0.0, 0.7, size), np.linspace(0.3, 1.0, size)])
     return Scores(values, np.concatenate([np.zeros(size, bool), np.ones(size, bool)]),
-                  np.concatenate([np.arange(size)] * 2),
-                  np.concatenate([np.zeros(size, int), np.ones(size, int)]),
-                  [(False, "human_score"), (True, "ai_score")])
+                  np.concatenate([np.arange(size)] * 2))
 
 
-def test_each_classifier_sweeps_for_its_own_criterion():
+def test_both_low_fpr_operating_points_are_evaluated():
     scores, cfg, overall = overlapping_scores(), make_analysis_config(), Subset("", "Overall")
-    strict = evaluate(make_classifier("F", "_s", threshold_type="fpr_0_01pct"),
-                      scores, scores, [overall])
-    balanced = evaluate(make_classifier("A", "_s", threshold_type="accuracy"),
-                        scores, scores, [overall])
-    # Best accuracy sits inside the overlap; a 0.01% FPR target has to clear the
-    # top of the human range, which it now does exactly rather than overshooting
-    # it and giving up AI rows for no false positive saving.
-    assert balanced.threshold < 0.7 <= strict.threshold
-    assert strict.subsets[overall]["fpr"] == 0.0
+    run = evaluate(make_classifier("F", "_s"), scores, [overall])
+    assert run.points["fpr_1pct"].fpr <= 0.01
+    assert run.points["fpr_0_1pct"].fpr <= 0.001
 
 
 def test_every_subset_is_scored():
     scores = separable_scores(size=10)
     subsets = [Subset("", "Overall"), Subset("Prompt", "a", np.arange(10) < 5)]
-    run = evaluate(make_classifier("S", "_s"),
-                   scores, scores, subsets)
+    run = evaluate(make_classifier("S", "_s"), scores, subsets)
     assert run.subsets[subsets[0]]["n"] == 20
     assert run.subsets[subsets[1]]["n"] == 10
 
@@ -348,55 +329,6 @@ def test_fmt(value, expected):
     assert fmt(value, ".4f") == expected
 
 
-def test_threshold_description_names_the_swept_metric():
-    assert threshold_description(make_classifier("S", "_s")) == (
-        "swept for `accuracy` on the validation split")
-
-
-def test_threshold_description_reports_a_manual_pin():
-    clf = make_classifier("S", "_s", manual_threshold=0.5)
-    assert threshold_description(clf) == "pinned manually at 0.5"
-
-
-def test_the_overall_row_leads_a_subset_table_and_is_never_marked():
-    scores = separable_scores(size=10)
-    subsets = [Subset("Prompt", "easy", np.arange(10) < 5), Subset("Prompt", "hard", np.arange(10) >= 5)]
-    overall = Subset("", "Overall")
-    run = evaluate(make_classifier("S", "_s"),
-                   scores, scores, [overall, *subsets])
-    lines = subset_table(run, overall, subsets, "Prompt Subset").split("\n")
-    assert lines[0] == "| Prompt Subset | N | AUROC | TPR | FPR | Accuracy | F1 |"
-    assert lines[2].startswith("| Overall |")
-    assert len(lines) == 5
-
-
-# --------------------------------------------------------------------------
-# build_contents
-# --------------------------------------------------------------------------
-
-
-def test_the_contents_number_top_level_sections_and_indent_their_subsections():
-    assert build_contents("## First\ntext\n### Sub One\n## Second\n") == [
-        "1. [First](#first)",
-        "    - [Sub One](#sub-one)",
-        "2. [Second](#second)",
-    ]
-
-
-def test_contents_anchors_drop_punctuation_the_way_a_renderer_does():
-    assert build_contents("## Classifier Report: Top-p (Llama-3.2)") == [
-        "1. [Classifier Report: Top-p (Llama-3.2)](#classifier-report-top-p-llama-32)"]
-
-
-def test_repeated_headings_get_the_numeric_anchor_suffixes_renderers_assign():
-    entries = build_contents("## Same\n## Same\n## Same")
-    assert [entry.split("(#")[1] for entry in entries] == ["same)", "same-1)", "same-2)"]
-
-
-def test_deeper_headings_are_not_listed():
-    assert build_contents("## Kept\n#### Dropped\n# Also dropped") == ["1. [Kept](#kept)"]
-
-
 # --------------------------------------------------------------------------
 # End to end, through main()
 # --------------------------------------------------------------------------
@@ -409,7 +341,10 @@ def report() -> tuple[str, dict]:
     prompts = ["revise", "rewrite"]
     ds = Dataset.from_list([{
         "original": f"h{i}", "final_response": f"a{i}",
-        "prompt": {"metadata": {"PROMPT_TYPE": prompts[i % 2]}},
+        "prompt": {"chat_turns": [f"First instruction {i % 3}", "ignored second turn"],
+                   "metadata": {"PROMPT_TYPE": prompts[i % 2]}},
+        "topic": ["news", "science"][i % 2],
+        "format": ["essay", "list"][i % 2],
         "generator_model": f"org/model-{i % 2}",
         "generation_params": json.dumps({"temperature": 0.6}),
         "cosdist": float(rng.uniform(0, 1)),
@@ -424,66 +359,122 @@ def report() -> tuple[str, dict]:
 
 def test_the_report_has_every_fixed_section(report):
     readme, _ = report
-    for heading in ["## Evaluation Results", "## Statistics of Interest", "## Appendix",
-                    "### Univariate Analysis", "### Correlation Heatmap",
-                    "### Distance Histograms", "### Distance Histograms per Prompt Subset",
-                    "### Distance Histograms per Generator Config Subset",
-                    "### Classifier: Score", "#### Performance:", "#### Thresholding:",
-                    "#### Classification Histograms:"]:
-        assert heading in readme
+    for expected in ['id="leaderboard"', 'id="analytics"', 'id="distances"',
+                     'id="appendix"', "Detector leaderboard", "Model-Specific Analytics",
+                     "How far do the rewrites move?", "Threshold sweep",
+                     "Score distributions", "Univariate statistics", "Correlation heatmap"]:
+        assert expected in readme
+    assert "Topic × format" in readme
+    assert "Generator × prompt category" in readme
+    assert "Specific prompt" in readme
+    assert "Select a model" in readme
+    assert "Select a split" in readme
+    assert "Open full size ↗" in readme
+    assert "Schema &amp; usage" in readme
+    assert "Robustness across subsets" not in readme
+    assert "Accuracy" not in readme and ">F1<" not in readme
 
 
-def test_the_appendix_has_a_blockquoted_table_of_contents(report):
+def test_threshold_sweep_precedes_the_four_class_specific_histograms(report):
+    readme = report[0]
+    assert readme.index('src="SWEEP_SCORE.png"') < readme.index('src="CLF_HUMAN_SCORE.png"')
+    assert all(filename in readme for filename in (
+        "CLF_HUMAN_SCORE.png", "CLF_AI_SCORE.png",
+        "CLF_PROMPTS_SCORE.png", "CLF_MODELS_SCORE.png"))
+
+
+def test_the_report_has_anchored_html_navigation(report):
     readme, _ = report
-    assert "> Table of contents" in readme
-    assert "## Table of Contents" not in readme
+    for anchor in ("leaderboard", "analytics", "distances", "appendix"):
+        assert f'href="#{anchor}"' in readme
 
 
-def test_every_contents_entry_links_to_a_heading_that_exists(report):
+def test_every_navigation_entry_links_to_an_id_that_exists(report):
     readme, _ = report
-    body = readme.split("## Appendix", 1)[1]
-    for entry in build_contents(body, base_level=3):
-        assert f"> {entry}" in readme
+    for anchor in re.findall(r'href="#([^"]+)"', readme):
+        assert f'id="{anchor}"' in readme
 
 
 def test_the_classifier_header_does_not_dump_implementation_details(report):
     readme, _ = report
-    header = next(line for line in readme.splitlines() if line.startswith("- Classifiers:"))
-    assert header == "- Classifiers: 1 (Score)"
+    assert "Score" in readme
     assert "columns `*_score`" not in readme
+    assert not re.search(r"(?<!flex-)direction:", readme.lower())
+    assert "lower_is_ai" not in readme and "higher_is_ai" not in readme
 
 
 def test_every_chart_the_readme_embeds_was_rendered_and_nothing_else(report):
     readme, files = report
-    embedded = set(re.findall(r"\]\((\S+\.png)\)", readme))
+    embedded = set(re.findall(r'<img src="([^\"]+\.png)"', readme))
     assert embedded == {name for name in files if name.endswith(".png")}
     assert all(files[name].startswith(b"\x89PNG") for name in embedded)
 
 
+def test_model_and_split_pickers_are_two_levels_of_exclusive_options(report):
+    readme = report[0]
+    analytics = readme.split('id="analytics"', 1)[1].split('id="distances"', 1)[0]
+    assert analytics.count('<details name="analytics-model"') == 1
+    assert analytics.count('<details name="analytics-split-score"') == 3
+    assert "Select your split type" not in analytics
+
+
+def test_generator_by_prompt_has_no_human_grid(report):
+    _, files = report
+    assert "ANALYTICS_GENERATOR_PROMPT_AI_SCORE.png" in files
+    assert "ANALYTICS_GENERATOR_PROMPT_DISTANCE_SCORE.png" in files
+    assert "ANALYTICS_GENERATOR_PROMPT_HUMAN_SCORE.png" not in files
+    assert "ANALYTICS_TOPIC_FORMAT_HUMAN_SCORE.png" in files
+
+
+def test_each_detector_traces_tpr_against_a_minimum_distance(report):
+    readme, files = report
+    assert 'src="MINDIST_SCORE.png"' in readme
+    assert readme.index('src="SWEEP_SCORE.png"') < readme.index('src="MINDIST_SCORE.png"')
+
+
+def test_the_specific_prompt_table_shows_full_prompts_scores_and_distances(report):
+    readme = report[0]
+    table = readme.split('id="analytics-score-specific-prompt"', 1)[1].split("</table>", 1)[0]
+    for column in ("Human score", "AI score", "|AI − human|", "cosdist"):
+        assert column in table
+    assert "First instruction 0" in table
+    assert "ignored second turn" not in table
+    assert ">#<" not in table
+
+
+def test_the_appendix_describes_generators_prompts_and_protocol(report):
+    readme = report[0]
+    appendix = readme.split('id="appendix"', 1)[1]
+    assert "https://huggingface.co/org/model-0" in appendix
+    assert re.search(r"Show the \d+ instructions", appendix)
+    assert "Evaluation protocol" in appendix
+    assert "```python" in appendix
+
+
+def test_prompt_boilerplate_is_stripped_from_instructions():
+    trailer = "Output the full new text."
+    messages = np.array([f"<document>\n{{{{DOC}}}}\n</document>\n\n{text}\n{trailer}"
+                         for text in ("Shorten it.", "Lengthen it.", "Translate it.")])
+    boilerplate = analysis.prompt_boilerplate(messages)
+    assert boilerplate == {trailer}
+    assert analysis.prompt_instruction(messages[0], boilerplate) == "Shorten it."
+
+
 def test_statistics_of_interest_only_embeds_available_requested_metrics(report):
-    section = report[0].split("## Statistics of Interest", 1)[1].split("## Appendix", 1)[0]
-    assert "![COSDIST by Prompt Subset](DIST_BY_PROMPT_COSDIST.png)" in section
-    assert "![COSDIST by Generator Config](DIST_BY_MODEL_COSDIST.png)" in section
-    assert "JACCARD_1" not in section
-    assert "never_computed" not in section
+    readme = report[0]
+    assert 'src="DIST_BY_PROMPT_COSDIST.png"' in readme
+    assert 'src="DIST_BY_MODEL_COSDIST.png"' in readme
+    assert "JACCARD_1" not in readme
 
 
 def test_a_clean_separation_is_reported_as_one(report):
-    auroc = float(re.search(r"with an AUROC of ([\d]+\.[\d]+)", report[0]).group(1))
-    assert auroc > 0.95
+    assert ">0.99" in report[0] or ">1.0000" in report[0]
 
 
-def test_filtering_is_reflected_in_the_reported_rows():
-    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}", "keep": float(i % 4),
-                             "original_score": float(i), "final_response_score": float(i + 10)}
-                            for i in range(200)])
-    cfg = make_analysis_config(filter_type="AND",
-                               filter_conditions=[ConditionConfig(column="keep", operator=">=", value=2)],
-                               classifiers=[make_classifier("Score", "_score")])
-    readme, _ = run_main(ds, cfg)
-    assert "- Rows: 100" in readme
-    assert "- Filter Conditions: `keep >= 2`" in readme
-    assert "- Evaluation / Validation Rows: 90 / 10" in readme
+def test_analysis_uses_the_complete_published_dataset(report):
+    readme, _ = report
+    assert "All 200 rows are used" in readme
+    assert "No cosine, soft-ngram, Jaccard, or other analysis-time filtering is applied" in readme
 
 
 def test_a_bare_dataset_says_what_it_could_not_break_down():
@@ -493,42 +484,26 @@ def test_a_bare_dataset_says_what_it_could_not_break_down():
                              "final_response_score": float(rng.normal(1, 1))} for i in range(120)])
     readme, _ = run_main(ds, make_analysis_config(
         classifiers=[make_classifier("Score", "_score")]))
-    for expected in ["No distance metrics were configured or found.",
-                     "No prompt metadata was found, so there are no prompt subsets.",
-                     "No generator model/genconfig metadata was found, so there are no generator subsets."]:
+    for expected in ["No distance measures were available.",
+                     "No prompt messages were available."]:
         assert expected in readme
 
 
-def test_manual_thresholds_everywhere_skip_the_validation_split():
-    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
-                             "original_score": float(i), "final_response_score": float(i + 10)}
-                            for i in range(120)])
-    readme, files = run_main(ds, make_analysis_config(
-        classifiers=[make_classifier("Score", "_score", manual_threshold=0.5)]))
-    assert "- Sweeping skipped and fixed at 0.5000." in readme
-    assert not any(name.startswith("SWEEP_") for name in files)
-    assert "- Evaluation / Validation Rows: 120 / 0" in readme
-
-
-def test_only_the_classifiers_without_a_manual_threshold_are_swept():
-    # Pinning one classifier must leave the others sweeping, and still cut the
-    # validation split for them.
+def test_bucket_classifiers_are_not_reported():
     ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
                              "original_score": float(i), "final_response_score": float(i + 200),
                              "original_bucket": float(i % 2), "final_response_bucket": float(2 + i % 2)}
                             for i in range(100)])
     cfg = make_analysis_config(classifiers=[
-        make_classifier("Score", "_score", manual_threshold=0.6),
-        make_classifier("Bucket", "_bucket", threshold_type="f1")])
+        make_classifier("Score", "_score"),
+        make_classifier("Bucket", "_bucket")])
     readme, files = run_main(ds, cfg)
-    assert [n for n in files if n.startswith("SWEEP_")] == ["SWEEP_BUCKET.png"]
-    assert "- Evaluation / Validation Rows: 90 / 10" in readme
-    assert "- Classifiers: 2 (Score, Bucket)" in readme
-    assert "- Sweeping skipped and fixed at 0.6000." in readme
-    assert "- Swept for `f1` with a found threshold of" in readme
+    assert [n for n in files if n.startswith("SWEEP_")] == ["SWEEP_SCORE.png"]
+    assert 'id="classifier-score"' in readme
+    assert 'id="classifier-bucket"' not in readme
 
 
-def test_classifier_and_averaged_subset_tables_are_sorted_and_cover_every_classifier():
+def test_classifier_rows_are_sorted_by_auroc_and_cover_every_classifier():
     prompts = ["a", "b"]
     ds = Dataset.from_list([{
         "original": f"h{i}", "final_response": f"a{i}",
@@ -539,29 +514,23 @@ def test_classifier_and_averaged_subset_tables_are_sorted_and_cover_every_classi
         "original_bad": 0.6 + i / 100, "final_response_bad": i / 100,
     } for i in range(40)])
     cfg = make_analysis_config(classifiers=[
-        make_classifier("Bad", "_bad", manual_threshold=0.5),
-        make_classifier("Good", "_good", manual_threshold=0.5),
+        make_classifier("Bad", "_bad"),
+        make_classifier("Good", "_good"),
     ])
     readme, files = run_main(ds, cfg)
 
-    comparison = readme.split("| Classifier |", 1)[1].split(
-        "Classifier metrics averaged", 1)[0]
-    assert comparison.index("Good") < comparison.index("Bad")
-    assert "| Subset | Average AUROC | Average TPR | Average FPR | Average Accuracy | Average F1 |" in readme
-    assert "| Prompt: a | 0.5000 | 0.5000 | 0.5000 | 0.5000 | 0.5000 |" in readme
-    assert readme.count("model-0 (Temp: 0.6) |") == 3
-    assert "CLF_HIST_BAD_MODEL_MODEL_0_TEMP_0_6.png" in files
-    assert "CLF_HIST_GOOD_MODEL_MODEL_0_TEMP_0_6.png" in files
+    leaderboard = readme.split('id="leaderboard"', 1)[1].split('id="analytics"', 1)[0]
+    assert leaderboard.index("Good") < leaderboard.index("Bad")
+    assert "CLF_MODELS_BAD.png" in files
+    assert "CLF_MODELS_GOOD.png" in files
 
 
-def test_a_pinned_classifier_does_not_read_the_validation_split():
-    # evaluate() ignores the validation scores when the threshold is pinned, so
-    # flattening them would be the whole dataset a second time for nothing.
+def test_each_classifier_is_read_once():
     ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
                              "original_score": float(i), "final_response_score": float(i + 200)}
                             for i in range(50)])
     cfg = make_analysis_config(
-        classifiers=[make_classifier("Score", "_score", manual_threshold=0.6)])
+        classifiers=[make_classifier("Score", "_score")])
     reads, original = [], analysis.read_scores
     analysis.read_scores = lambda read, config, suffix, auto_ai=None: (
         reads.append(suffix), original(read, config, suffix, auto_ai))[1]
@@ -572,21 +541,27 @@ def test_a_pinned_classifier_does_not_read_the_validation_split():
     assert reads == ["_score"]
 
 
-def test_a_manual_threshold_of_zero_is_not_read_as_unset():
-    ds = Dataset.from_list([{"original": f"h{i}", "final_response": f"a{i}",
-                             "original_score": float(-i - 1), "final_response_score": float(i + 1)}
-                            for i in range(50)])
-    cfg = make_analysis_config(
-        classifiers=[make_classifier("Score", "_score", manual_threshold=0.0)])
-    readme, files = run_main(ds, cfg)
-    assert not any(name.startswith("SWEEP_") for name in files)
-    assert "- Sweeping skipped and fixed at 0.0000." in readme
-    # Every AI score is positive and every human score negative, so 0 separates.
-    overall = re.search(r"\| Overall \|[^\n]+", readme).group(0)
-    assert "| 1.0000 | 1.0000 | 0.0000 | 1.0000 | 1.0000 |" in overall
-
-
 def test_a_config_with_no_classes_at_all_is_rejected():
     ds = Dataset.from_dict({"original": ["a"], "final_response": ["b"]})
     with pytest.raises(ValueError, match="fixed_classes or auto_class_column"):
         run_main(ds, make_analysis_config(fixed_classes=None))
+
+
+def test_every_detector_ships_its_full_prompt_ranking_as_csv(report):
+    _, files = report
+    lines = files["prompt_rankings/SCORE.csv"].decode().strip().splitlines()
+    assert lines[0].startswith("rank,prompt,category")
+    assert len(lines) == 1 + 3
+
+
+def test_a_long_prompt_ranking_is_truncated_inline_and_links_the_csv(monkeypatch):
+    monkeypatch.setattr(analysis, "PROMPT_TABLE_LIMIT", 1)
+    rng = np.random.default_rng(2)
+    ds = Dataset.from_list([{
+        "original": f"h{i}", "final_response": f"a{i}",
+        "prompt": {"chat_turns": [f"Instruction {i % 3}"], "metadata": {"PROMPT_TYPE": "revise"}},
+        "original_score": float(rng.normal(0, 1)), "final_response_score": float(rng.normal(2, 1)),
+    } for i in range(60)])
+    readme, _ = run_main(ds, make_analysis_config(classifiers=[make_classifier("Score", "_score")]))
+    assert "Only the 1 hardest of 3 are shown" in readme
+    assert "blob/main/prompt_rankings/SCORE.csv" in readme

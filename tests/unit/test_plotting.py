@@ -7,7 +7,8 @@ from fastdetector.visualization.plotting import (
     header,
     heatmap,
     histogram,
-    sweep_plot,
+    detector_sweep_plot,
+    score_grid_panels,
     table,
 )
 
@@ -134,6 +135,11 @@ def test_a_histogram_of_several_overlaid_series_renders():
     assert histogram(series, "overlaid").startswith(PNG_MAGIC)
 
 
+def test_a_histogram_can_mark_both_low_fpr_thresholds():
+    assert histogram([(np.arange(5), "AI")], "marked",
+                     markers={"1% FPR": 2.0, "0.1% FPR": 3.0}).startswith(PNG_MAGIC)
+
+
 def test_a_histogram_drops_non_finite_values():
     assert histogram([(np.array([1.0, np.nan, np.inf, 3.0]), "a")], "title").startswith(PNG_MAGIC)
 
@@ -163,13 +169,35 @@ def test_a_wide_heatmap_drops_its_annotations_rather_than_failing():
     assert heatmap(matrix, [f"s{i}" for i in range(size)], "title").startswith(PNG_MAGIC)
 
 
-def test_a_sweep_plot_renders_a_png():
+def test_detector_rate_sweep_renders_both_markers():
     thresholds = np.linspace(0, 1, 20)
-    curves = [(np.linspace(0, 1, 20), "human"), (np.linspace(1, 0, 20), "ai")]
-    markers = {"accuracy": 0.5, "f1": 0.6}
-    assert sweep_plot(thresholds, curves, np.full(20, 0.5), markers, "title").startswith(PNG_MAGIC)
+    assert detector_sweep_plot(thresholds, thresholds, 1 - thresholds,
+                               {"1% FPR": 0.7, "0.1% FPR": 0.9}, "title").startswith(PNG_MAGIC)
 
 
-def test_a_sweep_plot_renders_without_per_column_curves():
-    thresholds = np.linspace(0, 1, 20)
-    assert sweep_plot(thresholds, [], np.full(20, 0.5), {}, "title").startswith(PNG_MAGIC)
+def test_three_score_grids_with_marginals_render():
+    human = np.array([0.1, 0.2, 0.3, 0.4])
+    ai = np.array([0.8, 0.7, 0.9, 0.6])
+    rows = np.array(["news", "news", "fiction", "fiction"])
+    columns = np.array(["essay", "list", "essay", "list"])
+    panels = score_grid_panels(human, ai, rows, columns, "Topic", "Format", "title")
+    assert set(panels) == {"HUMAN", "AI", "DISTANCE"}
+    assert all(image.startswith(PNG_MAGIC) for image in panels.values())
+
+
+def test_generator_grids_can_leave_out_the_human_panel():
+    human = np.array([0.1, 0.2, 0.3, 0.4])
+    ai = np.array([0.8, 0.7, 0.9, 0.6])
+    rows = np.array(["m1", "m1", "m2", "m2"])
+    columns = np.array(["revise", "rewrite", "revise", "rewrite"])
+    panels = score_grid_panels(human, ai, rows, columns, "Generator", "Prompt", "title",
+                               include_human=False)
+    assert set(panels) == {"AI", "DISTANCE"}
+
+
+def test_min_distance_plot_renders():
+    from fastdetector.visualization.plotting import min_distance_plot
+    cutoffs = np.linspace(0, 1, 10)
+    image = min_distance_plot(cutoffs, {"TPR @ 1% FPR": cutoffs, "TPR @ 0.1% FPR": cutoffs / 2},
+                              np.arange(10, 0, -1), "title", "cosdist")
+    assert image.startswith(PNG_MAGIC)

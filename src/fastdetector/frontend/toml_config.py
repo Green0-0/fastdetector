@@ -163,20 +163,11 @@ class FilterConfig(BaseModel):
 
 
 class ClassifierConfig(BaseModel):
-    """Configuration for one classifier's evaluation settings."""
+    """A named continuous classifier score and its AI-facing direction."""
 
     name: str
     suffix: str
-
-    # Criterion this classifier's threshold is swept for on the validation
-    # split: "accuracy", "f1", or one of the fpr_* targets.
-    threshold_type: str
-
     direction: str = "higher_is_ai"
-
-    # Pin the threshold outright instead of sweeping for one, which also takes
-    # this classifier out of the validation split.
-    manual_threshold: Optional[float] = None
 
 
 class AnalysisConfig(BaseModel):
@@ -192,15 +183,16 @@ class AnalysisConfig(BaseModel):
     prompt_metadata_column: str
     model_metadata_column: str
 
-    # Fraction of rows held out to sweep thresholds on.
-    validation_size: float
-
-    # Dataset Filtering
-    filter_type: str = "OR"
-    filter_conditions: List[ConditionConfig] = []
+    # Optional corpus dimensions used by the model-specific score grids.
+    topic_column: str = "topic"
+    format_column: str = "format"
 
     # Distance Metrics for Correlation/Plots
     distance_metrics: List[str] = []
+
+    # Distance whose rising minimum each detector's TPR is traced against:
+    # AI rows below the cutoff are dropped, human rows are kept.
+    min_distance_metric: str = "cosdist"
 
     # Classifiers to Evaluate
     classifiers: List[ClassifierConfig] = []

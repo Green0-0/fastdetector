@@ -190,20 +190,8 @@ def test_condition_value_is_untyped():
 # --------------------------------------------------------------------------
 
 
-def test_a_classifier_must_name_its_threshold_criterion():
-    with pytest.raises(ValidationError, match="threshold_type"):
-        ClassifierConfig(name="n", suffix="_s")
-
-
-def test_a_classifier_carries_its_own_threshold_criterion():
-    clf = ClassifierConfig(name="n", suffix="_s", threshold_type="f1")
-    assert clf.threshold_type == "f1"
-    assert clf.manual_threshold is None
-
-
-def test_a_classifier_can_pin_its_threshold():
-    clf = ClassifierConfig(name="n", suffix="_s", threshold_type="f1", manual_threshold=0.5)
-    assert clf.manual_threshold == 0.5
+def test_a_classifier_defaults_to_higher_scores_mean_ai():
+    assert ClassifierConfig(name="n", suffix="_s").direction == "higher_is_ai"
 
 
 def test_analysis_config_defaults_and_nesting():
@@ -211,12 +199,9 @@ def test_analysis_config_defaults_and_nesting():
         base_columns=["original", "final_response"],
         prompt_metadata_column="prompt",
         model_metadata_column="generator_model",
-        validation_size=0.1,
-        classifiers=[{"name": "c", "suffix": "_c", "threshold_type": "f1"}],
+        classifiers=[{"name": "c", "suffix": "_c"}],
     )
-    assert config.filter_type == "OR"
     assert config.distance_metrics == []
-    assert config.classifiers[0].manual_threshold is None
     assert isinstance(config.classifiers[0], ClassifierConfig)
 
 

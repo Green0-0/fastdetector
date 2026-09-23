@@ -1,9 +1,8 @@
 prompt_metadata_column = "prompt"
 model_metadata_column = "generator_model"
 
-validation_size = 0.1
-
-filter_type = "OR"
+topic_column = "topic"
+format_column = "format"
 
 base_columns = ["original", "final_response"]
 fixed_classes = [false, true]
@@ -24,87 +23,76 @@ distance_metrics = [
     "reranker"
 ]
 
-[[filter_conditions]]
-column = "cosdist"
-operator = ">="
-value = 0.03
-
-[[filter_conditions]]
-column = "softngram"
-operator = ">="
-value = 0.06
+# Each detector's TPR is also traced as AI rows below a rising minimum of this
+# distance are dropped (human rows, and so the thresholds, are unchanged).
+min_distance_metric = "cosdist"
 
 [[classifiers]]
 name = "EditLens Roberta-Large Score"
 suffix = "_editlens_score_roberta_large"
-threshold_type = "fpr_0_5pct"
 
 [[classifiers]]
-name = "EditLens Roberta-Large Bucket"
-suffix = "_editlens_bucket_roberta_large"
-threshold_type = "f1"
+name = "EditLens Llama-3.2-3B Score"
+suffix = "_editlens_score_llama_3_2_3b"
+
+[[classifiers]]
+name = "Giga EditLens Roberta Score"
+suffix = "_editlens_score_giga_roberta"
+
+[[classifiers]]
+name = "Giga EditLens Llama-3.2-3B Score"
+suffix = "_editlens_score_giga_llama_3_2_3b"
 
 [[classifiers]]
 name = "Perplexity (Llama-3.2-3B-Instruct)"
 suffix = "_perplexity_llama_instruct"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Perplexity (Llama-3.2-3B)"
 suffix = "_perplexity_llama_base"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Entropy (Llama-3.2-3B-Instruct)"
 suffix = "_entropy_llama_instruct"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Entropy (Llama-3.2-3B)"
 suffix = "_entropy_llama_base"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Top-p Outliers (Llama-3.2-3B-Instruct)"
 suffix = "_topp_outlier_llama_instruct"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Top-p Outliers (Llama-3.2-3B)"
 suffix = "_topp_outlier_llama_base"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Top-k Outliers (Llama-3.2-3B-Instruct)"
 suffix = "_topk_outlier_llama_instruct"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Top-k Outliers (Llama-3.2-3B)"
 suffix = "_topk_outlier_llama_base"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "FastDetectGPT (Llama-3.2-3B-Instruct)"
 suffix = "_fastdetectgpt_llama_instruct"
-threshold_type = "fpr_0_5pct"
 
 [[classifiers]]
 name = "FastDetectGPT (Llama-3.2-3B)"
 suffix = "_fastdetectgpt_llama_base"
-threshold_type = "fpr_0_5pct"
 direction = "lower_is_ai"
 
 [[classifiers]]
 name = "Binoculars"
 suffix = "_binoculars"
-threshold_type = "fpr_0_5pct"
 direction = "higher_is_ai"
