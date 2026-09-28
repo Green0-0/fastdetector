@@ -10,6 +10,7 @@ from fastdetector.modeling.editlens import (
     NormedLinear,
     clean_text,
     compute_editlens_scores,
+    get_model_and_tokenizer,
     infer_n_buckets,
     is_qlora_checkpoint,
 )
@@ -112,6 +113,61 @@ def test_a_hub_repo_without_an_adapter_config_is_not_an_adapter(monkeypatch):
 
     monkeypatch.setattr(editlens_module, "hf_hub_download", missing)
     assert is_qlora_checkpoint("user/full-model") is False
+
+
+# --------------------------------------------------------------------------
+# get_model_and_tokenizer
+# --------------------------------------------------------------------------
+
+
+class _RecordingModel(torch.nn.Module):
+    """Minimal model that records whether it was moved to the GPU."""
+
+    def __init__(self):
+        super().__init__()
+        self.linear = torch.nn.Linear(2, 2)
+        self.moved_to_cuda = False
+
+    def cuda(self, device=None):
+        self.moved_to_cuda = True
+        return self
+
+
+class _FakeTokenizer:
+    pad_token = "<pad>"
+    pad_token_id = 0
+
+
+@pytest.fixture
+def full_checkpoint_loader(monkeypatch):
+    """Stub the Hub so a full (non-QLoRA) checkpoint loads a recording model."""
+    model = _RecordingModel()
+    monkeypatch.setattr(editlens_module, "is_qlora_checkpoint", lambda ckpt: False)
+    monkeypatch.setattr(
+        editlens_module.AutoTokenizer, "from_pretrained", lambda name: _FakeTokenizer()
+    )
+    monkeypatch.setattr(
+        editlens_module.AutoModelForSequenceClassification,
+        "from_pretrained",
+        lambda path, **kw: model,
+    )
+    return model
+
+
+def test_a_full_checkpoint_is_moved_to_the_gpu_when_available(full_checkpoint_loader, monkeypatch):
+    """Test that a full checkpoint is moved to CUDA instead of staying on the CPU."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    model, _, is_qlora = get_model_and_tokenizer("user/full-model", "base", 2)
+    assert is_qlora is False
+    assert model.moved_to_cuda is True
+    assert model.training is False
+
+
+def test_a_full_checkpoint_stays_on_the_cpu_without_a_gpu(full_checkpoint_loader, monkeypatch):
+    """Test that the loader does not try to move the model when CUDA is missing."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    model, _, _ = get_model_and_tokenizer("user/full-model", "base", 2)
+    assert model.moved_to_cuda is False
 
 
 # --------------------------------------------------------------------------

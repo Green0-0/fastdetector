@@ -578,8 +578,47 @@ REPORT_COLUMNS = [("n", "N"), ("auroc", "AUROC"),
                   ("tpr_at_fpr_1pct", "TPR @ 1% FPR"), ("tpr_at_fpr_0_1pct", "TPR @ 0.1% FPR")]
 
 
+def _subset_table(run: Run, groups: SubsetGroups) -> str:
+    """Score one detector on every prompt subset and generator config.
+
+    Subsets are scored at the detector's corpus-wide thresholds, so a subset's
+    own FPR can drift from the budget; the best and worst subsets are marked
+    by TPR at 1% FPR, with Overall never marked.
+    """
+    families = [("prompt", groups.prompts), ("gen", groups.models)]
+    ranked = sorted((value, subset.label) for _, subsets in families for subset in subsets
+                    if (value := run.subsets[subset]["tpr_at_fpr_1pct"]) == value)
+    marks = {}
+    if len(ranked) > 1:
+        marks = {ranked[-1][1]: ("▲ best", "#2a8c82"), ranked[0][1]: ("▼ worst", "#c8475a")}
+
+    # One of these per detector, so cells carry as little inline style as they can.
+    def row(label: str, values: dict, tag: str = "", colour: str = "") -> str:
+        badge = ""
+        if label in marks:
+            text, tint = marks[label]
+            badge = f' <b style="font-size:10.5px;color:{tint};white-space:nowrap">{text}</b>'
+        name = (f'<small style="color:{FAINT}">{tag}</small> <span style="color:{colour}">●</span> '
+                f'{esc(label)}' if tag else f"<b>{esc(label)}</b>")
+        return (f'<tr><td style="text-align:left;font-family:{SANS}">{name}{badge}</td>'
+                + "".join(f'<td style="text-align:right">{_number(values[key])}</td>'
+                          for key, _ in REPORT_COLUMNS) + "</tr>")
+
+    body = row("Overall", run.subsets[groups.overall])
+    for tag, subsets in families:
+        body += "".join(row(subset.label, run.subsets[subset], tag, _colour(index))
+                        for index, subset in enumerate(subsets))
+    head = f'<th style="text-align:left;{TH}">Subset</th>' + "".join(
+        f'<th style="text-align:right;{TH}">{esc(label)}</th>' for _, label in REPORT_COLUMNS)
+    return (f'<div style="overflow-x:auto;border:1px solid {LINE};border-radius:12px;background:{PAPER}">'
+            f'<table cellpadding="8" cellspacing="0" rules="rows" style="display:table;width:100%;min-width:620px;margin:0;'
+            f'border:0;border-color:{HAIR};border-collapse:collapse;font-family:{MONO};font-size:12.5px;'
+            f'font-variant-numeric:tabular-nums;color:{INK}"><thead><tr>{head}</tr></thead>'
+            f'<tbody>{body}</tbody></table></div>')
+
+
 def _leaderboard(dataset: str, rows: list[dict], runs: dict[str, Run], charts: dict,
-                 min_distance: str) -> str:
+                 min_distance: str, groups: SubsetGroups) -> str:
     entries = []
     for rank, row in enumerate(rows, 1):
         name, run = row["name"], runs[row["name"]]
@@ -589,7 +628,14 @@ def _leaderboard(dataset: str, rows: list[dict], runs: dict[str, Run], charts: d
                       f'{_code(fmt(run.points["fpr_1pct"].threshold))}</span>'
                       f'<span><b>0.1% FPR threshold</b> '
                       f'{_code(fmt(run.points["fpr_0_1pct"].threshold))}</span></div>')
-        body = thresholds + _image_card(dataset, f"SWEEP_{safe}.png", f"Threshold sweep: {name}",
+        body = thresholds
+        if groups.prompts or groups.models:
+            body += (_subset_table(run, groups)
+                     + f'<p style="margin:8px 2px 0;color:{FAINT};font-size:12.5px;line-height:1.5">'
+                     "Every subset is scored at the corpus-wide thresholds above, so its own false "
+                     "positive rate can differ from the budget. ▲ and ▼ mark the subsets with the "
+                     "highest and lowest TPR @ 1% FPR.</p>")
+        body += _image_card(dataset, f"SWEEP_{safe}.png", f"Threshold sweep: {name}",
                                         "TPR and FPR at every threshold · both FPR operating points marked")
         if f"MINDIST_{safe}.png" in charts:
             body += _image_card(
@@ -1094,7 +1140,7 @@ def _build_html_report(dataset: str, analysis_config: str, cfg: AnalysisConfig, 
 <div style="display:flex;flex-wrap:wrap;gap:6px 22px;padding:14px clamp(20px,4vw,44px);background:{PAPER};border-bottom:1px solid {LINE}">{nav_html}</div>
 <div style="padding:4px clamp(20px,4vw,44px) 36px">
 {_section("01", "leaderboard", "Detector leaderboard", f"Score-based detectors ranked by overall AUROC. Thresholds are placed exactly on every human score, so TPR is reported at a true 1% and 0.1% false positive rate. Open a row for its threshold sweep, its TPR as AI rows with low {min_distance} are dropped, and its score distributions.")}
-{_leaderboard(dataset, overall_rows, runs, charts, min_distance)}
+{_leaderboard(dataset, overall_rows, runs, charts, min_distance, groups)}
 {_section("02", "analytics", "Model-Specific Analytics", "Select a model, then a split; the split's charts appear below it. Topic × format compares human scores, AI scores and their unsigned gap; generator × prompt category shows only the AI side, since neither changes the human text; specific prompt ranks every first message by difficulty.")}
 {_analytics(dataset, overall_rows, runs, charts, rankings, distances)}
 {_section("03", "distances", "How far do the rewrites move?", "Every distance measure between each source and its rewrite: overall, then with every prompt subset and every generator config overlaid on one chart each.")}

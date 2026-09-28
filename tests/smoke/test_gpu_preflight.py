@@ -285,9 +285,6 @@ def test_editlens_config_fits_in_vram(repo_root):
     model, tokenizer, is_qlora = get_model_and_tokenizer(
         config.checkpoint, config.base_model, n_buckets
     )
-    if not is_qlora and not next(model.parameters()).is_cuda:
-        model = model.cuda()
-
     # A full batch of maximum-length texts is the worst case for this stage.
     long_text = "word " * (config.max_length * 2)
     texts = [long_text] * config.batch_size

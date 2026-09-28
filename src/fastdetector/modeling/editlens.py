@@ -147,6 +147,10 @@ def get_model_and_tokenizer(checkpoint_path: str, base_model_name: str, n_bucket
         model = PeftModel.from_pretrained(base_model, checkpoint_path)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(checkpoint_path)
+        # bitsandbytes places 4-bit weights on the GPU itself; a full checkpoint
+        # loads on the CPU, so move it explicitly.
+        if torch.cuda.is_available():
+            model = model.cuda()
 
     model.eval()
     return model, tokenizer, is_qlora

@@ -565,3 +565,16 @@ def test_a_long_prompt_ranking_is_truncated_inline_and_links_the_csv(monkeypatch
     readme, _ = run_main(ds, make_analysis_config(classifiers=[make_classifier("Score", "_score")]))
     assert "Only the 1 hardest of 3 are shown" in readme
     assert "blob/main/prompt_rankings/SCORE.csv" in readme
+
+
+def test_each_leaderboard_row_has_a_subset_table_above_its_sweep(report):
+    readme = report[0]
+    entry = readme.split('id="classifier-score"', 1)[1].split('id="analytics"', 1)[0]
+    table = entry.split("</table>", 1)[0]
+    for expected in ("Overall", "revise", "rewrite", "model-0 (Temp: 0.6)",
+                     "TPR @ 1% FPR", "TPR @ 0.1% FPR", "AUROC"):
+        assert expected in table
+    assert "▲ best" in table and "▼ worst" in table
+    for dropped in ("Acc.", "F1", ">FPR<"):
+        assert dropped not in table
+    assert entry.index("</table>") < entry.index('src="SWEEP_SCORE.png"')
